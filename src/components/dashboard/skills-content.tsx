@@ -14,6 +14,7 @@ import {
   createSkill, deleteSkill,
   castSkill
 } from '@/app/actions/skills'
+import SanityLockOverlay from '@/components/sanity-lock-overlay'
 
 /* ─── Art Nouveau Corner Ornament ─── */
 function CornerOrnament({ className }: { className?: string }) {
@@ -655,6 +656,9 @@ export default function SkillsContent({
 }: SkillsContentProps) {
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
   const [showAdmin, setShowAdmin] = useState(false)
+  
+  // ตรวจสอบว่าสติเหลือ 0 หรือไม่
+  const isSanityLocked = (profile?.sanity ?? 10) === 0
 
   return (
     <div className="min-h-screen bg-victorian-950 text-victorian-100">
@@ -717,6 +721,9 @@ export default function SkillsContent({
           />
         )}
       </div>
+      
+      {/* Sanity Lock Overlay */}
+      {isSanityLocked && <SanityLockOverlay />}
     </div>
   )
 }

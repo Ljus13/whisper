@@ -5,11 +5,13 @@ import type { GameMap } from '@/lib/types/database'
 import { ArrowLeft, Plus, Pencil, Trash2, X, Save, MapIcon } from 'lucide-react'
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import SanityLockOverlay from '@/components/sanity-lock-overlay'
 
 interface MapsContentProps {
   maps: GameMap[]
   isAdmin: boolean
   myMapId: string | null
+  sanity: number
 }
 
 /* ── Art Nouveau Corner Ornament ── */
@@ -168,12 +170,15 @@ function MapModal({
 /* ══════════════════════════════════════════════
    MAIN: Maps Gallery Content
    ══════════════════════════════════════════════ */
-export default function MapsContent({ maps, isAdmin, myMapId }: MapsContentProps) {
+export default function MapsContent({ maps, isAdmin, myMapId, sanity }: MapsContentProps) {
   const router = useRouter()
   const [showModal, setShowModal] = useState(false)
   const [editingMap, setEditingMap] = useState<GameMap | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  
+  // ตรวจสอบว่าสติเหลือ 0 หรือไม่
+  const isSanityLocked = sanity === 0
 
   function handleEdit(map: GameMap) {
     setEditingMap(map)
@@ -320,6 +325,9 @@ export default function MapsContent({ maps, isAdmin, myMapId }: MapsContentProps
           onSaved={() => router.refresh()}
         />
       )}
+      
+      {/* Sanity Lock Overlay */}
+      {isSanityLocked && <SanityLockOverlay />}
     </div>
   )
 }

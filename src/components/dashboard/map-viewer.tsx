@@ -12,6 +12,7 @@ import {
 import Link from 'next/link'
 import { useState, useRef, useCallback, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import SanityLockOverlay from '@/components/sanity-lock-overlay'
 
 /* ══════════════════════════════════════════════
    TYPES
@@ -133,6 +134,9 @@ export default function MapViewer({
   // ── My token ──
   const myToken = tokens.find(t => t.user_id === currentUserId)
   const isOnThisMap = myToken?.map_id === map.id
+  
+  // ── Sanity Lock ──
+  const isSanityLocked = (currentUser?.sanity ?? 10) === 0
 
   // ── Toast helper ──
   function showToast(msg: string, type: 'error' | 'info' = 'info') {
@@ -618,10 +622,18 @@ export default function MapViewer({
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
-          {/* Travel points indicator */}
-          <div className="hidden sm:flex items-center gap-2 text-victorian-400 text-xl mr-4 border border-gold-400/10 rounded-sm px-4 py-2 bg-black/20">
-            <Footprints className="w-6 h-6 text-gold-400" />
-            <span className="tabular-nums font-bold text-nouveau-cream">{currentUser.travel_points}/{currentUser.max_travel_points}</span>
+          {/* Travel points indicator - progress bar */}
+          <div className="hidden sm:flex flex-col gap-1 text-victorian-400 text-xs mr-4 border border-gold-400/10 rounded-sm px-4 py-2 bg-black/20 min-w-[200px]">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-gold-400 font-display text-sm">แต้มเดินทาง</span>
+              <span className="tabular-nums font-bold text-nouveau-cream text-sm">{currentUser.travel_points}/{currentUser.max_travel_points}</span>
+            </div>
+            <div className="w-full h-2 bg-victorian-800 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-gold-400 to-gold-300 transition-all duration-300"
+                style={{ width: `${(currentUser.travel_points / currentUser.max_travel_points) * 100}%` }}
+              />
+            </div>
           </div>
 
           <button onClick={zoomOut} className="p-3 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><ZoomOut className="w-8 h-8" /></button>
@@ -799,22 +811,38 @@ export default function MapViewer({
         </div>
 
         {/* ── Drag hint ── */}
-        {imageLoaded && !drag && scale <= 1 && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5
-                          bg-victorian-900/80 border border-gold-400/10 rounded-full text-victorian-500 text-[10px]
-                          pointer-events-none animate-fade-in">
-            <Move className="w-3 h-3" />
-            ลากเพื่อเลื่อน • ซูมด้วยสกรอลล์ • กดค้างตัวละครเพื่อย้าย
+        {imageLoaded && !drag && (
+          <div className="absolute bottom-8 inset-x-0 z-50 flex flex-col items-center justify-center gap-2
+                          pointer-events-none animate-fade-in text-center px-4">
+             <div className="flex flex-col items-center gap-1 px-8 py-4 bg-black/90 border-2 border-gold-400 
+                             rounded-2xl text-gold-400 shadow-[0_0_40px_rgba(0,0,0,0.8)] backdrop-blur-md">
+                <div className="flex items-center gap-3 text-xl sm:text-2xl font-display font-bold text-shadow-glow">
+                  <Move className="w-6 h-6 animate-pulse" />
+                  <span>กดค้างที่ตัวละครเพื่อเดิน</span>
+                </div>
+                <div className="text-nouveau-ruby font-bold text-lg bg-nouveau-ruby/10 px-3 py-0.5 rounded border border-nouveau-ruby/30">
+                  ( ใช้ 1 แต้มการเดินทาง )
+                </div>
+             </div>
+             <div className="text-victorian-300 text-sm font-sans bg-black/60 px-4 py-1.5 rounded-full backdrop-blur-sm border border-white/10 shadow-lg">
+                ลากพื้นหลังเพื่อเลื่อน • ซูมด้วยสกรอลล์
+             </div>
           </div>
         )}
 
         {/* ── Drag active indicator ── */}
         {drag?.active && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-4 py-2
-                          bg-gold-400/20 border border-gold-400/40 rounded-full text-gold-400 text-xs font-display
-                          pointer-events-none animate-pulse">
-            <Footprints className="w-4 h-4" />
-            กำลังย้ายตัวละคร — ปล่อยเพื่อวาง (−1 แต้ม)
+          <div className="absolute top-[20%] inset-x-0 z-50 flex flex-col items-center justify-center gap-4
+                          pointer-events-none px-4">
+            <div className="bg-black/95 border-2 border-gold-400 text-gold-400 text-3xl font-display font-bold 
+                            px-10 py-6 rounded-2xl shadow-[0_0_50px_rgba(251,191,36,0.4)] flex items-center gap-4 animate-bounce">
+              <Footprints className="w-10 h-10" />
+              <span>ปล่อยเพื่อวาง</span>
+            </div>
+            <div className="bg-nouveau-ruby border-2 border-white/20 text-white text-2xl font-bold 
+                            px-6 py-3 rounded-xl shadow-xl animate-pulse">
+              − 1 แต้มการเดินทาง
+            </div>
           </div>
         )}
       </div>
@@ -898,6 +926,9 @@ export default function MapViewer({
           {toast.msg}
         </div>
       )}
+      
+      {/* Sanity Lock Overlay */}
+      {isSanityLocked && <SanityLockOverlay />}
     </div>
   )
 }

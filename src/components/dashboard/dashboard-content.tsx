@@ -3,8 +3,9 @@
 import { signOut, updateProfile } from '@/app/actions/auth'
 import { applySanityDecay } from '@/app/actions/players'
 import AdminEditModal from '@/components/admin/admin-edit-modal'
+import SanityLockOverlay from '@/components/sanity-lock-overlay'
 import type { User } from '@supabase/supabase-js'
-import { LogOut, Shield, Swords, Crown, Settings, X, Camera, Map, Zap, Skull, Users, Footprints, Flame, Brain, Heart, Pencil } from 'lucide-react'
+import { LogOut, Shield, Swords, Crown, Settings, X, Camera, Map, Zap, Skull, Users, Footprints, Flame, Brain, Heart, Pencil, Lock } from 'lucide-react'
 import { useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -102,6 +103,9 @@ export default function DashboardContent({
   const [optimisticAvatar, setOptimisticAvatar] = useState<string | null>(null)
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
+  
+  // ตรวจสอบว่าสติเหลือ 0 หรือไม่ (Sanity Lock)
+  const isSanityLocked = profile?.sanity === 0
   
   // Apply sanity decay on page load
   useEffect(() => {
@@ -313,8 +317,13 @@ export default function DashboardContent({
 
         {/* 2. Grid Menu */}
         <section className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
-          <Link href="/dashboard/maps" className="group relative overflow-hidden card-victorian p-12 lg:p-16 flex flex-col items-center justify-center gap-8 
-                                    hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 cursor-pointer min-h-[350px]">
+          <Link 
+            href={isSanityLocked ? "#" : "/dashboard/maps"} 
+            className={`group relative overflow-hidden card-victorian p-12 lg:p-16 flex flex-col items-center justify-center gap-8 
+                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[350px]
+                        ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+            title={isSanityLocked ? "ถูกล็อค: สติของคุณเหลือ 0" : ""}
+          >
             <CornerOrnament className="absolute top-0 left-0 w-24 h-24" />
             <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-24 h-24" />
             <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-24 h-24" />
@@ -322,7 +331,11 @@ export default function DashboardContent({
             <div className="relative z-10 flex flex-col items-center gap-8">
               <div className="w-32 h-32 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
                               flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
-                <Map className="w-16 h-16 text-gold-400" />
+                {isSanityLocked ? (
+                  <Lock className="w-16 h-16 text-red-500" />
+                ) : (
+                  <Map className="w-16 h-16 text-gold-400" />
+                )}
               </div>
               <h3 className="heading-victorian text-5xl">แผนที่</h3>
               <p className="text-victorian-400 text-center text-2xl font-body">
@@ -331,8 +344,13 @@ export default function DashboardContent({
             </div>
           </Link>
 
-          <a href="/dashboard/skills" className="group relative overflow-hidden card-victorian p-12 lg:p-16 flex flex-col items-center justify-center gap-8 
-                                       hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 cursor-pointer min-h-[350px]">
+          <a 
+            href={isSanityLocked ? "#" : "/dashboard/skills"} 
+            className={`group relative overflow-hidden card-victorian p-12 lg:p-16 flex flex-col items-center justify-center gap-8 
+                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[350px]
+                        ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+            title={isSanityLocked ? "ถูกล็อค: สติของคุณเหลือ 0" : ""}
+          >
             <CornerOrnament className="absolute top-0 left-0 w-24 h-24" />
             <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-24 h-24" />
             <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-24 h-24" />
@@ -340,7 +358,11 @@ export default function DashboardContent({
             <div className="relative z-10 flex flex-col items-center gap-8">
               <div className="w-32 h-32 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
                               flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
-                <Zap className="w-16 h-16 text-gold-400" />
+                {isSanityLocked ? (
+                  <Lock className="w-16 h-16 text-red-500" />
+                ) : (
+                  <Zap className="w-16 h-16 text-gold-400" />
+                )}
               </div>
               <h3 className="heading-victorian text-5xl">สกิล</h3>
               <p className="text-victorian-400 text-center text-2xl font-body">
@@ -349,8 +371,13 @@ export default function DashboardContent({
             </div>
           </a>
 
-          <a href="#enemies" className="group relative overflow-hidden card-victorian p-12 lg:p-16 flex flex-col items-center justify-center gap-8 
-                                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 cursor-pointer min-h-[350px]">
+          <a 
+            href={isSanityLocked ? "#" : "#enemies"} 
+            className={`group relative overflow-hidden card-victorian p-12 lg:p-16 flex flex-col items-center justify-center gap-8 
+                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[350px]
+                        ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+            title={isSanityLocked ? "ถูกล็อค: สติของคุณเหลือ 0" : ""}
+          >
             <CornerOrnament className="absolute top-0 left-0 w-24 h-24" />
             <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-24 h-24" />
             <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-24 h-24" />
@@ -358,7 +385,11 @@ export default function DashboardContent({
             <div className="relative z-10 flex flex-col items-center gap-8">
               <div className="w-32 h-32 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
                               flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
-                <Skull className="w-16 h-16 text-gold-400" />
+                {isSanityLocked ? (
+                  <Lock className="w-16 h-16 text-red-500" />
+                ) : (
+                  <Skull className="w-16 h-16 text-gold-400" />
+                )}
               </div>
               <h3 className="heading-victorian text-5xl">ข้อมูลศัตรู</h3>
               <p className="text-victorian-400 text-center text-2xl font-body">
@@ -367,8 +398,13 @@ export default function DashboardContent({
             </div>
           </a>
 
-          <a href="/dashboard/players" className="group relative overflow-hidden card-victorian p-12 lg:p-16 flex flex-col items-center justify-center gap-8 
-                                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 cursor-pointer min-h-[350px]">
+          <a 
+            href={isSanityLocked ? "#" : "/dashboard/players"} 
+            className={`group relative overflow-hidden card-victorian p-12 lg:p-16 flex flex-col items-center justify-center gap-8 
+                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[350px]
+                        ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+            title={isSanityLocked ? "ถูกล็อค: สติของคุณเหลือ 0" : ""}
+          >
             <CornerOrnament className="absolute top-0 left-0 w-24 h-24" />
             <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-24 h-24" />
             <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-24 h-24" />
@@ -376,7 +412,11 @@ export default function DashboardContent({
             <div className="relative z-10 flex flex-col items-center gap-8">
               <div className="w-32 h-32 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
                               flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
-                <Users className="w-16 h-16 text-gold-400" />
+                {isSanityLocked ? (
+                  <Lock className="w-16 h-16 text-red-500" />
+                ) : (
+                  <Users className="w-16 h-16 text-gold-400" />
+                )}
               </div>
               <h3 className="heading-victorian text-5xl">ทำเนียบผู้เล่น</h3>
               <p className="text-victorian-400 text-center text-2xl font-body">
@@ -441,16 +481,24 @@ export default function DashboardContent({
               <button
                 type="button"
                 onClick={() => {
+                  if (isSanityLocked) return
                   setShowProfile(false)
                   setShowEditAvatar(true)
                 }}
-                className="w-full flex items-center justify-center gap-3 px-4 py-3
+                disabled={isSanityLocked}
+                className={`w-full flex items-center justify-center gap-3 px-4 py-3
                            border border-gold-400/20 rounded-sm
                            text-nouveau-cream hover:text-gold-400 hover:border-gold-400/40
-                           transition-colors cursor-pointer text-base"
+                           transition-colors text-base
+                           ${isSanityLocked ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                 style={{ backgroundColor: '#231C14' }}
+                title={isSanityLocked ? "ถูกล็อค: สติของคุณเหลือ 0" : ""}
               >
-                <Settings className="w-5 h-5" />
+                {isSanityLocked ? (
+                  <Lock className="w-5 h-5 text-red-500" />
+                ) : (
+                  <Settings className="w-5 h-5" />
+                )}
                 การตั้งค่า
               </button>
 
@@ -474,9 +522,9 @@ export default function DashboardContent({
       )}
 
       {/* ═══════════════════════════════════════════ */}
-      {/*  EDIT AVATAR POPUP                          */}
+      {/*  EDIT AVATAR POPUP — Only if NOT locked    */}
       {/* ═══════════════════════════════════════════ */}
-      {showEditAvatar && (
+      {showEditAvatar && !isSanityLocked && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           onClick={() => setShowEditAvatar(false)}
@@ -584,6 +632,9 @@ export default function DashboardContent({
           onSaved={() => router.refresh()}
         />
       )}
+
+      {/* Sanity Lock Overlay - แสดงเมื่อสติเหลือ 0 */}
+      {isSanityLocked && <SanityLockOverlay />}
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { ArrowLeft, Crown, Shield, Swords, Pencil, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
+import SanityLockOverlay from '@/components/sanity-lock-overlay'
 
 interface Profile {
   id: string
@@ -83,6 +84,9 @@ export default function PlayersContent({
   const [editingPlayer, setEditingPlayer] = useState<Profile | null>(null)
 
   const isAdmin = currentProfile?.role === 'admin' || currentProfile?.role === 'dm'
+  
+  // ตรวจสอบว่าสติเหลือ 0 หรือไม่
+  const isSanityLocked = (currentProfile?.sanity ?? 10) === 0
 
   // Helper: get pathways for a player
   function getPlayerPathwayInfo(playerId: string) {
@@ -231,6 +235,9 @@ export default function PlayersContent({
           playerPathways={playerPathways}
         />
       )}
+      
+      {/* Sanity Lock Overlay */}
+      {isSanityLocked && <SanityLockOverlay />}
     </div>
   )
 }

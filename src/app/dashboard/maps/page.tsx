@@ -10,10 +10,10 @@ export default async function MapsPage() {
     redirect('/')
   }
 
-  // Fetch user profile for role check
+  // Fetch user profile for role check and sanity
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, sanity')
     .eq('id', user.id)
     .single()
 
@@ -34,5 +34,5 @@ export default async function MapsPage() {
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
 
-  return <MapsContent maps={maps ?? []} isAdmin={isAdmin} myMapId={myToken?.map_id ?? null} />
+  return <MapsContent maps={maps ?? []} isAdmin={isAdmin} myMapId={myToken?.map_id ?? null} sanity={profile?.sanity ?? 10} />
 }
