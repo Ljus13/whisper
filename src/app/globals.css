@@ -1,0 +1,177 @@
+@import url('https://fonts.googleapis.com/css2?family=Uncial+Antiqua&family=Kanit:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ══════════════════════════════════════════════
+   VICTORIAN / ART NOUVEAU THEME — WHISPER DND
+   ══════════════════════════════════════════════ */
+
+@layer base {
+  :root {
+    --gold-primary:   #D4AF37;
+    --gold-secondary: #C5A55A;
+    --gold-dim:       rgba(212, 175, 55, 0.3);
+    --bg-dark:        #0F0D0A;
+    --bg-surface:     #1A1612;
+    --bg-elevated:    #231C14;
+    --text-primary:   #F5F0E1;
+    --text-secondary: #A89070;
+    --border-gold:    rgba(212, 175, 55, 0.25);
+  }
+
+  body {
+    @apply bg-victorian-950 text-nouveau-cream font-body antialiased;
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(212, 175, 55, 0.03) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(139, 116, 37, 0.04) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 80%, rgba(72, 73, 75, 0.05) 0%, transparent 50%);
+  }
+
+  ::selection {
+    background: rgba(212, 175, 55, 0.3);
+    color: #F5F0E1;
+  }
+
+  /* Scrollbar Victorian Style */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0F0D0A;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #705D1C, #4A3E13);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #8B7425, #705D1C);
+  }
+}
+
+@layer components {
+  /* ── Art Nouveau Ornamental Divider ── */
+  .ornament-divider {
+    @apply relative w-full h-px my-8;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--gold-dim) 20%,
+      var(--gold-primary) 50%,
+      var(--gold-dim) 80%,
+      transparent 100%
+    );
+  }
+  .ornament-divider::before,
+  .ornament-divider::after {
+    content: '✦';
+    @apply absolute top-1/2 -translate-y-1/2 text-gold-400 text-xs;
+  }
+  .ornament-divider::before { left: 45%; }
+  .ornament-divider::after  { right: 45%; }
+
+  /* ── Victorian Card ── */
+  .card-victorian {
+    @apply relative bg-victorian-900/80 backdrop-blur-sm 
+           border border-gold-subtle rounded-sm p-6
+           shadow-inner-gold;
+    background-image:
+      linear-gradient(135deg, rgba(212, 175, 55, 0.02) 0%, transparent 50%),
+      linear-gradient(225deg, rgba(72, 73, 75, 0.03) 0%, transparent 50%);
+  }
+  .card-victorian::before {
+    content: '';
+    @apply absolute inset-0 pointer-events-none rounded-sm;
+    background: linear-gradient(
+      135deg,
+      rgba(212, 175, 55, 0.08) 0%,
+      transparent 40%,
+      transparent 60%,
+      rgba(212, 175, 55, 0.05) 100%
+    );
+  }
+
+  /* ── Gold Button ── */
+  .btn-gold {
+    @apply relative inline-flex items-center justify-center gap-2
+           px-8 py-4 font-display font-semibold text-lg tracking-wider
+           text-victorian-950 bg-gold-gradient
+           border border-gold-400/50
+           rounded-sm
+           shadow-gold
+           transition-all duration-300 ease-out
+           hover:shadow-gold-lg hover:scale-[1.02]
+           active:scale-[0.98]
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100;
+  }
+
+  /* ── Outlined Victorian Button ── */
+  .btn-victorian {
+    @apply relative inline-flex items-center justify-center gap-2
+           px-8 py-4 font-display font-medium text-lg tracking-wider
+           text-gold-400 
+           border border-gold-400/30
+           rounded-sm
+           bg-victorian-900/50 backdrop-blur-sm
+           transition-all duration-300 ease-out
+           hover:border-gold-400/60 hover:bg-victorian-800/50 hover:shadow-gold
+           active:scale-[0.98];
+  }
+
+  /* ── Art Nouveau Frame ── */
+  .frame-nouveau {
+    @apply relative border border-gold-400/20 rounded-sm;
+    box-shadow:
+      inset 0 0 30px rgba(212, 175, 55, 0.05),
+      0 0 15px rgba(212, 175, 55, 0.1);
+  }
+  .frame-nouveau::before {
+    content: '';
+    @apply absolute -inset-px pointer-events-none rounded-sm;
+    background: linear-gradient(
+      135deg,
+      rgba(212, 175, 55, 0.15),
+      transparent 30%,
+      transparent 70%,
+      rgba(212, 175, 55, 0.1)
+    );
+  }
+
+  /* ── Victorian Heading ── */
+  .heading-victorian {
+    @apply font-display font-bold tracking-wide;
+    background: linear-gradient(135deg, #E8C84D 0%, #D4AF37 40%, #C5A55A 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ── Input Victorian ── */
+  .input-victorian {
+    @apply w-full px-6 py-4 text-lg
+           bg-victorian-900/60 backdrop-blur-sm
+           border border-gold-400/20 rounded-sm
+           text-nouveau-cream font-body placeholder:text-victorian-400
+           focus:outline-none focus:border-gold-400/50 focus:shadow-gold
+           transition-all duration-300;
+  }
+}
+
+@layer utilities {
+  .text-gold-shine {
+    background: linear-gradient(135deg, #E8C84D 0%, #D4AF37 40%, #C5A55A 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .border-art-nouveau {
+    border-image: linear-gradient(
+      135deg,
+      rgba(212, 175, 55, 0.4),
+      rgba(212, 175, 55, 0.1),
+      rgba(212, 175, 55, 0.4)
+    ) 1;
+  }
+}
