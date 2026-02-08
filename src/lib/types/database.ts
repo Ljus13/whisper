@@ -35,6 +35,8 @@ export interface SkillPathway {
   type_id: string
   name: string
   description: string | null
+  bg_url: string | null
+  logo_url: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -69,6 +71,14 @@ export interface PlayerPathway {
   sequence_id: string | null
   created_at: string
   updated_at: string
+}
+
+export interface SkillUsageLog {
+  id: string
+  player_id: string
+  skill_id: string
+  spirit_cost: number
+  used_at: string
 }
 
 export interface GameMap {
@@ -178,11 +188,15 @@ export interface Database {
           type_id: string
           name: string
           description?: string | null
+          bg_url?: string | null
+          logo_url?: string | null
           sort_order?: number
         }
         Update: {
           name?: string
           description?: string | null
+          bg_url?: string | null
+          logo_url?: string | null
           sort_order?: number
         }
       }

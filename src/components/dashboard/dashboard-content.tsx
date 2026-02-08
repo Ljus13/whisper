@@ -85,10 +85,12 @@ function RoleBadge({ role }: { role: string }) {
 
 export default function DashboardContent({ 
   user, 
-  profile 
+  profile,
+  rankDisplay = 'Level 1 Adventurer'
 }: { 
   user: User
-  profile: Profile | null 
+  profile: Profile | null
+  rankDisplay?: string 
 }) {
   const [showProfile, setShowProfile] = useState(false)
   const [showEditAvatar, setShowEditAvatar] = useState(false)
@@ -172,46 +174,43 @@ export default function DashboardContent({
         {/* 1. Character Info Section */}
         <OrnamentedCard className="p-10 md:p-14 animate-fade-in">
         <section className="flex flex-col xl:flex-row items-center xl:items-start gap-12 xl:gap-20">
-          {/* Left: Avatar + Name + Role */}
+          {/* Left: Avatar + Name */}
           <div className="flex flex-col items-center text-center w-full xl:w-auto shrink-0">
-            <div className="relative group mb-8">
-              <div className="absolute -inset-1 rounded-full bg-gold-400/20 blur-md group-hover:bg-gold-400/30 transition-all duration-500" />
+            <div className="relative group mb-6">
+              <div className="absolute -inset-1 rounded-xl bg-gold-400/20 blur-md group-hover:bg-gold-400/30 transition-all duration-500" />
               {currentAvatarUrl ? (
                 <img
                   src={currentAvatarUrl}
                   alt={displayName}
-                  className="relative w-48 h-48 md:w-64 md:h-64 rounded-full border-4 border-gold-400/50 object-cover shadow-gold"
+                  className="relative w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 rounded-xl border-4 border-gold-400/50 object-cover shadow-gold"
                 />
               ) : (
-                <div className="relative w-48 h-48 md:w-64 md:h-64 rounded-full border-4 border-gold-400/50 
+                <div className="relative w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 rounded-xl border-4 border-gold-400/50 
                                 bg-victorian-800 flex items-center justify-center shadow-gold">
-                  <span className="text-gold-400 text-7xl font-display">
+                  <span className="text-gold-400 text-8xl font-body font-semibold">
                     {displayName[0]?.toUpperCase()}
                   </span>
                 </div>
               )}
-              <div className="absolute bottom-2 right-2 scale-125">
-                <RoleBadge role={role} />
-              </div>
             </div>
-            <div className="flex items-center gap-4 justify-center">
-              <h2 className="heading-victorian text-5xl md:text-7xl">
+            <div className="flex items-center gap-3 justify-center">
+              <h2 className="heading-victorian text-3xl md:text-4xl">
                 {displayName}
               </h2>
               {isAdmin && (
                 <button
                   type="button"
                   onClick={() => setShowAdminEdit(true)}
-                  className="p-3 text-victorian-400 hover:text-gold-400 cursor-pointer 
+                  className="p-2 text-victorian-400 hover:text-gold-400 cursor-pointer 
                              bg-victorian-900/60 rounded-md border border-gold-400/10 hover:border-gold-400/30 transition-all"
                   title="แก้ไขข้อมูล (Admin)"
                 >
-                  <Pencil className="w-8 h-8" />
+                  <Pencil className="w-5 h-5" />
                 </button>
               )}
             </div>
-            <p className="text-victorian-300 font-display text-2xl uppercase tracking-widest mt-4">
-              Level 1 Adventurer
+            <p className="text-victorian-300 font-body text-lg md:text-xl tracking-wide mt-3">
+              {rankDisplay}
             </p>
           </div>
 

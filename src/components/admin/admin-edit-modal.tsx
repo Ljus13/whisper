@@ -1,7 +1,8 @@
 'use client'
 
 import { adminUpdatePlayer } from '@/app/actions/players'
-import { X, Save, Crown, Shield, Swords, Plus, Minus } from 'lucide-react'
+import { assignPlayerPathway, removePlayerPathway } from '@/app/actions/skills'
+import { X, Save, Crown, Shield, Swords, Plus, Minus, GitBranch, Trash2 } from 'lucide-react'
 import { useState, useTransition } from 'react'
 
 interface PlayerProfile {
@@ -18,17 +19,48 @@ interface PlayerProfile {
   max_travel_points: number
 }
 
+interface PathwayInfo {
+  id: string
+  name: string
+}
+
+interface SequenceInfo {
+  id: string
+  pathway_id: string
+  seq_number: number
+  name: string
+}
+
+interface PlayerPathwayInfo {
+  id: string
+  player_id: string
+  pathway_id: string | null
+  sequence_id: string | null
+}
+
 export default function AdminEditModal({
   player,
   onClose,
   onSaved,
+  pathways = [],
+  sequences = [],
+  playerPathways = [],
 }: {
   player: PlayerProfile
   onClose: () => void
   onSaved?: () => void
+  pathways?: PathwayInfo[]
+  sequences?: SequenceInfo[]
+  playerPathways?: PlayerPathwayInfo[]
 }) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [showAddPathway, setShowAddPathway] = useState(false)
+  const [newPathwayId, setNewPathwayId] = useState('')
+  const [newSequenceId, setNewSequenceId] = useState('')
+
+  // Get current player pathways
+  const currentPPs = playerPathways.filter(pp => pp.player_id === player.id)
 
   function handleSubmit(formData: FormData) {
     setError(null)
@@ -237,6 +269,153 @@ export default function AdminEditModal({
               />
             </div>
           </div>
+
+          {/* Ornament Divider */}
+          <div className="ornament-divider !my-4" />
+
+          {/* ═══ Pathway & Sequence Management ═══ */}
+          {pathways.length > 0 && (
+            <div>
+              <label className="block text-sm text-gold-400 mb-2 font-display tracking-wider uppercase flex items-center gap-2">
+                <GitBranch className="w-4 h-4" /> เส้นทางและลำดับ
+              </label>
+
+              {/* Current Pathways */}
+              {currentPPs.length > 0 ? (
+                <div className="space-y-2 mb-3">
+                  {currentPPs.map(pp => {
+                    const pw = pathways.find(p => p.id === pp.pathway_id)
+                    const pathSeqs = sequences.filter(s => s.pathway_id === pp.pathway_id).sort((a, b) => b.seq_number - a.seq_number)
+                    const currentSeq = sequences.find(s => s.id === pp.sequence_id)
+                    if (!pw) return null
+                    return (
+                      <div key={pp.id} className="p-3 bg-victorian-950/60 border border-gold-400/10 rounded-sm space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-nouveau-cream/80 text-sm font-display">{pw.name}</span>
+                          <button
+                            type="button"
+                            disabled={isPending}
+                            onClick={() => {
+                              startTransition(async () => {
+                                const result = await removePlayerPathway(player.id, pw.id)
+                                if (result?.error) setError(result.error)
+                                else onSaved?.()
+                              })
+                            }}
+                            className="p-1 text-red-400/40 hover:text-red-400 rounded transition-colors"
+                            title="ลบเส้นทาง"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        {/* Sequence selector */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-victorian-400 text-xs">ลำดับ:</span>
+                          <select
+                            className="input-victorian !py-1 !px-2 !text-sm flex-1"
+                            defaultValue={pp.sequence_id || ''}
+                            onChange={(e) => {
+                              const seqId = e.target.value || null
+                              startTransition(async () => {
+                                const result = await assignPlayerPathway(player.id, pw.id, seqId)
+                                if (result?.error) setError(result.error)
+                                else onSaved?.()
+                              })
+                            }}
+                          >
+                            <option value="">— ยังไม่กำหนด —</option>
+                            {pathSeqs.map(s => (
+                              <option key={s.id} value={s.id}>#{s.seq_number} {s.name}</option>
+                            ))}
+                          </select>
+                          {currentSeq && (
+                            <span className="text-gold-400 text-xs font-mono">#{currentSeq.seq_number}</span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-victorian-500 text-sm italic mb-3">ยังไม่มีเส้นทาง</p>
+              )}
+
+              {/* Add Pathway */}
+              {showAddPathway ? (
+                <div className="p-3 bg-victorian-900/30 border border-gold-400/10 rounded-sm space-y-2">
+                  <div>
+                    <label className="text-victorian-400 text-xs block mb-1">เลือกเส้นทาง</label>
+                    <select
+                      className="input-victorian !py-1.5 !px-2 !text-sm w-full"
+                      value={newPathwayId}
+                      onChange={(e) => { setNewPathwayId(e.target.value); setNewSequenceId('') }}
+                    >
+                      <option value="">— เลือก —</option>
+                      {pathways
+                        .filter(pw => !currentPPs.some(pp => pp.pathway_id === pw.id))
+                        .map(pw => (
+                          <option key={pw.id} value={pw.id}>{pw.name}</option>
+                        ))}
+                    </select>
+                  </div>
+                  {newPathwayId && (
+                    <div>
+                      <label className="text-victorian-400 text-xs block mb-1">ลำดับเริ่มต้น</label>
+                      <select
+                        className="input-victorian !py-1.5 !px-2 !text-sm w-full"
+                        value={newSequenceId}
+                        onChange={(e) => setNewSequenceId(e.target.value)}
+                      >
+                        <option value="">— ยังไม่กำหนด —</option>
+                        {sequences
+                          .filter(s => s.pathway_id === newPathwayId)
+                          .sort((a, b) => b.seq_number - a.seq_number)
+                          .map(s => (
+                            <option key={s.id} value={s.id}>#{s.seq_number} {s.name}</option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={isPending || !newPathwayId}
+                      onClick={() => {
+                        startTransition(async () => {
+                          const result = await assignPlayerPathway(player.id, newPathwayId, newSequenceId || null)
+                          if (result?.error) setError(result.error)
+                          else {
+                            setShowAddPathway(false)
+                            setNewPathwayId('')
+                            setNewSequenceId('')
+                            onSaved?.()
+                          }
+                        })
+                      }}
+                      className="btn-gold px-3 py-1 text-xs"
+                    >
+                      บันทึก
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowAddPathway(false); setNewPathwayId(''); setNewSequenceId('') }}
+                      className="btn-victorian px-3 py-1 text-xs"
+                    >
+                      ยกเลิก
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowAddPathway(true)}
+                  className="text-sm text-gold-400 hover:text-gold-300 flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" /> เพิ่มเส้นทาง
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Submit */}
           <div className="flex justify-end gap-3 pt-2">

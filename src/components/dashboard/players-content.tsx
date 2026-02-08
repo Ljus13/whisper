@@ -226,6 +226,9 @@ export default function PlayersContent({
           player={editingPlayer}
           onClose={() => setEditingPlayer(null)}
           onSaved={() => router.refresh()}
+          pathways={pathways}
+          sequences={sequences}
+          playerPathways={playerPathways}
         />
       )}
     </div>

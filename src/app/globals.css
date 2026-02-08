@@ -140,7 +140,7 @@
 
   /* ── Victorian Heading ── */
   .heading-victorian {
-    @apply font-display font-bold tracking-wide;
+    @apply font-body font-semibold tracking-wide;
     background: linear-gradient(135deg, #E8C84D 0%, #D4AF37 40%, #C5A55A 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;

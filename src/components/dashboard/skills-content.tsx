@@ -5,13 +5,14 @@ import { User } from '@supabase/supabase-js'
 import type { Profile, SkillType, SkillPathway, SkillSequence, Skill, PlayerPathway } from '@/lib/types/database'
 import {
   ArrowLeft, ChevronDown, ChevronRight, Plus, Trash2, Sparkles, Zap,
-  GitBranch, Layers, Shield, Lock, BookOpen
+  GitBranch, Layers, Shield, Lock, BookOpen, Pencil
 } from 'lucide-react'
 import {
   createSkillType, deleteSkillType,
-  createSkillPathway, deleteSkillPathway,
-  createSkillSequence, deleteSkillSequence,
-  createSkill, deleteSkill
+  createSkillPathway, deleteSkillPathway, updateSkillPathway,
+  createSkillSequence, deleteSkillSequence, updateSkillSequence,
+  createSkill, deleteSkill,
+  castSkill
 } from '@/app/actions/skills'
 
 /* ─── Art Nouveau Corner Ornament ─── */
@@ -72,6 +73,8 @@ function AdminPanel({
   const [showAddPathway, setShowAddPathway] = useState<string | null>(null)
   const [showAddSequence, setShowAddSequence] = useState<string | null>(null)
   const [showAddSkill, setShowAddSkill] = useState<string | null>(null)
+  const [editPathwayId, setEditPathwayId] = useState<string | null>(null)
+  const [editSequenceId, setEditSequenceId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   function handleAction(action: () => Promise<{ error?: string; success?: boolean }>) {
@@ -172,6 +175,8 @@ function AdminPanel({
                       <input type="hidden" name="type_id" value={type.id} />
                       <input name="name" placeholder="ชื่อเส้นทาง" required className="input-victorian w-full text-sm" />
                       <textarea name="description" placeholder="คำอธิบาย" className="input-victorian w-full text-sm" rows={2} />
+                      <input name="bg_url" placeholder="URL ภาพพื้นหลัง (5:4)" className="input-victorian w-full text-sm" />
+                      <input name="logo_url" placeholder="URL โลโก้ (1:1 PNG)" className="input-victorian w-full text-sm" />
                       <div className="flex gap-2">
                         <button type="submit" disabled={isPending} className="btn-gold px-3 py-1.5 text-xs">บันทึก</button>
                         <button type="button" onClick={() => setShowAddPathway(null)} className="btn-victorian px-3 py-1.5 text-xs">ยกเลิก</button>
@@ -183,8 +188,26 @@ function AdminPanel({
                     const pathSeqs = sequences.filter(s => s.pathway_id === pathway.id).sort((a, b) => b.seq_number - a.seq_number)
                     const pathSkills = skills.filter(s => s.pathway_id === pathway.id)
                     const isPathOpen = openPathway === pathway.id
+                    const isEditing = editPathwayId === pathway.id
                     return (
                       <div key={pathway.id} className="ml-4 border-l-2 border-gold-400/10 pl-4">
+                        {isEditing ? (
+                          /* ── Inline Edit Pathway Form ── */
+                          <form
+                            className="p-3 bg-victorian-900/30 border border-gold-400/10 rounded space-y-2 my-2"
+                            action={(fd) => { handleAction(() => updateSkillPathway(pathway.id, fd)); setEditPathwayId(null) }}
+                          >
+                            <h4 className="text-gold-300 text-sm font-semibold flex items-center gap-2"><Pencil className="w-3.5 h-3.5" /> แก้ไขเส้นทาง</h4>
+                            <input name="name" defaultValue={pathway.name} placeholder="ชื่อเส้นทาง" required className="input-victorian w-full text-sm" />
+                            <textarea name="description" defaultValue={pathway.description || ''} placeholder="คำอธิบาย" className="input-victorian w-full text-sm" rows={2} />
+                            <input name="bg_url" defaultValue={pathway.bg_url || ''} placeholder="URL ภาพพื้นหลัง (5:4)" className="input-victorian w-full text-sm" />
+                            <input name="logo_url" defaultValue={pathway.logo_url || ''} placeholder="URL โลโก้ (1:1 PNG)" className="input-victorian w-full text-sm" />
+                            <div className="flex gap-2">
+                              <button type="submit" disabled={isPending} className="btn-gold px-3 py-1.5 text-xs">บันทึก</button>
+                              <button type="button" onClick={() => setEditPathwayId(null)} className="btn-victorian px-3 py-1.5 text-xs">ยกเลิก</button>
+                            </div>
+                          </form>
+                        ) : (
                         <div
                           className="flex items-center justify-between py-2 cursor-pointer"
                           onClick={() => setOpenPathway(isPathOpen ? null : pathway.id)}
@@ -195,13 +218,23 @@ function AdminPanel({
                             <span className="text-gold-200">{pathway.name}</span>
                             <span className="text-victorian-500 text-xs">({pathSeqs.length} ลำดับ, {pathSkills.length} สกิล)</span>
                           </div>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleAction(() => deleteSkillPathway(pathway.id)) }}
-                            className="p-1 text-red-400/60 hover:text-red-400 rounded transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setEditPathwayId(pathway.id) }}
+                              className="p-1 text-gold-400/40 hover:text-gold-400 rounded transition-colors"
+                              title="แก้ไขเส้นทาง"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleAction(() => deleteSkillPathway(pathway.id)) }}
+                              className="p-1 text-red-400/60 hover:text-red-400 rounded transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
+                        )}
 
                         {isPathOpen && (
                           <div className="ml-4 space-y-3 py-2">
@@ -238,21 +271,53 @@ function AdminPanel({
                               )}
 
                               {pathSeqs.map(seq => (
-                                <div key={seq.id} className="flex items-center justify-between py-1 px-2 rounded hover:bg-victorian-800/20 text-sm">
-                                  <span className="text-victorian-300">
-                                    <span className={`font-mono mr-2 ${seq.seq_number <= 2 ? 'text-red-400' : seq.seq_number <= 5 ? 'text-amber-400' : 'text-gold-400'}`}>
-                                      ลำดับ {seq.seq_number}
-                                    </span>
-                                    {seq.name}
-                                    {seq.seq_number === 9 && <span className="text-victorian-500 text-xs ml-2">(เริ่มต้น)</span>}
-                                    {seq.seq_number === 0 && <span className="text-red-400 text-xs ml-2">(สูงสุด)</span>}
-                                  </span>
-                                  <button
-                                    onClick={() => handleAction(() => deleteSkillSequence(seq.id))}
-                                    className="p-1 text-red-400/40 hover:text-red-400 rounded transition-colors"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
+                                <div key={seq.id}>
+                                  {editSequenceId === seq.id ? (
+                                    /* ── Inline Edit Sequence Form ── */
+                                    <form
+                                      className="p-2 bg-victorian-900/30 border border-gold-400/10 rounded space-y-2 my-1"
+                                      action={(fd) => { handleAction(() => updateSkillSequence(seq.id, fd)); setEditSequenceId(null) }}
+                                    >
+                                      <h4 className="text-gold-300 text-xs font-semibold flex items-center gap-1"><Pencil className="w-3 h-3" /> แก้ไขลำดับ</h4>
+                                      <div className="flex gap-2">
+                                        <div className="w-20">
+                                          <input name="seq_number" type="number" min="0" max="9" defaultValue={seq.seq_number} required className="input-victorian w-full text-sm" />
+                                          <span className="text-victorian-500 text-[10px]">9=อ่อน, 0=แกร่ง</span>
+                                        </div>
+                                        <input name="name" defaultValue={seq.name} placeholder="ชื่อลำดับ" required className="input-victorian flex-1 text-sm" />
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <button type="submit" disabled={isPending} className="btn-gold px-3 py-1 text-xs">บันทึก</button>
+                                        <button type="button" onClick={() => setEditSequenceId(null)} className="btn-victorian px-3 py-1 text-xs">ยกเลิก</button>
+                                      </div>
+                                    </form>
+                                  ) : (
+                                    <div className="flex items-center justify-between py-1 px-2 rounded hover:bg-victorian-800/20 text-sm">
+                                      <span className="text-victorian-300">
+                                        <span className={`font-mono mr-2 ${seq.seq_number <= 2 ? 'text-red-400' : seq.seq_number <= 5 ? 'text-amber-400' : 'text-gold-400'}`}>
+                                          ลำดับ {seq.seq_number}
+                                        </span>
+                                        {seq.name}
+                                        {seq.seq_number === 9 && <span className="text-victorian-500 text-xs ml-2">(เริ่มต้น)</span>}
+                                        {seq.seq_number === 0 && <span className="text-red-400 text-xs ml-2">(สูงสุด)</span>}
+                                      </span>
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          onClick={() => setEditSequenceId(seq.id)}
+                                          className="p-1 text-gold-400/40 hover:text-gold-400 rounded transition-colors"
+                                          title="แก้ไขลำดับ"
+                                        >
+                                          <Pencil className="w-3 h-3" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleAction(() => deleteSkillSequence(seq.id))}
+                                          className="p-1 text-red-400/40 hover:text-red-400 rounded transition-colors"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -337,166 +402,245 @@ function AdminPanel({
 }
 
 /* ═══════════════════════════════════════
-   PLAYER VIEW: Skills filtered by access
+   PLAYER VIEW: Two-column pathway + skills
    ═══════════════════════════════════════ */
 function PlayerSkillView({
-  skillTypes, pathways, sequences, skills, playerPathways
+  profile, skillTypes, pathways, sequences, skills, playerPathways
 }: {
+  profile: Profile | null
   skillTypes: SkillType[]
   pathways: SkillPathway[]
   sequences: SkillSequence[]
   skills: Skill[]
   playerPathways: PlayerPathway[]
 }) {
-  const [expandedType, setExpandedType] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+  const [usedSkill, setUsedSkill] = useState<{ name: string; remaining: number } | null>(null)
+  const [skillError, setSkillError] = useState<string | null>(null)
 
   // Determine which skills the player can access
   function canAccessSkill(skill: Skill): boolean {
-    // Find player's progression for this skill's pathway
     const pp = playerPathways.find(pp => pp.pathway_id === skill.pathway_id)
     if (!pp || !pp.sequence_id) return false
-
-    // Find the player's current sequence and the skill's required sequence
     const playerSeq = sequences.find(s => s.id === pp.sequence_id)
     const skillSeq = sequences.find(s => s.id === skill.sequence_id)
     if (!playerSeq || !skillSeq) return false
-
-    // Inverted system: 9=weakest, 0=strongest
-    // Player at seq 7 can access skills at seq 9, 8, 7 (>= their level)
     return skillSeq.seq_number >= playerSeq.seq_number
   }
 
-  // Check if player has any pathway in a given type
-  function hasAccessToType(typeId: string): boolean {
-    const typePathwayIds = pathways.filter(p => p.type_id === typeId).map(p => p.id)
-    return playerPathways.some(pp => pp.pathway_id && typePathwayIds.includes(pp.pathway_id))
+  function handleUseSkill(skillId: string) {
+    setSkillError(null)
+    setUsedSkill(null)
+    startTransition(async () => {
+      const result = await castSkill(skillId)
+      if (result.error) {
+        setSkillError(result.error)
+        setTimeout(() => setSkillError(null), 4000)
+      } else if (result.success) {
+        setUsedSkill({ name: result.skillName!, remaining: result.remaining! })
+        setTimeout(() => setUsedSkill(null), 3000)
+      }
+    })
+  }
+
+  // Get player's accessible pathways
+  const accessiblePathways = pathways.filter(p =>
+    playerPathways.some(pp => pp.pathway_id === p.id && pp.sequence_id)
+  )
+
+  if (accessiblePathways.length === 0) {
+    return (
+      <OrnamentedCard className="p-10 text-center">
+        <BookOpen className="w-16 h-16 text-gold-400/40 mx-auto mb-4" />
+        <p className="text-victorian-400 text-2xl heading-victorian">ยังไม่มีเส้นทางสกิลที่เข้าถึงได้</p>
+        <p className="text-victorian-500 text-lg mt-2">รอผู้ดูแลกำหนดเส้นทางให้กับคุณ</p>
+      </OrnamentedCard>
+    )
   }
 
   return (
-    <div className="space-y-4">
-      {skillTypes.length === 0 && (
-        <OrnamentedCard className="p-8 text-center">
-          <BookOpen className="w-12 h-12 text-gold-400/40 mx-auto mb-4" />
-          <p className="text-victorian-400 text-lg">ยังไม่มีระบบสกิลใดถูกสร้างขึ้น</p>
-          <p className="text-victorian-500 text-sm mt-1">รอผู้ดูแลเพิ่มสกิลเข้าสู่ระบบ</p>
-        </OrnamentedCard>
+    <div className="space-y-6">
+      {/* Spirituality Bar */}
+      <OrnamentedCard className="p-5">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-gold-300 text-xl font-semibold flex items-center gap-2">
+            <Sparkles className="w-6 h-6" /> พลังวิญญาณ
+          </span>
+          <span className="text-3xl font-bold text-gold-200">
+            {profile?.spirituality ?? 0} <span className="text-lg text-victorian-400">/ {profile?.max_spirituality ?? 0}</span>
+          </span>
+        </div>
+        <div className="w-full h-4 bg-victorian-900 rounded-full overflow-hidden border border-gold-400/20">
+          <div
+            className="h-full bg-gradient-to-r from-blue-600 via-purple-500 to-gold-400 rounded-full transition-all duration-700"
+            style={{ width: `${Math.min(100, ((profile?.spirituality ?? 0) / Math.max(1, profile?.max_spirituality ?? 1)) * 100)}%` }}
+          />
+        </div>
+      </OrnamentedCard>
+
+      {/* Feedback messages */}
+      {skillError && (
+        <div className="p-4 bg-red-900/40 border-2 border-red-500/40 rounded-xl text-red-300 text-lg text-center font-semibold animate-pulse">
+          ⚠️ {skillError}
+        </div>
+      )}
+      {usedSkill && (
+        <div className="p-4 bg-green-900/40 border-2 border-green-500/40 rounded-xl text-green-300 text-lg text-center font-semibold">
+          ✨ ใช้ <span className="text-gold-300">{usedSkill.name}</span> สำเร็จ — เหลือพลังวิญญาณ {usedSkill.remaining}
+        </div>
       )}
 
-      {skillTypes.map(type => {
-        const typePathways = pathways.filter(p => p.type_id === type.id)
-        const hasAccess = hasAccessToType(type.id)
-        const isExpanded = expandedType === type.id
+      {/* Pathway Cards — two-column layout */}
+      {accessiblePathways.map(pathway => {
+        const type = skillTypes.find(t => t.id === pathway.type_id)
+        const pp = playerPathways.find(pp => pp.pathway_id === pathway.id)
+        const playerSeq = pp?.sequence_id ? sequences.find(s => s.id === pp.sequence_id) : null
+        const pathwaySkills = skills.filter(s => s.pathway_id === pathway.id)
+        const pathSeqs = sequences.filter(s => s.pathway_id === pathway.id).sort((a, b) => b.seq_number - a.seq_number)
 
         return (
-          <OrnamentedCard key={type.id} className="p-6">
-            <div
-              className="flex items-center justify-between cursor-pointer"
-              onClick={() => setExpandedType(isExpanded ? null : type.id)}
-            >
-              <div className="flex items-center gap-3">
-                {isExpanded ? <ChevronDown className="w-5 h-5 text-gold-400" /> : <ChevronRight className="w-5 h-5 text-gold-400" />}
-                <Layers className="w-6 h-6 text-gold-400" />
-                <div>
-                  <h3 className="heading-victorian text-xl">{type.name}</h3>
-                  {type.description && <p className="text-victorian-400 text-sm">{type.description}</p>}
+          <div key={pathway.id} className="grid grid-cols-1 lg:grid-cols-[350px_1fr] gap-0 rounded-2xl overflow-hidden border-2 border-gold-400/20 bg-victorian-900/60">
+            {/* LEFT: Pathway Card with BG + Logo */}
+            <div className="relative min-h-[320px] lg:min-h-[400px] flex flex-col justify-end p-6 overflow-hidden">
+              {/* Background image */}
+              {pathway.bg_url ? (
+                <div className="absolute inset-0">
+                  <img src={pathway.bg_url} alt="" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/30" />
                 </div>
-              </div>
-              {!hasAccess && (
-                <div className="flex items-center gap-1 text-victorian-500 text-sm">
-                  <Lock className="w-4 h-4" /> ยังไม่มีสิทธิ์
+              ) : (
+                <div className="absolute inset-0 bg-gradient-to-t from-victorian-950 via-victorian-900 to-victorian-800" />
+              )}
+
+              {/* Logo overlay */}
+              {pathway.logo_url && (
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+                  <img
+                    src={pathway.logo_url}
+                    alt={pathway.name}
+                    className="w-32 h-32 lg:w-40 lg:h-40 object-contain drop-shadow-[0_0_30px_rgba(212,175,55,0.3)]"
+                  />
                 </div>
               )}
+
+              {/* Info */}
+              <div className="relative z-20">
+                {type && (
+                  <span className="inline-block text-xs px-3 py-1 rounded-full bg-gold-400/20 text-gold-300 mb-2">
+                    {type.name}
+                  </span>
+                )}
+                <h3 className="heading-victorian text-3xl lg:text-4xl text-gold-200 drop-shadow-lg">{pathway.name}</h3>
+                {pathway.description && (
+                  <p className="text-victorian-300 text-base mt-2 line-clamp-3 drop-shadow">{pathway.description}</p>
+                )}
+                {playerSeq && (
+                  <div className={`mt-3 inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-full font-bold ${
+                    playerSeq.seq_number <= 2 ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
+                    playerSeq.seq_number <= 5 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                    'bg-gold-400/20 text-gold-300 border border-gold-400/30'
+                  }`}>
+                    <Shield className="w-4 h-4" />
+                    ลำดับ {playerSeq.seq_number} — {playerSeq.name}
+                  </div>
+                )}
+              </div>
             </div>
 
-            {isExpanded && (
-              <div className="mt-4 space-y-4">
-                {typePathways.map(pathway => {
-                  const pp = playerPathways.find(pp => pp.pathway_id === pathway.id)
-                  const hasPathwayAccess = !!pp && !!pp.pathway_id
-                  const playerSeq = pp?.sequence_id ? sequences.find(s => s.id === pp.sequence_id) : null
-                  const pathwaySkills = skills.filter(s => s.pathway_id === pathway.id)
-                  const pathSeqs = sequences.filter(s => s.pathway_id === pathway.id).sort((a, b) => b.seq_number - a.seq_number)
+            {/* RIGHT: Skills List */}
+            <div className="p-5 lg:p-6 space-y-4 bg-victorian-950/80 overflow-y-auto max-h-[600px]">
+              <h4 className="text-gold-300 text-xl font-semibold flex items-center gap-2 border-b border-gold-400/10 pb-3">
+                <Sparkles className="w-5 h-5" /> สกิลที่ใช้ได้
+              </h4>
 
-                  return (
-                    <div key={pathway.id} className="ml-4 border-l-2 border-gold-400/10 pl-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <GitBranch className="w-4 h-4 text-gold-400" />
-                        <span className="text-gold-200 font-semibold">{pathway.name}</span>
-                        {hasPathwayAccess && playerSeq && (
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            playerSeq.seq_number <= 2 ? 'bg-red-400/10 text-red-400' :
-                            playerSeq.seq_number <= 5 ? 'bg-amber-400/10 text-amber-400' :
-                            'bg-gold-400/10 text-gold-400'
-                          }`}>
-                            ลำดับ {playerSeq.seq_number} — {playerSeq.name}
-                          </span>
-                        )}
-                        {!hasPathwayAccess && (
-                          <span className="text-xs text-victorian-500 flex items-center gap-1">
-                            <Lock className="w-3 h-3" /> ล็อค
-                          </span>
-                        )}
-                      </div>
+              {pathSeqs.map(seq => {
+                const seqSkills = pathwaySkills.filter(s => s.sequence_id === seq.id)
+                if (seqSkills.length === 0) return null
 
-                      {/* Show skills per sequence */}
-                      {pathSeqs.map(seq => {
-                        const seqSkills = pathwaySkills.filter(s => s.sequence_id === seq.id)
-                        if (seqSkills.length === 0) return null
+                return (
+                  <div key={seq.id}>
+                    <div className={`text-sm font-bold mb-2 px-2 py-1 rounded ${
+                      seq.seq_number <= 2 ? 'text-red-400 bg-red-400/5' :
+                      seq.seq_number <= 5 ? 'text-amber-400 bg-amber-400/5' :
+                      'text-gold-400 bg-gold-400/5'
+                    }`}>
+                      ลำดับ {seq.seq_number}: {seq.name}
+                    </div>
+
+                    <div className="space-y-2">
+                      {seqSkills.map(skill => {
+                        const accessible = canAccessSkill(skill)
+                        const canAfford = (profile?.spirituality ?? 0) >= skill.spirit_cost
 
                         return (
-                          <div key={seq.id} className="mb-3 ml-4">
-                            <div className={`text-xs font-mono mb-1.5 ${
-                              seq.seq_number <= 2 ? 'text-red-400/80' :
-                              seq.seq_number <= 5 ? 'text-amber-400/80' :
-                              'text-victorian-400'
-                            }`}>
-                              ─── ลำดับ {seq.seq_number}: {seq.name} ───
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {seqSkills.map(skill => {
-                                const accessible = canAccessSkill(skill)
-                                return (
-                                  <div
-                                    key={skill.id}
-                                    className={`p-3 rounded-lg border transition-all ${
-                                      accessible
-                                        ? 'bg-victorian-800/40 border-gold-400/20 hover:border-gold-400/40'
-                                        : 'bg-victorian-900/40 border-victorian-700/20 opacity-50'
+                          <div
+                            key={skill.id}
+                            className={`p-4 rounded-xl border-2 transition-all ${
+                              accessible
+                                ? 'bg-victorian-800/50 border-gold-400/20 hover:border-gold-400/40'
+                                : 'bg-victorian-900/50 border-victorian-700/20 opacity-40'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  {accessible ? (
+                                    <Sparkles className="w-5 h-5 text-gold-400 flex-shrink-0" />
+                                  ) : (
+                                    <Lock className="w-5 h-5 text-victorian-600 flex-shrink-0" />
+                                  )}
+                                  <span className={`text-lg font-semibold truncate ${accessible ? 'text-gold-200' : 'text-victorian-500'}`}>
+                                    {skill.name}
+                                  </span>
+                                </div>
+                                {skill.description && (
+                                  <p className={`text-sm mt-1 ml-7 ${accessible ? 'text-victorian-400' : 'text-victorian-600'}`}>
+                                    {skill.description}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-3 flex-shrink-0">
+                                {/* Spirit cost badge */}
+                                <div className={`flex items-center gap-1 text-base px-3 py-1 rounded-full font-bold ${
+                                  accessible && canAfford
+                                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                    : accessible && !canAfford
+                                    ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                    : 'bg-victorian-800/50 text-victorian-600'
+                                }`}>
+                                  <Zap className="w-4 h-4" />{skill.spirit_cost}
+                                </div>
+
+                                {/* Use button */}
+                                {accessible && (
+                                  <button
+                                    onClick={() => handleUseSkill(skill.id)}
+                                    disabled={isPending || !canAfford}
+                                    className={`px-5 py-2.5 rounded-xl text-base font-bold transition-all ${
+                                      canAfford
+                                        ? 'btn-gold hover:scale-105 active:scale-95'
+                                        : 'bg-victorian-800 text-victorian-500 border border-victorian-700 cursor-not-allowed'
                                     }`}
                                   >
-                                    <div className="flex items-center justify-between mb-1">
-                                      <div className="flex items-center gap-2">
-                                        {accessible ? (
-                                          <Sparkles className="w-4 h-4 text-gold-400" />
-                                        ) : (
-                                          <Lock className="w-4 h-4 text-victorian-600" />
-                                        )}
-                                        <span className={accessible ? 'text-gold-200 font-medium' : 'text-victorian-500'}>
-                                          {skill.name}
-                                        </span>
-                                      </div>
-                                      <span className={`text-xs flex items-center gap-0.5 ${accessible ? 'text-blue-400' : 'text-victorian-600'}`}>
-                                        <Zap className="w-3 h-3" />{skill.spirit_cost}
-                                      </span>
-                                    </div>
-                                    {skill.description && (
-                                      <p className={`text-xs mt-1 ${accessible ? 'text-victorian-400' : 'text-victorian-600'}`}>
-                                        {skill.description}
-                                      </p>
-                                    )}
-                                  </div>
-                                )
-                              })}
+                                    {isPending ? '...' : canAfford ? 'ใช้สกิล' : 'พลังไม่พอ'}
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         )
                       })}
                     </div>
-                  )
-                })}
-              </div>
-            )}
-          </OrnamentedCard>
+                  </div>
+                )
+              })}
+
+              {pathwaySkills.length === 0 && (
+                <p className="text-victorian-500 text-center py-6 text-lg">ยังไม่มีสกิลในเส้นทางนี้</p>
+              )}
+            </div>
+          </div>
         )
       })}
     </div>
@@ -564,6 +708,7 @@ export default function SkillsContent({
         {/* Player View (or default admin view) */}
         {(!isAdmin || !showAdmin) && (
           <PlayerSkillView
+            profile={profile}
             skillTypes={skillTypes}
             pathways={pathways}
             sequences={sequences}

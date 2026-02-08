@@ -604,43 +604,43 @@ export default function MapViewer({
   return (
     <div className="fixed inset-0 z-40 flex flex-col" style={{ backgroundColor: '#0D0B09' }}>
       {/* ── TOP BAR ── */}
-      <div className="relative z-20 flex items-center justify-between px-3 py-2 border-b border-gold-400/10 gap-2"
+      <div className="relative z-20 flex items-center justify-between px-6 py-4 border-b border-gold-400/10 gap-4"
         style={{ backgroundColor: '#1A1612' }}>
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-4 min-w-0">
           <Link href="/dashboard/maps"
-            className="p-2 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm transition-all shrink-0 cursor-pointer">
-            <ArrowLeft className="w-4 h-4" />
+            className="p-4 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm transition-all shrink-0 cursor-pointer">
+            <ArrowLeft className="w-8 h-8" />
           </Link>
           <div className="min-w-0">
-            <h1 className="font-display text-gold-400 text-base truncate">{map.name}</h1>
-            {map.description && <p className="text-victorian-500 text-[10px] truncate">{map.description}</p>}
+            <h1 className="font-display text-gold-400 text-4xl truncate leading-tight">{map.name}</h1>
+            {map.description && <p className="text-victorian-500 text-lg truncate">{map.description}</p>}
           </div>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-3 shrink-0">
           {/* Travel points indicator */}
-          <div className="hidden sm:flex items-center gap-1 text-victorian-400 text-xs mr-2 border border-gold-400/10 rounded-sm px-2 py-1">
-            <Footprints className="w-3 h-3 text-gold-400" />
-            <span className="tabular-nums">{currentUser.travel_points}/{currentUser.max_travel_points}</span>
+          <div className="hidden sm:flex items-center gap-2 text-victorian-400 text-xl mr-4 border border-gold-400/10 rounded-sm px-4 py-2 bg-black/20">
+            <Footprints className="w-6 h-6 text-gold-400" />
+            <span className="tabular-nums font-bold text-nouveau-cream">{currentUser.travel_points}/{currentUser.max_travel_points}</span>
           </div>
 
-          <button onClick={zoomOut} className="p-1.5 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><ZoomOut className="w-3.5 h-3.5" /></button>
-          <span className="text-victorian-400 text-[10px] font-display min-w-[2.5rem] text-center tabular-nums">{Math.round(scale * 100)}%</span>
-          <button onClick={zoomIn} className="p-1.5 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><ZoomIn className="w-3.5 h-3.5" /></button>
-          <button onClick={fitToScreen} className="p-1.5 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><Maximize className="w-3.5 h-3.5" /></button>
+          <button onClick={zoomOut} className="p-3 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><ZoomOut className="w-8 h-8" /></button>
+          <span className="text-victorian-400 text-xl font-display min-w-[3.5rem] text-center tabular-nums">{Math.round(scale * 100)}%</span>
+          <button onClick={zoomIn} className="p-3 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><ZoomIn className="w-8 h-8" /></button>
+          <button onClick={fitToScreen} className="p-3 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><Maximize className="w-8 h-8" /></button>
 
           {/* Admin controls */}
           {isAdmin && (
             <>
-              <div className="w-px h-5 bg-gold-400/10 mx-1" />
+              <div className="w-px h-10 bg-gold-400/10 mx-2" />
               <button onClick={() => { setNpcName(''); setNpcUrl(''); setShowNpcModal(true) }} title="เพิ่ม NPC"
-                className="p-1.5 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><Ghost className="w-3.5 h-3.5" /></button>
+                className="p-3 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><Ghost className="w-8 h-8" /></button>
               <button onClick={() => { setSelectedPlayerId(''); setShowAddPlayer(true) }} title="เพิ่มผู้เล่น"
-                className="p-1.5 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><UserPlus className="w-3.5 h-3.5" /></button>
+                className="p-3 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><UserPlus className="w-8 h-8" /></button>
               <button onClick={() => { setShowZoneCreator(true); setEditingZone(null) }} title="ล็อคพื้นที่"
-                className="p-1.5 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><Lock className="w-3.5 h-3.5" /></button>
+                className="p-3 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><Lock className="w-8 h-8" /></button>
               <button onClick={() => setShowEmbedModal(true)} title="Embed"
-                className="p-1.5 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><Code className="w-3.5 h-3.5" /></button>
+                className="p-3 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><Code className="w-8 h-8" /></button>
             </>
           )}
         </div>
@@ -648,27 +648,27 @@ export default function MapViewer({
 
       {/* ── YOU ARE HERE banner ── */}
       {isOnThisMap && (
-        <div className="relative z-10 flex items-center justify-center gap-2 px-3 py-1.5 border-b border-gold-400/10"
+        <div className="relative z-10 flex items-center justify-center gap-3 px-6 py-4 border-b border-gold-400/20 shadow-lg shadow-gold-900/10"
           style={{ backgroundColor: '#1d1a14' }}>
-          <span className="relative flex h-2 w-2">
+          <span className="relative flex h-4 w-4">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-gold-400" />
+            <span className="relative inline-flex rounded-full h-4 w-4 bg-gold-400" />
           </span>
-          <span className="text-gold-400 text-xs font-display">คุณกำลังอยู่ในแมพนี้</span>
+          <span className="text-gold-400 text-2xl font-display tracking-widest uppercase text-shadow-glow">คุณกำลังอยู่ในแมพนี้</span>
         </div>
       )}
 
       {/* ── PLAYER JOIN BUTTON ── */}
       {!isOnThisMap && !isAdmin && (
-        <div className="relative z-10 flex items-center justify-center gap-2 px-3 py-2 border-b border-gold-400/10"
+        <div className="relative z-10 flex items-center justify-center gap-4 px-6 py-4 border-b border-gold-400/10"
           style={{ backgroundColor: '#1d1a14' }}>
           <button onClick={handleJoinMap} disabled={isPending}
-            className="btn-gold !py-1.5 !px-4 !text-xs flex items-center gap-2 disabled:opacity-50">
-            <MapPin className="w-3.5 h-3.5" />
+            className="btn-gold !py-3 !px-8 !text-xl flex items-center gap-3 disabled:opacity-50">
+            <MapPin className="w-6 h-6" />
             {myToken ? `ย้ายมาแมพนี้ (−3 แต้ม)` : 'เข้าร่วมแมพนี้'}
           </button>
           {myToken && (
-            <span className="text-victorian-500 text-[10px]">แต้มเดินทาง: {currentUser.travel_points}</span>
+            <span className="text-victorian-500 text-lg">แต้มเดินทาง: {currentUser.travel_points}</span>
           )}
         </div>
       )}
@@ -909,16 +909,18 @@ export default function MapViewer({
 
 function ModalOverlay({ onClose, title, children }: { onClose: () => void; title: string; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}
-      style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
-      <div className="w-full max-w-sm border border-gold-400/30 rounded-sm p-6"
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 shadow-2xl" onClick={onClose}
+      style={{ backgroundColor: 'rgba(0,0,0,0.85)' }}>
+      <div className="w-full max-w-2xl border-2 border-gold-400/30 rounded-sm p-8"
         style={{ backgroundColor: '#1A1612' }}
         onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="heading-victorian text-xl">{title}</h3>
-          <button onClick={onClose} className="text-victorian-400 hover:text-gold-400 cursor-pointer"><X className="w-5 h-5" /></button>
+        <div className="flex justify-between items-center mb-8 border-b border-gold-400/20 pb-4">
+          <h3 className="heading-victorian text-4xl text-shadow-glow">{title}</h3>
+          <button onClick={onClose} className="text-victorian-400 hover:text-gold-400 cursor-pointer p-2 hover:bg-white/5 rounded-full"><X className="w-10 h-10" /></button>
         </div>
-        {children}
+        <div className="text-xl">
+          {children}
+        </div>
       </div>
     </div>
   )
@@ -930,34 +932,34 @@ function TokenInfoPopup({ token, isAdmin, isMe, onClose, onRemove }: {
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}
-      style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-full max-w-xs border border-gold-400/20 rounded-sm p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+      <div className="w-full max-w-lg border-2 border-gold-400/40 rounded-sm p-8 shadow-2xl shadow-gold-900/20"
         style={{ backgroundColor: '#1A1612' }}
         onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-3 mb-3">
-          <div className={`w-12 h-12 rounded-full overflow-hidden border-2 shrink-0
-            ${token.user_id && isMe ? 'border-gold-400' : token.token_type === 'npc' ? 'border-nouveau-ruby/60' : 'border-victorian-400/60'}`}>
+        <div className="flex items-center gap-6 mb-6">
+          <div className={`w-24 h-24 rounded-full overflow-hidden border-4 shrink-0 shadow-lg
+            ${token.user_id && isMe ? 'border-gold-400 shadow-gold-400/20' : token.token_type === 'npc' ? 'border-nouveau-ruby/60' : 'border-victorian-400/60'}`}>
             {(token.avatar_url || token.npc_image_url) ? (
               <img src={token.avatar_url || token.npc_image_url || ''} className="w-full h-full object-cover" alt="" />
             ) : (
-              <div className="w-full h-full bg-victorian-800 flex items-center justify-center text-gold-400 font-display">
+              <div className="w-full h-full bg-victorian-800 flex items-center justify-center text-gold-400 font-display text-4xl">
                 {(token.display_name || token.npc_name || '?')[0]}
               </div>
             )}
           </div>
-          <div className="min-w-0">
-            <p className="font-display text-gold-400 text-sm truncate">{token.display_name || token.npc_name}</p>
-            <p className="text-[10px] text-victorian-500">
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-gold-400 text-3xl truncate mb-1 text-shadow-glow">{token.display_name || token.npc_name}</p>
+            <p className="text-xl text-victorian-400">
               {token.token_type === 'npc' ? 'NPC' : token.role === 'admin' ? 'แอดมิน' : token.role === 'dm' ? 'DM' : 'ผู้เล่น'}
               {isMe && ' (คุณ)'}
             </p>
           </div>
-          <button onClick={onClose} className="ml-auto text-victorian-400 hover:text-gold-400 cursor-pointer"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="self-start -mt-2 -mr-2 text-victorian-400 hover:text-gold-400 cursor-pointer p-2"><X className="w-8 h-8" /></button>
         </div>
         {isAdmin && (
           <button onClick={onRemove}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs text-nouveau-ruby border border-nouveau-ruby/20 hover:border-nouveau-ruby/40 rounded-sm cursor-pointer">
-            <Trash2 className="w-3 h-3" /> ลบออกจากแมพ
+            className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-nouveau-ruby border-2 border-nouveau-ruby/30 hover:border-nouveau-ruby/60 rounded-sm cursor-pointer hover:bg-nouveau-ruby/10 transition-colors">
+            <Trash2 className="w-6 h-6" /> ลบออกจากแมพ
           </button>
         )}
       </div>
@@ -972,33 +974,33 @@ function ClusterPopup({ cluster, currentUserId, isAdmin: _isAdmin, onSelectToken
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}
-      style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-full max-w-xs border border-gold-400/20 rounded-sm p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+      <div className="w-full max-w-lg border-2 border-gold-400/30 rounded-sm p-6 shadow-2xl"
         style={{ backgroundColor: '#1A1612' }}
         onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-3">
-          <h4 className="heading-victorian text-base flex items-center gap-2">
-            <Users className="w-4 h-4 text-gold-400" /> ผู้ที่อยู่ในพื้นที่นี้
+        <div className="flex justify-between items-center mb-6 border-b border-gold-400/10 pb-4">
+          <h4 className="heading-victorian text-2xl flex items-center gap-3 text-gold-400">
+            <Users className="w-6 h-6" /> ผู้ที่อยู่ในพื้นที่นี้ ({cluster.tokens.length})
           </h4>
-          <button onClick={onClose} className="text-victorian-400 hover:text-gold-400 cursor-pointer"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="text-victorian-400 hover:text-gold-400 cursor-pointer p-2"><X className="w-6 h-6" /></button>
         </div>
-        <div className="space-y-1.5 max-h-60 overflow-y-auto">
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
           {cluster.tokens.map(t => (
             <button key={t.id} onClick={() => onSelectToken(t)}
-              className="w-full flex items-center gap-2 p-2 rounded-sm border border-gold-400/10 hover:border-gold-400/30 transition-all cursor-pointer text-left">
-              <div className={`w-8 h-8 rounded-full overflow-hidden border shrink-0
+              className="w-full flex items-center gap-4 p-4 rounded-sm border border-gold-400/10 hover:border-gold-400/50 hover:bg-white/5 transition-all cursor-pointer text-left group">
+              <div className={`w-16 h-16 rounded-full overflow-hidden border-2 shrink-0 shadow-md group-hover:scale-105 transition-transform
                 ${t.user_id === currentUserId ? 'border-gold-400' : t.token_type === 'npc' ? 'border-nouveau-ruby/40' : 'border-victorian-400/40'}`}>
                 {(t.avatar_url || t.npc_image_url) ? (
                   <img src={t.avatar_url || t.npc_image_url || ''} className="w-full h-full object-cover" alt="" />
                 ) : (
-                  <div className="w-full h-full bg-victorian-800 flex items-center justify-center text-gold-400 text-[10px] font-display">
+                  <div className="w-full h-full bg-victorian-800 flex items-center justify-center text-gold-400 text-xl font-display">
                     {(t.display_name || t.npc_name || '?')[0]}
                   </div>
                 )}
               </div>
               <div className="min-w-0">
-                <p className="text-sm text-nouveau-cream truncate">{t.display_name || t.npc_name}</p>
-                <p className="text-[9px] text-victorian-500">{t.token_type === 'npc' ? 'NPC' : t.user_id === currentUserId ? 'คุณ' : 'ผู้เล่น'}</p>
+                <p className="text-xl font-display text-nouveau-cream truncate group-hover:text-gold-400 transition-colors">{t.display_name || t.npc_name}</p>
+                <p className="text-sm text-victorian-400">{t.token_type === 'npc' ? 'NPC' : t.user_id === currentUserId ? 'คุณ' : 'ผู้เล่น'}</p>
               </div>
             </button>
           ))}
