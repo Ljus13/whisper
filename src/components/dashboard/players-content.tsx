@@ -78,20 +78,36 @@ export default function PlayersContent({ userId }: { userId: string }) {
 
   useEffect(() => {
     const supabase = createClient()
-    Promise.all([
-      supabase.from('profiles').select('*').eq('id', userId).single(),
-      supabase.from('profiles').select('*').order('display_name'),
-      supabase.from('player_pathways').select('*'),
-      supabase.from('skill_pathways').select('*'),
-      supabase.from('skill_sequences').select('*'),
-    ]).then(([meRes, allRes, ppRes, pwRes, seqRes]) => {
-      setCurrentProfile(meRes.data); setCache('players:me', meRes.data)
-      setPlayers(allRes.data ?? []); setCache('players:all', allRes.data ?? [])
-      setPlayerPathways(ppRes.data ?? []); setCache('players:pp', ppRes.data ?? [])
-      setPathways(pwRes.data ?? []); setCache('players:pw', pwRes.data ?? [], REF_TTL)
-      setSequences(seqRes.data ?? []); setCache('players:seq', seqRes.data ?? [], REF_TTL)
-      setLoaded(true)
-    })
+
+    const fetchPlayers = () => {
+      Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('profiles').select('*').order('display_name'),
+        supabase.from('player_pathways').select('*'),
+        supabase.from('skill_pathways').select('*'),
+        supabase.from('skill_sequences').select('*'),
+      ]).then(([meRes, allRes, ppRes, pwRes, seqRes]) => {
+        if (meRes.data) { setCurrentProfile(meRes.data); setCache('players:me', meRes.data) }
+        if (allRes.data) { setPlayers(allRes.data); setCache('players:all', allRes.data) }
+        if (ppRes.data) { setPlayerPathways(ppRes.data); setCache('players:pp', ppRes.data) }
+        if (pwRes.data) { setPathways(pwRes.data); setCache('players:pw', pwRes.data, REF_TTL) }
+        if (seqRes.data) { setSequences(seqRes.data); setCache('players:seq', seqRes.data, REF_TTL) }
+        setLoaded(true)
+      })
+    }
+    
+    fetchPlayers()
+
+    const channel = supabase
+      .channel('players_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+         if (['profiles', 'player_pathways'].includes(payload.table)) {
+           fetchPlayers()
+         }
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [userId])
 
   const isAdmin = currentProfile?.role === 'admin' || currentProfile?.role === 'dm'

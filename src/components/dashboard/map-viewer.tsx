@@ -115,51 +115,66 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
   useEffect(() => {
     const supabase = createClient()
-    Promise.all([
-      supabase.from('maps').select('*').eq('id', mapId).single(),
-      supabase.from('profiles').select('*').eq('id', userId).single(),
-      supabase.from('map_tokens').select('*').eq('map_id', mapId),
-      supabase.from('map_locked_zones').select('*').eq('map_id', mapId),
-    ]).then(async ([mapRes, profileRes, rawTokensRes, zonesRes]) => {
-      if (mapRes.error || !mapRes.data || !profileRes.data) {
-        router.replace('/dashboard/maps')
-        return
-      }
-      const mapData = mapRes.data as GameMap
-      const profile = profileRes.data as Profile
-      const rawTokens = rawTokensRes.data ?? []
-      const zoneData = (zonesRes.data ?? []) as MapLockedZone[]
-      const admin = profile.role === 'admin' || profile.role === 'dm'
 
-      const playerIds = rawTokens.filter(t => t.token_type === 'player' && t.user_id).map(t => t.user_id!)
-      const [playerProfiles, adminPlayers] = await Promise.all([
-        playerIds.length > 0
-          ? supabase.from('profiles').select('id, display_name, avatar_url, role').in('id', playerIds)
-          : Promise.resolve({ data: null }),
-        admin
-          ? supabase.from('profiles').select('id, display_name, avatar_url, role').order('display_name')
-          : Promise.resolve({ data: null }),
-      ])
+    const fetchMapData = () => {
+      Promise.all([
+        supabase.from('maps').select('*').eq('id', mapId).single(),
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('map_tokens').select('*').eq('map_id', mapId),
+        supabase.from('map_locked_zones').select('*').eq('map_id', mapId),
+      ]).then(async ([mapRes, profileRes, rawTokensRes, zonesRes]) => {
+        if (mapRes.error || !mapRes.data || !profileRes.data) {
+          // If map deleted or error, maybe redirect? For now just log
+          if (mapRes.error) console.error('Map fetch error:', mapRes.error)
+          return
+        }
+        const mapData = mapRes.data as GameMap
+        const profile = profileRes.data as Profile
+        const rawTokens = rawTokensRes.data ?? []
+        const zoneData = (zonesRes.data ?? []) as MapLockedZone[]
+        const admin = profile.role === 'admin' || profile.role === 'dm'
 
-      let profileMap: Record<string, { display_name: string | null; avatar_url: string | null; role: string }> = {}
-      if (playerProfiles.data) {
-        profileMap = Object.fromEntries(playerProfiles.data.map(p => [p.id, p]))
-      }
-      const builtTokens = rawTokens.map(t => ({
-        ...t,
-        display_name: t.user_id ? (profileMap[t.user_id]?.display_name ?? null) : t.npc_name,
-        avatar_url: t.user_id ? (profileMap[t.user_id]?.avatar_url ?? null) : t.npc_image_url,
-        role: t.user_id ? (profileMap[t.user_id]?.role ?? null) : null,
-      })) as MapTokenWithProfile[]
+        const playerIds = rawTokens.filter(t => t.token_type === 'player' && t.user_id).map(t => t.user_id!)
+        const [playerProfiles, adminPlayers] = await Promise.all([
+          playerIds.length > 0
+            ? supabase.from('profiles').select('id, display_name, avatar_url, role').in('id', playerIds)
+            : Promise.resolve({ data: null }),
+          admin
+            ? supabase.from('profiles').select('id, display_name, avatar_url, role').order('display_name')
+            : Promise.resolve({ data: null }),
+        ])
 
-      const ap = (adminPlayers.data ?? []) as AllPlayer[]
-      setMap(mapData); setCurrentUser(profile); setIsAdmin(admin); setAllPlayers(ap)
-      setTokens(builtTokens); setZones(zoneData)
-      setCache(`mv:${mapId}:map`, mapData); setCache(`mv:${mapId}:me`, profile)
-      setCache(`mv:${mapId}:admin`, admin); setCache(`mv:${mapId}:players`, ap)
-      setCache(`mv:${mapId}:tokens`, builtTokens); setCache(`mv:${mapId}:zones`, zoneData)
-      setLoaded(true)
-    })
+        let profileMap: Record<string, { display_name: string | null; avatar_url: string | null; role: string }> = {}
+        if (playerProfiles.data) {
+          profileMap = Object.fromEntries(playerProfiles.data.map(p => [p.id, p]))
+        }
+        const builtTokens = rawTokens.map(t => ({
+          ...t,
+          display_name: t.user_id ? (profileMap[t.user_id]?.display_name ?? null) : t.npc_name,
+          avatar_url: t.user_id ? (profileMap[t.user_id]?.avatar_url ?? null) : t.npc_image_url,
+          role: t.user_id ? (profileMap[t.user_id]?.role ?? null) : null,
+        })) as MapTokenWithProfile[]
+
+        const ap = (adminPlayers.data ?? []) as AllPlayer[]
+        setMap(mapData); setCurrentUser(profile); setIsAdmin(admin); setAllPlayers(ap)
+        setTokens(builtTokens); setZones(zoneData)
+        setCache(`mv:${mapId}:map`, mapData); setCache(`mv:${mapId}:me`, profile)
+        setCache(`mv:${mapId}:admin`, admin); setCache(`mv:${mapId}:players`, ap)
+        setCache(`mv:${mapId}:tokens`, builtTokens); setCache(`mv:${mapId}:zones`, zoneData)
+        setLoaded(true)
+      })
+    }
+
+    fetchMapData()
+
+    const channel = supabase
+      .channel(`map_view:${mapId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_tokens', filter: `map_id=eq.${mapId}` }, fetchMapData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_locked_zones', filter: `map_id=eq.${mapId}` }, fetchMapData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'maps', filter: `id=eq.${mapId}` }, fetchMapData)
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [userId, mapId, router])
 
   // ── Token drag state ──

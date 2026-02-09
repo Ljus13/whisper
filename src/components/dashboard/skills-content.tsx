@@ -657,22 +657,39 @@ export default function SkillsContent({ userId }: SkillsContentProps) {
 
   useEffect(() => {
     const supabase = createClient()
-    Promise.all([
-      supabase.from('profiles').select('*').eq('id', userId).single(),
-      supabase.from('skill_types').select('*').order('name'),
-      supabase.from('skill_pathways').select('*').order('name'),
-      supabase.from('skill_sequences').select('*').order('seq_number', { ascending: false }),
-      supabase.from('skills').select('*').order('name'),
-      supabase.from('player_pathways').select('*').eq('player_id', userId),
-    ]).then(([pRes, tRes, pwRes, sqRes, skRes, ppRes]) => {
-      setProfile(pRes.data); setCache('skills:profile', pRes.data)
-      setSkillTypes(tRes.data ?? []); setCache('skills:types', tRes.data ?? [], REF_TTL)
-      setPathways(pwRes.data ?? []); setCache('skills:pathways', pwRes.data ?? [], REF_TTL)
-      setSequences(sqRes.data ?? []); setCache('skills:sequences', sqRes.data ?? [], REF_TTL)
-      setSkills(skRes.data ?? []); setCache('skills:skills', skRes.data ?? [], REF_TTL)
-      setPlayerPathways(ppRes.data ?? []); setCache(`skills:pp:${userId}`, ppRes.data ?? [])
-      setLoaded(true)
-    })
+
+    const fetchData = () => {
+      Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('skill_types').select('*').order('name'),
+        supabase.from('skill_pathways').select('*').order('name'),
+        supabase.from('skill_sequences').select('*').order('seq_number', { ascending: false }),
+        supabase.from('skills').select('*').order('name'),
+        supabase.from('player_pathways').select('*').eq('player_id', userId),
+      ]).then(([pRes, tRes, pwRes, sqRes, skRes, ppRes]) => {
+        if (pRes.data) { setProfile(pRes.data); setCache('skills:profile', pRes.data) }
+        if (tRes.data) { setSkillTypes(tRes.data); setCache('skills:types', tRes.data, REF_TTL) }
+        if (pwRes.data) { setPathways(pwRes.data); setCache('skills:pathways', pwRes.data, REF_TTL) }
+        if (sqRes.data) { setSequences(sqRes.data); setCache('skills:sequences', sqRes.data, REF_TTL) }
+        if (skRes.data) { setSkills(skRes.data); setCache('skills:skills', skRes.data, REF_TTL) }
+        if (ppRes.data) { setPlayerPathways(ppRes.data); setCache(`skills:pp:${userId}`, ppRes.data) }
+        setLoaded(true)
+      })
+    }
+
+    fetchData()
+
+    // ─── Realtime Subscription ───
+    const channel = supabase
+      .channel('skills_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+        if (['profiles', 'skill_types', 'skill_pathways', 'skill_sequences', 'skills', 'player_pathways'].includes(payload.table)) {
+          fetchData()
+        }
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [userId])
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'

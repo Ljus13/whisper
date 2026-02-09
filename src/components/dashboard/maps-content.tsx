@@ -185,21 +185,37 @@ export default function MapsContent({ userId }: MapsContentProps) {
 
   useEffect(() => {
     const supabase = createClient()
-    Promise.all([
-      supabase.from('profiles').select('role, sanity').eq('id', userId).single(),
-      supabase.from('maps').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: false }),
-      supabase.from('map_tokens').select('map_id').eq('user_id', userId).eq('token_type', 'player').single(),
-    ]).then(([profileRes, mapsRes, tokenRes]) => {
-      const p = profileRes.data
-      const admin = p?.role === 'admin' || p?.role === 'dm'
-      const mList = mapsRes.data ?? []
-      const mId = tokenRes.data?.map_id ?? null
-      const san = p?.sanity ?? 10
 
-      setMaps(mList); setIsAdmin(admin); setMyMapId(mId); setSanity(san)
-      setCache('maps:all', mList); setCache('maps:admin', admin); setCache('maps:mymap', mId); setCache('maps:sanity', san)
-      setLoaded(true)
-    })
+    const fetchData = () => {
+      Promise.all([
+        supabase.from('profiles').select('role, sanity').eq('id', userId).single(),
+        supabase.from('maps').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: false }),
+        supabase.from('map_tokens').select('map_id').eq('user_id', userId).eq('token_type', 'player').single(),
+      ]).then(([profileRes, mapsRes, tokenRes]) => {
+        const p = profileRes.data
+        const admin = p?.role === 'admin' || p?.role === 'dm'
+        const mList = mapsRes.data ?? []
+        const mId = tokenRes.data?.map_id ?? null
+        const san = p?.sanity ?? 10
+
+        setMaps(mList); setIsAdmin(admin); setMyMapId(mId); setSanity(san)
+        setCache('maps:all', mList); setCache('maps:admin', admin); setCache('maps:mymap', mId); setCache('maps:sanity', san)
+        setLoaded(true)
+      })
+    }
+    
+    fetchData()
+
+    const channel = supabase
+      .channel('maps_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+        if (['maps', 'profiles', 'map_tokens'].includes(payload.table)) {
+          fetchData()
+        }
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [userId])
 
   if (!loaded) {
