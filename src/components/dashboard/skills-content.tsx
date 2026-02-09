@@ -671,9 +671,11 @@ function PlayerSkillView({
                                 : 'bg-victorian-900/50 border-victorian-700/20 opacity-40'
                             }`}
                           >
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
+                            {/* Mobile-friendly vertical layout */}
+                            <div className="flex flex-col space-y-3">
+                              {/* Row 1: Skill name + Spirit cost */}
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
                                   {accessible ? (
                                     <Sparkles className="w-5 h-5 text-gold-400 flex-shrink-0" />
                                   ) : (
@@ -685,45 +687,45 @@ function PlayerSkillView({
                                     {accessible ? skill.name : '???'}
                                   </span>
                                 </div>
-                                {accessible && skill.description && (
-                                  <p className="text-sm mt-1 ml-7 text-victorian-400">
-                                    {skill.description}
-                                  </p>
-                                )}
-                                {!accessible && (
-                                  <p className="text-sm mt-1 ml-7 text-victorian-600 italic">
-                                    สกิลถูกปิดผนึก...
-                                  </p>
-                                )}
-                              </div>
-
-                              <div className="flex items-center gap-3 flex-shrink-0">
-                                {/* Spirit cost badge — blur if not accessible */}
-                                <div className={`flex items-center gap-1 text-base px-3 py-1 rounded-full font-bold ${
+                                
+                                {/* Spirit cost badge */}
+                                <div className={`flex items-center gap-1 text-sm md:text-base px-2 md:px-3 py-1 rounded-full font-bold flex-shrink-0 ${
                                   accessible && canAfford
                                     ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                                     : accessible && !canAfford
                                     ? 'bg-red-500/20 text-red-400 border border-red-500/30'
                                     : 'bg-victorian-800/50 text-victorian-600'
                                 } ${!accessible ? 'blur-sm select-none' : ''}`}>
-                                  <Zap className="w-4 h-4" />{accessible ? skill.spirit_cost : '?'}
+                                  <Zap className="w-3 h-3 md:w-4 md:h-4" />{accessible ? skill.spirit_cost : '?'}
                                 </div>
-
-                                {/* Use button */}
-                                {accessible && (
-                                  <button
-                                    onClick={() => handleUseSkill(skill.id)}
-                                    disabled={isPending || !canAfford}
-                                    className={`px-5 py-2.5 rounded-xl text-base font-bold transition-all ${
-                                      canAfford
-                                        ? 'btn-gold hover:scale-105 active:scale-95'
-                                        : 'bg-victorian-800 text-victorian-500 border border-victorian-700 cursor-not-allowed'
-                                    }`}
-                                  >
-                                    {isPending ? '...' : canAfford ? 'ใช้สกิล' : 'พลังไม่พอ'}
-                                  </button>
-                                )}
                               </div>
+
+                              {/* Row 2: Description */}
+                              {accessible && skill.description && (
+                                <p className="text-sm text-victorian-400 leading-relaxed">
+                                  {skill.description}
+                                </p>
+                              )}
+                              {!accessible && (
+                                <p className="text-sm text-victorian-600 italic">
+                                  สกิลถูกปิดผนึก...
+                                </p>
+                              )}
+
+                              {/* Row 3: Use button (full width on mobile) */}
+                              {accessible && (
+                                <button
+                                  onClick={() => handleUseSkill(skill.id)}
+                                  disabled={isPending || !canAfford}
+                                  className={`w-full px-5 py-2.5 rounded-xl text-base font-bold transition-all ${
+                                    canAfford
+                                      ? 'btn-gold hover:scale-105 active:scale-95'
+                                      : 'bg-victorian-800 text-victorian-500 border border-victorian-700 cursor-not-allowed'
+                                  }`}
+                                >
+                                  {isPending ? '...' : canAfford ? 'ใช้สกิล' : 'พลังไม่พอ'}
+                                </button>
+                              )}
                             </div>
                           </div>
                         )
