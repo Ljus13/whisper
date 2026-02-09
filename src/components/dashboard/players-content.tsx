@@ -5,6 +5,7 @@ import { ArrowLeft, Crown, Shield, Swords, Pencil, Users } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
+import { CornerOrnament } from '@/components/ui/ornaments'
 import { createClient } from '@/lib/supabase/client'
 import { getCached, setCache, REF_TTL } from '@/lib/client-cache'
 
@@ -12,6 +13,8 @@ interface Profile {
   id: string
   display_name: string | null
   avatar_url: string | null
+  background_url: string | null
+  bio: string | null
   role: 'player' | 'admin' | 'dm'
   hp: number
   sanity: number
@@ -43,22 +46,6 @@ interface Sequence {
   name: string
 }
 
-/* ── Corner Ornament ── */
-function CornerOrnament({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="40" height="40" viewBox="0 0 60 60" fill="none">
-      <path d="M2 58V20C2 10 10 2 20 2H58" stroke="url(#gc)" strokeWidth="1.5" fill="none" />
-      <path d="M8 58V26C8 16 16 8 26 8H58" stroke="url(#gc)" strokeWidth="0.5" opacity="0.4" fill="none" />
-      <circle cx="20" cy="20" r="2" fill="#D4AF37" opacity="0.6" />
-      <defs>
-        <linearGradient id="gc" x1="2" y1="58" x2="58" y2="2">
-          <stop stopColor="#D4AF37" stopOpacity="0.8" />
-          <stop offset="1" stopColor="#C5A55A" stopOpacity="0.2" />
-        </linearGradient>
-      </defs>
-    </svg>
-  )
-}
 
 function RoleIcon({ role }: { role: string }) {
   if (role === 'admin') return <Crown className="w-4 h-4 text-gold-300" />
@@ -100,11 +87,8 @@ export default function PlayersContent({ userId }: { userId: string }) {
 
     const channel = supabase
       .channel('players_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
-         if (['profiles', 'player_pathways'].includes(payload.table)) {
-           fetchPlayers()
-         }
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchPlayers())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'player_pathways' }, () => fetchPlayers())
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -171,19 +155,28 @@ export default function PlayersContent({ userId }: { userId: string }) {
             return (
               <div
                 key={player.id}
-                className="card-victorian relative overflow-hidden group"
+                onClick={() => router.push(`/dashboard/players/${player.id}`)}
+                className="card-victorian relative overflow-hidden group cursor-pointer hover:border-gold-400/40 transition-all"
               >
-                <CornerOrnament className="absolute top-0 left-0" />
-                <CornerOrnament className="absolute top-0 right-0 -scale-x-100" />
-                <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100" />
-                <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1]" />
+                <CornerOrnament className="absolute top-0 left-0" size={40} />
+                <CornerOrnament className="absolute top-0 right-0 -scale-x-100" size={40} />
+                <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100" size={40} />
+                <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1]" size={40} />
+
+                {/* Background image */}
+                {player.background_url && (
+                  <div className="absolute inset-0 z-0">
+                    <img src={player.background_url} alt="" className="w-full h-full object-cover opacity-10" loading="lazy" decoding="async" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-victorian-950/50 to-victorian-950/90" />
+                  </div>
+                )}
 
                 <div className="relative z-10 p-6">
                   {/* Admin Edit Button */}
                   {isAdmin && (
                     <button
                       type="button"
-                      onClick={() => setEditingPlayer(player)}
+                      onClick={(e) => { e.stopPropagation(); setEditingPlayer(player) }}
                       className="absolute top-3 right-3 p-2 text-victorian-400 hover:text-gold-400 
                                  opacity-0 group-hover:opacity-100 transition-all cursor-pointer
                                  bg-victorian-900/80 rounded-sm border border-gold-400/10 hover:border-gold-400/30"
@@ -200,6 +193,8 @@ export default function PlayersContent({ userId }: { userId: string }) {
                         src={player.avatar_url}
                         alt={player.display_name || ''}
                         className="w-16 h-16 rounded-full border-2 border-gold-400/30 object-cover flex-shrink-0"
+                        loading="lazy"
+                        decoding="async"
                       />
                     ) : (
                       <div className="w-16 h-16 rounded-full border-2 border-gold-400/30 bg-victorian-800 flex items-center justify-center flex-shrink-0">
@@ -260,6 +255,8 @@ export default function PlayersContent({ userId }: { userId: string }) {
           </div>
         )}
       </main>
+
+
 
       {/* Admin Edit Modal */}
       {editingPlayer && (

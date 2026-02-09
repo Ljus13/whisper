@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import MapViewer from '@/components/dashboard/map-viewer'
+import MapViewerLoader from '@/components/dashboard/map-viewer-loader'
 
 export default async function MapDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -11,5 +11,5 @@ export default async function MapDetailPage({ params }: { params: Promise<{ id: 
     redirect('/')
   }
 
-  return <MapViewer userId={session.user.id} mapId={id} />
+  return <MapViewerLoader userId={session.user.id} mapId={id} />
 }

@@ -14,37 +14,10 @@ import {
   castSkill
 } from '@/app/actions/skills'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
+import { OrnamentedCard } from '@/components/ui/ornaments'
 import { createClient } from '@/lib/supabase/client'
 import { getCached, setCache, REF_TTL } from '@/lib/client-cache'
 
-/* ─── Art Nouveau Corner Ornament ─── */
-function CornerOrnament({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="60" height="60" viewBox="0 0 60 60" fill="none">
-      <path d="M2 58V20C2 10 10 2 20 2H58" stroke="url(#gold-corner-s)" strokeWidth="1.5" fill="none" />
-      <path d="M8 58V26C8 16 16 8 26 8H58" stroke="url(#gold-corner-s)" strokeWidth="0.5" opacity="0.4" fill="none" />
-      <circle cx="20" cy="20" r="2" fill="#D4AF37" opacity="0.6"/>
-      <defs>
-        <linearGradient id="gold-corner-s" x1="2" y1="58" x2="58" y2="2">
-          <stop stopColor="#D4AF37" stopOpacity="0.8"/>
-          <stop offset="1" stopColor="#C5A55A" stopOpacity="0.2"/>
-        </linearGradient>
-      </defs>
-    </svg>
-  )
-}
-
-function OrnamentedCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`card-victorian relative overflow-hidden ${className}`}>
-      <CornerOrnament className="absolute top-0 left-0" />
-      <CornerOrnament className="absolute top-0 right-0 -scale-x-100" />
-      <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100" />
-      <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1]" />
-      <div className="relative z-10">{children}</div>
-    </div>
-  )
-}
 
 /* ─── Props ─── */
 interface SkillsContentProps {
@@ -614,7 +587,7 @@ function PlayerSkillView({
               {/* Background image */}
               {pathway.bg_url ? (
                 <div className="absolute inset-0">
-                  <img src={pathway.bg_url} alt="" className="w-full h-full object-cover" />
+                  <img src={pathway.bg_url} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/30" />
                 </div>
               ) : (
@@ -628,6 +601,8 @@ function PlayerSkillView({
                     src={pathway.logo_url}
                     alt={pathway.name}
                     className="w-32 h-32 lg:w-40 lg:h-40 object-contain drop-shadow-[0_0_30px_rgba(212,175,55,0.3)]"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </div>
               )}
@@ -808,11 +783,12 @@ export default function SkillsContent({ userId }: SkillsContentProps) {
     const supabase = createClient()
     const channel = supabase
       .channel('skills_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
-        if (['profiles', 'skill_types', 'skill_pathways', 'skill_sequences', 'skills', 'player_pathways'].includes(payload.table)) {
-          fetchData()
-        }
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'skill_types' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'skill_pathways' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'skill_sequences' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'skills' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'player_pathways' }, () => fetchData())
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }

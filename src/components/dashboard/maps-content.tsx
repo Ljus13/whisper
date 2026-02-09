@@ -6,28 +6,12 @@ import { ArrowLeft, Plus, Pencil, Trash2, X, Save, MapIcon } from 'lucide-react'
 import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
+import { CornerOrnament } from '@/components/ui/ornaments'
 import { createClient } from '@/lib/supabase/client'
 import { getCached, setCache } from '@/lib/client-cache'
 
 interface MapsContentProps {
   userId: string
-}
-
-/* ── Art Nouveau Corner Ornament ── */
-function CornerOrnament({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="40" height="40" viewBox="0 0 60 60" fill="none">
-      <path d="M2 58V20C2 10 10 2 20 2H58" stroke="url(#gold-c)" strokeWidth="1.5" fill="none" />
-      <path d="M8 58V26C8 16 16 8 26 8H58" stroke="url(#gold-c)" strokeWidth="0.5" opacity="0.4" fill="none" />
-      <circle cx="20" cy="20" r="2" fill="#D4AF37" opacity="0.6"/>
-      <defs>
-        <linearGradient id="gold-c" x1="2" y1="58" x2="58" y2="2">
-          <stop stopColor="#D4AF37" stopOpacity="0.8"/>
-          <stop offset="1" stopColor="#C5A55A" stopOpacity="0.2"/>
-        </linearGradient>
-      </defs>
-    </svg>
-  )
 }
 
 /* ══════════════════════════════════════════════
@@ -208,11 +192,9 @@ export default function MapsContent({ userId }: MapsContentProps) {
 
     const channel = supabase
       .channel('maps_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
-        if (['maps', 'profiles', 'map_tokens'].includes(payload.table)) {
-          fetchData()
-        }
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'maps' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_tokens' }, () => fetchData())
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -302,13 +284,15 @@ export default function MapsContent({ userId }: MapsContentProps) {
                       src={map.image_url} 
                       alt={map.name}
                       className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      loading="lazy"
+                      decoding="async"
                     />
                     {/* Gradient overlay at bottom */}
                     <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#1A1612] to-transparent" />
                     
                     {/* Corner ornaments */}
-                    <CornerOrnament className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                    <CornerOrnament className="absolute top-2 right-2 -scale-x-100 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <CornerOrnament className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300" size={40} />
+                    <CornerOrnament className="absolute top-2 right-2 -scale-x-100 opacity-0 group-hover:opacity-100 transition-opacity duration-300" size={40} />
 
                     {/* You are here badge */}
                     {myMapId === map.id && (

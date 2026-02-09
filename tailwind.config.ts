@@ -56,8 +56,8 @@ const config: Config = {
       },
       fontFamily: {
         display: ['Uncial Antiqua', 'cursive'],
-        body:    ['Kanit', 'sans-serif'],
-        ui:      ['Kanit', 'sans-serif'],
+        body:    ['var(--font-kanit)', 'Kanit', 'sans-serif'],
+        ui:      ['var(--font-kanit)', 'Kanit', 'sans-serif'],
       },
       backgroundImage: {
         'victorian-gradient': 'linear-gradient(135deg, #1A1612 0%, #231C14 40%, #2D2509 100%)',

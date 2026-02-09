@@ -8,6 +8,8 @@ export interface Profile {
   id: string
   display_name: string | null
   avatar_url: string | null
+  background_url: string | null
+  bio: string | null
   role: UserRole
   spirituality: number
   max_spirituality: number
@@ -204,6 +206,8 @@ export interface Database {
           id: string
           display_name?: string | null
           avatar_url?: string | null
+          background_url?: string | null
+          bio?: string | null
           role?: UserRole
           spirituality?: number
           max_spirituality?: number
@@ -219,6 +223,8 @@ export interface Database {
         Update: {
           display_name?: string | null
           avatar_url?: string | null
+          background_url?: string | null
+          bio?: string | null
           role?: UserRole
           spirituality?: number
           max_spirituality?: number

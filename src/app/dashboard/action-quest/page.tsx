@@ -6,7 +6,7 @@ export default async function ActionQuestPage() {
   const supabase = await createClient()
   const { data: { session } } = await supabase.auth.getSession()
 
-  if (!session) redirect('/auth/callback')
+  if (!session?.user) redirect('/auth/callback')
 
   const { data: profile } = await supabase
     .from('profiles')

@@ -12,7 +12,6 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useState, useRef, useCallback, useEffect, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
 import { createClient } from '@/lib/supabase/client'
 import { getCached, setCache } from '@/lib/client-cache'
@@ -27,20 +26,9 @@ interface MapViewerProps {
 
 type AllPlayer = { id: string; display_name: string | null; avatar_url: string | null; role: string }
 
-interface DragState {
-  tokenId: string
-  startX: number
-  startY: number
-  origPosX: number
-  origPosY: number
-  active: boolean
-  longPressReady: boolean
-}
-
 const MIN_SCALE = 0.5
 const MAX_SCALE = 5
 const ZOOM_STEP = 0.3
-const LONG_PRESS_MS = 400
 const CLUSTER_THRESHOLD_PX = 44
 const TOKEN_SIZE = 44
 
@@ -88,15 +76,13 @@ function clusterTokens(
    MAIN COMPONENT
    ══════════════════════════════════════════════ */
 export default function MapViewer({ userId, mapId }: MapViewerProps) {
-  const router = useRouter()
   const containerRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  /* ── Fix #3: Track pending moves to prevent realtime overwrite ── */
+  /* ── Track pending moves to prevent realtime overwrite ── */
   const pendingMovesRef = useRef<Map<string, { x: number; y: number }>>(new Map())
-  /* ── Fix #4: Track if a drag just ended to prevent click handler ── */
-  const justDraggedRef = useRef(false)
+  /* ── Ref to call fetchMapData from outside useEffect ── */
+  const fetchMapDataRef = useRef<(() => void) | null>(null)
 
   /* ── client-side data ── */
   const currentUserId = userId
@@ -180,6 +166,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       })
     }
 
+    fetchMapDataRef.current = fetchMapData
     fetchMapData()
 
     const channel = supabase
@@ -190,11 +177,11 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [userId, mapId, router])
+  }, [userId, mapId])
 
-  // ── Token drag state ──
-  const [drag, setDrag] = useState<DragState | null>(null)
-  const [dragPreview, setDragPreview] = useState<{ x: number; y: number } | null>(null)
+  // ── Token move state (button-based flow) ──
+  const [movingTokenId, setMovingTokenId] = useState<string | null>(null)
+  const [movePreview, setMovePreview] = useState<{ x: number; y: number } | null>(null)
 
   // ── UI state ──
   const [selectedCluster, setSelectedCluster] = useState<TokenCluster | null>(null)
@@ -207,7 +194,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const [toast, setToast] = useState<{ msg: string; type: 'error' | 'info' } | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  /* ── Fix #3: Move notification modal ── */
+  /* ── Move notification modal ── */
   const [moveNotif, setMoveNotif] = useState<{ name: string; status: 'moving' | 'success' | 'error'; msg?: string } | null>(null)
 
   // ── Modal form state (lifted to parent to survive re-renders) ──
@@ -264,6 +251,20 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     }
   }, [])
 
+  /* ════════════════════════════════════════════
+     ESC key: cancel move mode
+     ════════════════════════════════════════════ */
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && movingTokenId) {
+        setMovingTokenId(null)
+        setMovePreview(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [movingTokenId])
+
   /* ── Loading guard (after all hooks) ── */
   if (!loaded) {
     return (
@@ -280,19 +281,25 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
      PAN: mouse drag on background
      ════════════════════════════════════════════ */
   function handleBgMouseDown(e: React.MouseEvent) {
+    if (movingTokenId) {
+      e.preventDefault()
+      const pos = screenToMapPercent(e.clientX, e.clientY)
+      if (pos) finalizeMove(pos.x, pos.y)
+      return
+    }
     if (e.button !== 0) return
     if (showZoneCreator) return
     setIsPanning(true)
     setPanStart({ x: e.clientX - position.x, y: e.clientY - position.y })
   }
   function handleBgMouseMove(e: React.MouseEvent) {
+    if (movingTokenId) return // Handled by onPointerMove
     if (isPanning) {
       setPosition({ x: e.clientX - panStart.x, y: e.clientY - panStart.y })
     }
   }
   function handleBgMouseUp() {
     if (isPanning) setIsPanning(false)
-    clearLongPress()
   }
 
   /* ════════════════════════════════════════════
@@ -305,8 +312,15 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     return Math.sqrt(dx * dx + dy * dy)
   }
   function handleBgTouchStart(e: React.TouchEvent) {
+    if (movingTokenId) {
+      if (e.touches.length === 1) {
+        const pos = screenToMapPercent(e.touches[0].clientX, e.touches[0].clientY)
+        if (pos) setMovePreview(pos)
+      }
+      return
+    }
     if (showZoneCreator) return
-    if (e.touches.length === 1 && !drag) {
+    if (e.touches.length === 1) {
       setIsPanning(true)
       setPanStart({ x: e.touches[0].clientX - position.x, y: e.touches[0].clientY - position.y })
     } else if (e.touches.length === 2) {
@@ -314,7 +328,14 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     }
   }
   function handleBgTouchMove(e: React.TouchEvent) {
-    if (e.touches.length === 1 && isPanning && !drag) {
+    if (movingTokenId) {
+      if (e.touches.length === 1) {
+        const pos = screenToMapPercent(e.touches[0].clientX, e.touches[0].clientY)
+        if (pos) setMovePreview(pos)
+      }
+      return
+    }
+    if (e.touches.length === 1 && isPanning) {
       setPosition({ x: e.touches[0].clientX - panStart.x, y: e.touches[0].clientY - panStart.y })
     } else if (e.touches.length === 2) {
       const dist = getTouchDist(e.touches)
@@ -325,23 +346,22 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     }
   }
   function handleBgTouchEnd() {
+    if (movingTokenId && movePreview) {
+      finalizeMove(movePreview.x, movePreview.y)
+      return
+    }
     setIsPanning(false)
     setLastTouchDist(0)
-    clearLongPress()
   }
 
   /* ════════════════════════════════════════════
-     POINTER events: token drag move + drop
+     POINTER events: move preview tracking
      ════════════════════════════════════════════ */
   function handlePointerMove(e: React.PointerEvent) {
-    if (drag?.active) {
+    if (movingTokenId) {
       const pos = screenToMapPercent(e.clientX, e.clientY)
-      if (pos) setDragPreview(pos)
+      if (pos) setMovePreview(pos)
     }
-  }
-  function handlePointerUp() {
-    if (drag?.active) finalizeDrag()
-    clearLongPress()
   }
 
   /* ════════════════════════════════════════════
@@ -366,104 +386,65 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   }
 
   /* ════════════════════════════════════════════
-     TOKEN: long-press → drag
+     TOKEN: Move mode (button-based flow)
      ════════════════════════════════════════════ */
-  function clearLongPress() {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current)
-      longPressTimer.current = null
-    }
-  }
-
-  /* ── Fix #5: Only allow dragging own token (unless admin) ── */
-  function canDragToken(token: MapTokenWithProfile) {
+  function canMoveToken(token: MapTokenWithProfile) {
     if (isAdmin) return true
     return token.token_type === 'player' && token.user_id === currentUserId
   }
 
-  function handleTokenPointerDown(e: React.PointerEvent, token: MapTokenWithProfile) {
-    e.stopPropagation()
-    e.preventDefault()
-    if (!canDragToken(token)) return
-
-    const newDrag: DragState = {
-      tokenId: token.id,
-      startX: e.clientX,
-      startY: e.clientY,
-      origPosX: token.position_x,
-      origPosY: token.position_y,
-      active: false,
-      longPressReady: false,
+  function startMoveMode(token: MapTokenWithProfile) {
+    // Check travel points (non-admin, own token only)
+    const isOwnToken = token.user_id === currentUserId
+    if (!isAdmin && isOwnToken && currentUser.travel_points <= 0) {
+      showToast('แต้มเดินทางหมดแล้ว!', 'error')
+      return
     }
-    setDrag(newDrag)
-    setDragPreview({ x: token.position_x, y: token.position_y })
-
-    clearLongPress()
-    longPressTimer.current = setTimeout(() => {
-      setDrag(prev => prev ? { ...prev, active: true, longPressReady: true } : null)
-      if (navigator.vibrate) navigator.vibrate(30)
-    }, LONG_PRESS_MS)
+    setMovingTokenId(token.id)
+    setMovePreview({ x: token.position_x, y: token.position_y })
+    setSelectedToken(null)
+    setSelectedCluster(null)
+    if (navigator.vibrate) navigator.vibrate(30)
   }
 
-  function handleTokenPointerUp(e: React.PointerEvent, token: MapTokenWithProfile) {
-    e.stopPropagation()
-    if (drag?.active) {
-      finalizeDrag()
-    } else {
-      clearLongPress()
-      setDrag(null)
-      setDragPreview(null)
-      /* ── Fix #4: Only open info on short tap, not after drag ── */
-      if (!justDraggedRef.current) {
-        handleTokenClick(token)
-      }
-    }
+  function cancelMoveMode() {
+    setMovingTokenId(null)
+    setMovePreview(null)
   }
 
   function handleTokenClick(token: MapTokenWithProfile) {
-    /* ── Fix #4: Skip if drag just ended ── */
-    if (justDraggedRef.current) return
+    if (movingTokenId) return
     setSelectedToken(token)
     setSelectedCluster(null)
   }
 
   function handleClusterClick(cluster: TokenCluster) {
-    /* ── Fix #4: Skip if drag just ended ── */
-    if (justDraggedRef.current) return
+    if (movingTokenId) return
     setSelectedCluster(cluster)
     setSelectedToken(null)
   }
 
   /* ════════════════════════════════════════════
-     TOKEN: finalize drag (optimistic + small notification)
-     Fix #3: Proper optimistic UI with pending tracking
+     TOKEN: finalize move (optimistic + notification)
      ════════════════════════════════════════════ */
-  function finalizeDrag() {
-    if (!drag || !dragPreview) {
-      setDrag(null)
-      setDragPreview(null)
-      return
-    }
+  function finalizeMove(targetX?: number, targetY?: number) {
+    const newX = targetX ?? movePreview?.x
+    const newY = targetY ?? movePreview?.y
+    if (!movingTokenId || newX == null || newY == null) return
 
-    /* ── Fix #4: Flag that a drag just ended ── */
-    justDraggedRef.current = true
-    setTimeout(() => { justDraggedRef.current = false }, 300)
+    const tokenId = movingTokenId
+    const movedToken = tokens.find(t => t.id === tokenId)
+    if (!movedToken) return
 
-    const tokenId = drag.tokenId
-    const newX = dragPreview.x
-    const newY = dragPreview.y
-    const origX = drag.origPosX
-    const origY = drag.origPosY
-
-    // Find the token for name display
-    const draggedToken = tokens.find(t => t.id === tokenId)
-    const tokenName = draggedToken?.display_name || draggedToken?.npc_name || 'ตัวละคร'
+    const tokenName = movedToken.display_name || movedToken.npc_name || 'ตัวละคร'
+    const origX = movedToken.position_x
+    const origY = movedToken.position_y
+    const isOwnToken = movedToken.user_id === currentUserId
 
     /* ── Optimistic update: position ── */
     setTokens(prev => prev.map(t => t.id === tokenId ? { ...t, position_x: newX, position_y: newY } : t))
-    
+
     /* ── Optimistic update: travel points (own token, non-admin) ── */
-    const isOwnToken = draggedToken?.user_id === currentUserId
     if (!isAdmin && isOwnToken) {
       setCurrentUser(prev => ({ ...prev, travel_points: Math.max(0, prev.travel_points - 1) }))
     }
@@ -471,10 +452,11 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     /* ── Track pending move so realtime won't overwrite ── */
     pendingMovesRef.current.set(tokenId, { x: newX, y: newY })
 
-    setDrag(null)
-    setDragPreview(null)
+    /* ── Exit move mode ── */
+    setMovingTokenId(null)
+    setMovePreview(null)
 
-    /* ── Show small notification ── */
+    /* ── Show notification ── */
     setMoveNotif({ name: tokenName, status: 'moving' })
 
     // Send to server
@@ -515,7 +497,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         showToast(result.error, 'error')
       } else {
         showToast('เข้าร่วมแมพสำเร็จ!', 'info')
-        router.refresh()
+        fetchMapDataRef.current?.()
       }
     })
   }
@@ -580,7 +562,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       startTransition(async () => {
         const r = isEdit ? await updateLockedZone(zone!.id, data) : await createLockedZone(map.id, data)
         if (r?.error) setErr(r.error)
-        else { onClose(); router.refresh() }
+        else { onClose(); fetchMapDataRef.current?.() }
       })
     }
 
@@ -589,7 +571,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       startTransition(async () => {
         await deleteLockedZone(zone.id)
         onClose()
-        router.refresh()
+        fetchMapDataRef.current?.()
       })
     }
 
@@ -696,7 +678,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     function toggleEmbed() {
       startTransition(async () => {
         await toggleMapEmbed(map.id, !map.embed_enabled)
-        router.refresh()
+        fetchMapDataRef.current?.()
       })
     }
 
@@ -846,11 +828,11 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
             </div>
           )}
 
-          {/* ── Tips (in sidebar, not overlaying map) ── */}
+          {/* ── Tips ── */}
           <div className="px-4 py-2 lg:py-3 space-y-1.5">
             <div className="flex items-center gap-2 text-victorian-400 text-[10px] lg:text-xs">
               <Info className="w-3.5 h-3.5 text-gold-400/60 shrink-0" />
-              <span>กดค้างที่ตัวละครเพื่อเดิน (ใช้ 1 แต้ม)</span>
+              <span>คลิกตัวละครแล้วกด &quot;ย้าย&quot; เพื่อเดิน</span>
             </div>
             <div className="flex items-center gap-2 text-victorian-400 text-[10px] lg:text-xs">
               <Move className="w-3.5 h-3.5 text-gold-400/60 shrink-0" />
@@ -865,14 +847,12 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
         {/* ══ MAP CANVAS (right side, full area) ══ */}
         <div ref={containerRef}
-          className={`flex-1 min-h-0 overflow-hidden relative ${showZoneCreator ? 'cursor-default' : drag?.active ? 'cursor-grabbing' : isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+          className={`flex-1 min-h-0 overflow-hidden relative ${showZoneCreator ? 'cursor-default' : movingTokenId ? 'cursor-crosshair' : isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
           onMouseDown={handleBgMouseDown}
           onMouseMove={handleBgMouseMove}
           onMouseUp={handleBgMouseUp}
           onMouseLeave={handleBgMouseUp}
           onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
           onTouchStart={handleBgTouchStart}
           onTouchMove={handleBgTouchMove}
           onTouchEnd={handleBgTouchEnd}
@@ -892,7 +872,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
           <div className="absolute inset-0 flex items-center justify-center"
             style={{
               transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-              transition: isPanning || drag?.active ? 'none' : 'transform 0.15s ease-out',
+              transition: isPanning ? 'none' : 'transform 0.15s ease-out',
             }}>
             {/* Image */}
             <div className="relative">
@@ -927,32 +907,29 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
               {imageLoaded && clusters.map((cluster, ci) => {
                 const isCluster = cluster.tokens.length > 1
                 const displayToken = cluster.tokens[0]
-                const isDragTarget = drag?.active && cluster.tokens.some(t => t.id === drag.tokenId)
-
-                const cx = isDragTarget && dragPreview ? dragPreview.x : cluster.centerX
-                const cy = isDragTarget && dragPreview ? dragPreview.y : cluster.centerY
+                const isMovingThis = cluster.tokens.some(t => t.id === movingTokenId)
 
                 return (
                   <div key={ci}
-                    className={`absolute ${isDragTarget ? 'z-50' : 'z-20'}`}
+                    className={`absolute ${isMovingThis ? 'z-50' : 'z-20'}`}
                     style={{
-                      left: `${cx}%`, top: `${cy}%`,
+                      left: `${cluster.centerX}%`, top: `${cluster.centerY}%`,
                       transform: `translate(-50%, -50%) scale(${1 / scale})`,
-                      transition: isDragTarget ? 'none' : 'left 0.3s ease, top 0.3s ease',
+                      transition: 'left 0.3s ease, top 0.3s ease',
                     }}>
                     {/* Token circle */}
                     <div
-                      className={`relative select-none touch-none cursor-pointer
-                        ${isDragTarget ? 'ring-2 ring-gold-400 scale-125' : ''}
-                        ${drag?.tokenId === displayToken.id && !drag.active ? 'ring-2 ring-gold-400/50 animate-pulse' : ''}
+                      className={`relative select-none cursor-pointer
+                        ${isMovingThis ? 'animate-wiggle' : ''}
                       `}
                       style={{ width: TOKEN_SIZE, height: TOKEN_SIZE }}
-                      onPointerDown={e => !isCluster && handleTokenPointerDown(e, displayToken)}
-                      onPointerUp={e => !isCluster && handleTokenPointerUp(e, displayToken)}
                       onClick={e => {
                         e.stopPropagation()
-                        /* ── Fix #4: Don't open dialog if just finished dragging ── */
-                        if (justDraggedRef.current) return
+                        if (movingTokenId) {
+                          const pos = screenToMapPercent(e.clientX, e.clientY)
+                          if (pos) finalizeMove(pos.x, pos.y)
+                          return
+                        }
                         if (isCluster) { handleClusterClick(cluster) } else { handleTokenClick(displayToken) }
                       }}
                     >
@@ -989,16 +966,48 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                   </div>
                 )
               })}
+              {/* ── Ghost preview during move mode ── */}
+              {movingTokenId && movePreview && imageLoaded && (() => {
+                const movingToken = tokens.find(t => t.id === movingTokenId)
+                if (!movingToken) return null
+                return (
+                  <div className="absolute z-40 pointer-events-none"
+                    style={{
+                      left: `${movePreview.x}%`,
+                      top: `${movePreview.y}%`,
+                      transform: `translate(-50%, -50%) scale(${1 / scale})`,
+                    }}>
+                    <div style={{ width: TOKEN_SIZE, height: TOKEN_SIZE }}>
+                      <div className="w-full h-full rounded-full overflow-hidden border-2 border-gold-400 opacity-50 shadow-[0_0_16px_rgba(212,175,55,0.6)]">
+                        {(movingToken.avatar_url || movingToken.npc_image_url) ? (
+                          <img src={movingToken.avatar_url || movingToken.npc_image_url || ''}
+                            className="w-full h-full object-cover" draggable={false} alt="" />
+                        ) : (
+                          <div className="w-full h-full bg-victorian-800 flex items-center justify-center text-gold-400 text-xs font-display">
+                            {(movingToken.display_name || movingToken.npc_name || '?')[0]}
+                          </div>
+                        )}
+                      </div>
+                      {/* Crosshair marker */}
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 border-2 border-gold-400 rounded-full" />
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           </div>
 
-          {/* ── Drag active indicator (minimal, top of canvas only) ── */}
-          {drag?.active && (
-            <div className="absolute top-4 inset-x-0 z-50 flex justify-center pointer-events-none px-4">
+          {/* ── Move mode indicator ── */}
+          {movingTokenId && (
+            <div className="absolute top-4 inset-x-0 z-50 flex justify-center px-4">
               <div className="bg-black/90 border border-gold-400/60 text-gold-400 text-sm font-display font-bold 
-                              px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
-                <Footprints className="w-4 h-4" />
-                <span>ปล่อยเพื่อวาง (−1 แต้ม)</span>
+                              px-4 py-2 rounded-lg shadow-lg flex items-center gap-3 pointer-events-auto">
+                <Footprints className="w-4 h-4 animate-bounce" />
+                <span>คลิกบนแผนที่เพื่อวางตัวละคร</span>
+                <button onClick={cancelMoveMode}
+                  className="ml-1 px-3 py-1 text-xs bg-victorian-700 hover:bg-victorian-600 text-victorian-300 hover:text-nouveau-cream rounded cursor-pointer transition-colors">
+                  ยกเลิก
+                </button>
               </div>
             </div>
           )}
@@ -1011,14 +1020,16 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       {selectedToken && !showZoneCreator && (
         <TokenInfoPopup token={selectedToken} isAdmin={isAdmin}
           isMe={selectedToken.user_id === currentUserId}
+          canMove={canMoveToken(selectedToken)}
           onClose={() => setSelectedToken(null)}
           onRemove={() => {
             startTransition(async () => {
               await removeTokenFromMap(selectedToken.id)
               setSelectedToken(null)
-              router.refresh()
+              fetchMapDataRef.current?.()
             })
           }}
+          onMove={() => startMoveMode(selectedToken)}
         />
       )}
 
@@ -1027,7 +1038,6 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         <ClusterPopup cluster={selectedCluster} currentUserId={currentUserId} isAdmin={isAdmin}
           onSelectToken={t => { setSelectedCluster(null); setSelectedToken(t) }}
           onClose={() => setSelectedCluster(null)}
-          onDragToken={(t, e) => { setSelectedCluster(null); handleTokenPointerDown(e, t) }}
         />
       )}
 
@@ -1042,7 +1052,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
             startTransition(async () => {
               const r = await addNpcToMap(map.id, npcName, npcUrl)
               if (r?.error) showToast(r.error, 'error')
-              else { setShowNpcModal(false); setNpcName(''); setNpcUrl(''); router.refresh() }
+              else { setShowNpcModal(false); setNpcName(''); setNpcUrl(''); fetchMapDataRef.current?.() }
             })
           }} disabled={isPending} className="btn-gold !py-2 !px-4 !text-sm w-full flex items-center justify-center gap-2">
             <Ghost className="w-4 h-4" />{isPending ? 'กำลังเพิ่ม...' : 'เพิ่ม NPC'}
@@ -1065,7 +1075,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
             startTransition(async () => {
               const r = await addPlayerToMap(map.id, selectedPlayerId)
               if (r?.error) showToast(r.error, 'error')
-              else { setShowAddPlayer(false); setSelectedPlayerId(''); router.refresh() }
+              else { setShowAddPlayer(false); setSelectedPlayerId(''); fetchMapDataRef.current?.() }
             })
           }} disabled={isPending || !selectedPlayerId}
             className="btn-gold !py-2 !px-4 !text-sm w-full flex items-center justify-center gap-2 disabled:opacity-50">
@@ -1140,9 +1150,10 @@ function ModalOverlay({ onClose, title, children }: { onClose: () => void; title
   )
 }
 
-function TokenInfoPopup({ token, isAdmin, isMe, onClose, onRemove }: {
+function TokenInfoPopup({ token, isAdmin, isMe, canMove, onClose, onRemove, onMove }: {
   token: MapTokenWithProfile; isAdmin: boolean; isMe: boolean;
-  onClose: () => void; onRemove: () => void
+  canMove: boolean;
+  onClose: () => void; onRemove: () => void; onMove: () => void
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}
@@ -1170,21 +1181,28 @@ function TokenInfoPopup({ token, isAdmin, isMe, onClose, onRemove }: {
           </div>
           <button onClick={onClose} className="self-start -mt-2 -mr-2 text-victorian-400 hover:text-gold-400 cursor-pointer p-2"><X className="w-8 h-8" /></button>
         </div>
-        {isAdmin && (
-          <button onClick={onRemove}
-            className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-nouveau-ruby border-2 border-nouveau-ruby/30 hover:border-nouveau-ruby/60 rounded-sm cursor-pointer hover:bg-nouveau-ruby/10 transition-colors">
-            <Trash2 className="w-6 h-6" /> ลบออกจากแมพ
-          </button>
-        )}
+        <div className="space-y-3">
+          {canMove && (
+            <button onClick={onMove}
+              className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-gold-400 border-2 border-gold-400/30 hover:border-gold-400/60 rounded-sm cursor-pointer hover:bg-gold-400/10 transition-colors">
+              <Move className="w-6 h-6" /> ย้ายตำแหน่ง
+            </button>
+          )}
+          {isAdmin && (
+            <button onClick={onRemove}
+              className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-nouveau-ruby border-2 border-nouveau-ruby/30 hover:border-nouveau-ruby/60 rounded-sm cursor-pointer hover:bg-nouveau-ruby/10 transition-colors">
+              <Trash2 className="w-6 h-6" /> ลบออกจากแมพ
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
 }
 
-function ClusterPopup({ cluster, currentUserId, isAdmin: _isAdmin, onSelectToken, onClose, onDragToken: _onDragToken }: {
+function ClusterPopup({ cluster, currentUserId, isAdmin: _isAdmin, onSelectToken, onClose }: {
   cluster: TokenCluster; currentUserId: string; isAdmin: boolean;
   onSelectToken: (t: MapTokenWithProfile) => void; onClose: () => void;
-  onDragToken: (t: MapTokenWithProfile, e: React.PointerEvent) => void
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}

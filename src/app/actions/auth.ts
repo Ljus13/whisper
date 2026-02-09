@@ -13,22 +13,44 @@ export async function updateProfile(formData: FormData) {
     return { error: 'Not authenticated' }
   }
 
-  const avatarUrl = formData.get('avatar_url') as string
-  
-  if (!avatarUrl) {
-    return { error: 'Avatar URL is required' }
+  const avatarUrl = formData.get('avatar_url') as string | null
+  const backgroundUrl = formData.get('background_url') as string | null
+  const bio = formData.get('bio') as string | null
+
+  const updates: Record<string, unknown> = {}
+
+  // Avatar URL
+  if (avatarUrl !== null && avatarUrl !== undefined) {
+    if (avatarUrl.trim()) {
+      try { new URL(avatarUrl) } catch { return { error: 'Invalid avatar URL format' } }
+      updates.avatar_url = avatarUrl.trim()
+    } else {
+      updates.avatar_url = null
+    }
   }
 
-  try {
-    // Basic validation for URL
-    new URL(avatarUrl)
-  } catch {
-    return { error: 'Invalid URL format' }
+  // Background URL
+  if (backgroundUrl !== null && backgroundUrl !== undefined) {
+    if (backgroundUrl.trim()) {
+      try { new URL(backgroundUrl) } catch { return { error: 'Invalid background URL format' } }
+      updates.background_url = backgroundUrl.trim()
+    } else {
+      updates.background_url = null
+    }
+  }
+
+  // Bio (rich text HTML)
+  if (bio !== null && bio !== undefined) {
+    updates.bio = bio || null
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return { error: 'No fields to update' }
   }
 
   const { error } = await supabase
     .from('profiles')
-    .update({ avatar_url: avatarUrl })
+    .update(updates)
     .eq('id', user.id)
 
   if (error) {
@@ -36,6 +58,7 @@ export async function updateProfile(formData: FormData) {
   }
 
   revalidatePath('/dashboard')
+  revalidatePath('/dashboard/players')
   return { success: true }
 }
 

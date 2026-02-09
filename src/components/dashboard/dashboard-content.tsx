@@ -4,16 +4,22 @@ import { signOut, updateProfile } from '@/app/actions/auth'
 import { applySanityDecay } from '@/app/actions/players'
 import AdminEditModal from '@/components/admin/admin-edit-modal'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
+import { CornerOrnament, OrnamentedCard } from '@/components/ui/ornaments'
+import dynamic from 'next/dynamic'
 import type { User } from '@supabase/supabase-js'
-import { LogOut, Shield, Swords, Crown, Settings, X, Camera, Map, Zap, Skull, Users, Footprints, Flame, Brain, Heart, Pencil, Lock } from 'lucide-react'
+import { LogOut, Shield, Swords, Crown, Settings, X, Camera, Map, Zap, Users, Footprints, Flame, Brain, Heart, Pencil, Lock, Image as ImageIcon, BookOpen } from 'lucide-react'
 import { useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+
+const BioEditor = dynamic(() => import('@/components/bio-editor'), { ssr: false })
 
 interface Profile {
   id: string
   display_name: string | null
   avatar_url: string | null
+  background_url: string | null
+  bio: string | null
   role: 'player' | 'admin' | 'dm'
   hp: number
   sanity: number
@@ -26,45 +32,6 @@ interface Profile {
   updated_at: string
 }
 
-/* ── Art Nouveau Corner Ornament (same as login) ── */
-function CornerOrnament({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="60" height="60" viewBox="0 0 60 60" fill="none">
-      <path
-        d="M2 58V20C2 10 10 2 20 2H58"
-        stroke="url(#gold-corner)"
-        strokeWidth="1.5"
-        fill="none"
-      />
-      <path
-        d="M8 58V26C8 16 16 8 26 8H58"
-        stroke="url(#gold-corner)"
-        strokeWidth="0.5"
-        opacity="0.4"
-        fill="none"
-      />
-      <circle cx="20" cy="20" r="2" fill="#D4AF37" opacity="0.6"/>
-      <defs>
-        <linearGradient id="gold-corner" x1="2" y1="58" x2="58" y2="2">
-          <stop stopColor="#D4AF37" stopOpacity="0.8"/>
-          <stop offset="1" stopColor="#C5A55A" stopOpacity="0.2"/>
-        </linearGradient>
-      </defs>
-    </svg>
-  )
-}
-
-function OrnamentedCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`card-victorian relative overflow-hidden ${className}`}>
-      <CornerOrnament className="absolute top-0 left-0" />
-      <CornerOrnament className="absolute top-0 right-0 -scale-x-100" />
-      <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100" />
-      <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1]" />
-      <div className="relative z-10">{children}</div>
-    </div>
-  )
-}
 
 function RoleBadge({ role }: { role: string }) {
   const config = {
@@ -95,12 +62,16 @@ export default function DashboardContent({
 }) {
   const [showProfile, setShowProfile] = useState(false)
   const [showEditAvatar, setShowEditAvatar] = useState(false)
+  const [showEditBio, setShowEditBio] = useState(false)
   const [showAdminEdit, setShowAdminEdit] = useState(false)
   const [isSigningOut, startTransition] = useTransition()
+  const [isSavingBio, setIsSavingBio] = useState(false)
   const router = useRouter()
   
   // Optimistic UI state
   const [optimisticAvatar, setOptimisticAvatar] = useState<string | null>(null)
+  const [optimisticBg, setOptimisticBg] = useState<string | null | undefined>(undefined)
+  const [optimisticBio, setOptimisticBio] = useState<string | null | undefined>(undefined)
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
   
@@ -120,6 +91,9 @@ export default function DashboardContent({
   const currentAvatarUrl = optimisticAvatar 
     || profile?.avatar_url 
     || user.user_metadata?.avatar_url
+
+  const currentBgUrl = optimisticBg !== undefined ? optimisticBg : profile?.background_url
+  const currentBio = optimisticBio !== undefined ? optimisticBio : profile?.bio
 
   const role = profile?.role || 'player'
 
@@ -155,6 +129,7 @@ export default function DashboardContent({
                   src={currentAvatarUrl}
                   alt={displayName}
                   className="w-10 h-10 md:w-20 md:h-20 rounded-full border-2 border-gold-400/30 object-cover"
+                  decoding="async"
                 />
               ) : (
                 <div className="w-10 h-10 md:w-20 md:h-20 rounded-full border-2 border-gold-400/30 
@@ -176,7 +151,7 @@ export default function DashboardContent({
       <main className="max-w-screen-2xl mx-auto px-4 py-6 md:px-8 md:py-10 space-y-8 md:space-y-12">
         
         {/* 1. Character Info Section */}
-        <OrnamentedCard className="p-4 md:p-10 lg:p-14 animate-fade-in">
+        <OrnamentedCard className="p-4 md:p-10 lg:p-14 animate-fade-in relative">
         <section className="flex flex-col xl:flex-row items-center xl:items-start gap-6 md:gap-12 xl:gap-20">
           {/* Left: Avatar + Name */}
           <div className="flex flex-col items-center text-center w-full xl:w-auto shrink-0">
@@ -187,6 +162,8 @@ export default function DashboardContent({
                   src={currentAvatarUrl}
                   alt={displayName}
                   className="relative w-32 h-32 md:w-64 md:h-64 lg:w-80 lg:h-80 xl:w-96 xl:h-96 rounded-xl border-4 border-gold-400/50 object-cover shadow-gold"
+                  fetchPriority="high"
+                  decoding="async"
                 />
               ) : (
                 <div className="relative w-32 h-32 md:w-64 md:h-64 lg:w-80 lg:h-80 xl:w-96 xl:h-96 rounded-xl border-4 border-gold-400/50 
@@ -313,6 +290,7 @@ export default function DashboardContent({
             </div>
           </div>
         </section>
+
         </OrnamentedCard>
 
         {/* 2. Grid Menu */}
@@ -483,6 +461,30 @@ export default function DashboardContent({
                 onClick={() => {
                   if (isSanityLocked) return
                   setShowProfile(false)
+                  setShowEditBio(true)
+                }}
+                disabled={isSanityLocked}
+                className={`w-full flex items-center justify-center gap-3 px-4 py-3
+                           border border-gold-400/20 rounded-sm
+                           text-nouveau-cream hover:text-gold-400 hover:border-gold-400/40
+                           transition-colors text-base
+                           ${isSanityLocked ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                style={{ backgroundColor: '#231C14' }}
+                title={isSanityLocked ? "ถูกล็อค: สติของคุณเหลือ 0" : ""}
+              >
+                {isSanityLocked ? (
+                  <Lock className="w-5 h-5 text-red-500" />
+                ) : (
+                  <BookOpen className="w-5 h-5" />
+                )}
+                แก้ไขประวัติ
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (isSanityLocked) return
+                  setShowProfile(false)
                   setShowEditAvatar(true)
                 }}
                 disabled={isSanityLocked}
@@ -499,7 +501,7 @@ export default function DashboardContent({
                 ) : (
                   <Settings className="w-5 h-5" />
                 )}
-                การตั้งค่า
+                ตั้งค่าโปรไฟล์
               </button>
 
               <button
@@ -522,7 +524,7 @@ export default function DashboardContent({
       )}
 
       {/* ═══════════════════════════════════════════ */}
-      {/*  EDIT AVATAR POPUP — Only if NOT locked    */}
+      {/*  SETTINGS POPUP — Avatar + Background URL */}
       {/* ═══════════════════════════════════════════ */}
       {showEditAvatar && !isSanityLocked && (
         <div 
@@ -531,12 +533,12 @@ export default function DashboardContent({
           style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
         >
           <div 
-            className="w-full max-w-md rounded-sm border border-gold-400/20 p-8"
+            className="w-full max-w-md rounded-sm border border-gold-400/20 p-8 max-h-[90vh] overflow-y-auto"
             style={{ backgroundColor: '#1A1612' }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-6">
-              <h3 className="heading-victorian text-2xl">แก้ไขรูปโปรไฟล์</h3>
+              <h3 className="heading-victorian text-2xl">การตั้งค่าโปรไฟล์</h3>
               <button 
                 type="button"
                 onClick={() => setShowEditAvatar(false)}
@@ -547,22 +549,24 @@ export default function DashboardContent({
             </div>
 
             <form action={async (formData) => {
-              const newUrl = formData.get('avatar_url') as string
-              if (!newUrl) return
+              const newAvatarUrl = formData.get('avatar_url') as string
+              const newBgUrl = formData.get('background_url') as string
 
-              // 1. Optimistic Update: Show new image immediately
-              setOptimisticAvatar(newUrl)
+              // Optimistic Updates
+              if (newAvatarUrl) setOptimisticAvatar(newAvatarUrl)
+              if (newBgUrl) setOptimisticBg(newBgUrl)
+              else setOptimisticBg(null)
               setShowEditAvatar(false)
 
-              // 2. Server Update
               const result = await updateProfile(formData)
               
-              // 3. Rollback if error
               if (result?.error) {
                 setOptimisticAvatar(null)
+                setOptimisticBg(undefined)
                 alert(`เกิดข้อผิดพลาด: ${result.error}`)
               }
             }}>
+              {/* Avatar Preview */}
               <div className="flex justify-center mb-6">
                 {currentAvatarUrl ? (
                   <img
@@ -580,28 +584,48 @@ export default function DashboardContent({
                 )}
               </div>
 
-              <div className="mb-6">
+              {/* Avatar URL */}
+              <div className="mb-5">
                 <label className="block text-sm text-victorian-300 mb-2">
-                  Avatar URL <span className="text-nouveau-ruby">*</span>
+                  <Camera className="w-3.5 h-3.5 inline mr-1.5" />
+                  Avatar URL
                 </label>
                 <input 
                   name="avatar_url"
                   type="url" 
                   defaultValue={currentAvatarUrl || ''}
-                  placeholder="https://example.com/image.jpg"
-                  required
+                  placeholder="https://example.com/avatar.jpg"
                   className="input-victorian w-full"
                   onChange={(e) => {
-                    // Optional: Preview as you type
                     if (e.target.value && e.target.value.startsWith('http')) {
                       setOptimisticAvatar(e.target.value)
                     }
                   }}
                 />
-                <p className="mt-2 text-xs text-victorian-500 flex items-center gap-1.5">
-                  <Camera className="w-3 h-3" />
-                  รองรับเฉพาะ Direct URL ของรูปภาพเท่านั้น
+              </div>
+
+              {/* Background URL */}
+              <div className="mb-6">
+                <label className="block text-sm text-victorian-300 mb-2">
+                  <ImageIcon className="w-3.5 h-3.5 inline mr-1.5" />
+                  ภาพแบ็คกราวด์โปรไฟล์
+                </label>
+                <input 
+                  name="background_url"
+                  type="url" 
+                  defaultValue={currentBgUrl || ''}
+                  placeholder="https://example.com/background.jpg"
+                  className="input-victorian w-full"
+                />
+                <p className="mt-2 text-xs text-victorian-500">
+                  ภาพจะแสดงเป็นพื้นหลังในการ์ดตัวละครของคุณ
                 </p>
+                {/* Background preview */}
+                {currentBgUrl && (
+                  <div className="mt-3 rounded-sm overflow-hidden border border-gold-400/10 h-20">
+                    <img src={currentBgUrl} alt="BG Preview" className="w-full h-full object-cover opacity-60" loading="lazy" decoding="async" />
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-3">
@@ -620,6 +644,55 @@ export default function DashboardContent({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════ */}
+      {/*  BIO EDITOR POPUP                          */}
+      {/* ═══════════════════════════════════════════ */}
+      {showEditBio && !isSanityLocked && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowEditBio(false)}
+          style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+        >
+          <div 
+            className="w-full max-w-2xl rounded-sm border border-gold-400/20 p-6 md:p-8 max-h-[90vh] overflow-y-auto"
+            style={{ backgroundColor: '#1A1612' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="heading-victorian text-2xl">แก้ไขประวัติตัวละคร</h3>
+              <button 
+                type="button"
+                onClick={() => setShowEditBio(false)}
+                className="text-victorian-400 hover:text-gold-400 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <BioEditor
+              initialContent={currentBio || ''}
+              saving={isSavingBio}
+              onSave={async (html) => {
+                setIsSavingBio(true)
+                setOptimisticBio(html)
+                
+                const formData = new FormData()
+                formData.set('bio', html)
+                const result = await updateProfile(formData)
+                
+                setIsSavingBio(false)
+                if (result?.error) {
+                  setOptimisticBio(undefined)
+                  alert(`เกิดข้อผิดพลาด: ${result.error}`)
+                } else {
+                  setShowEditBio(false)
+                }
+              }}
+            />
           </div>
         </div>
       )}

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { ArrowLeft, ScrollText, ChevronLeft, ChevronRight, Copy, Check, Sparkles } from 'lucide-react'
 import { getSkillUsageLogs } from '@/app/actions/skills'
+import { OrnamentedCard } from '@/components/ui/ornaments'
 
 interface LogEntry {
   id: string
@@ -14,35 +15,6 @@ interface LogEntry {
   player_name: string
   player_avatar: string | null
   skill_name: string
-}
-
-/* ─── Art Nouveau Corner Ornament ─── */
-function CornerOrnament({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="60" height="60" viewBox="0 0 60 60" fill="none">
-      <path d="M2 58V20C2 10 10 2 20 2H58" stroke="url(#gold-corner-l)" strokeWidth="1.5" fill="none" />
-      <path d="M8 58V26C8 16 16 8 26 8H58" stroke="url(#gold-corner-l)" strokeWidth="0.5" opacity="0.4" fill="none" />
-      <circle cx="20" cy="20" r="2" fill="#D4AF37" opacity="0.6"/>
-      <defs>
-        <linearGradient id="gold-corner-l" x1="2" y1="58" x2="58" y2="2">
-          <stop stopColor="#D4AF37" stopOpacity="0.8"/>
-          <stop offset="1" stopColor="#C5A55A" stopOpacity="0.2"/>
-        </linearGradient>
-      </defs>
-    </svg>
-  )
-}
-
-function OrnamentedCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`card-victorian relative overflow-hidden ${className}`}>
-      <CornerOrnament className="absolute top-0 left-0" />
-      <CornerOrnament className="absolute top-0 right-0 -scale-x-100" />
-      <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100" />
-      <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1]" />
-      <div className="relative z-10">{children}</div>
-    </div>
-  )
 }
 
 export default function SkillLogsContent() {
@@ -171,6 +143,8 @@ export default function SkillLogsContent() {
                           src={log.player_avatar}
                           alt={log.player_name}
                           className="w-10 h-10 rounded-full border border-gold-400/20 object-cover"
+                          loading="lazy"
+                          decoding="async"
                         />
                       ) : (
                         <div className="w-10 h-10 rounded-full border border-gold-400/20 bg-victorian-800 flex items-center justify-center">

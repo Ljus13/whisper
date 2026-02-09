@@ -18,6 +18,7 @@ import {
   getMapsForQuestDropdown,
 } from '@/app/actions/action-quest'
 import type { ActionRewards } from '@/app/actions/action-quest'
+import { OrnamentedCard } from '@/components/ui/ornaments'
 import { MapPin, Gift } from 'lucide-react'
 
 /* ═══════════════════ Types ═══════════════════ */
@@ -49,33 +50,7 @@ type TabKey = 'actions' | 'quests' | 'sleep'
 
 /* ═══════════════════ Shared UI ═══════════════════ */
 
-function CornerOrnament({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="60" height="60" viewBox="0 0 60 60" fill="none">
-      <path d="M2 58V20C2 10 10 2 20 2H58" stroke="url(#gc-aq)" strokeWidth="1.5" fill="none" />
-      <path d="M8 58V26C8 16 16 8 26 8H58" stroke="url(#gc-aq)" strokeWidth="0.5" opacity="0.4" fill="none" />
-      <circle cx="20" cy="20" r="2" fill="#D4AF37" opacity="0.6"/>
-      <defs>
-        <linearGradient id="gc-aq" x1="2" y1="58" x2="58" y2="2">
-          <stop stopColor="#D4AF37" stopOpacity="0.8"/>
-          <stop offset="1" stopColor="#C5A55A" stopOpacity="0.2"/>
-        </linearGradient>
-      </defs>
-    </svg>
-  )
-}
-
-function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`card-victorian relative overflow-hidden ${className}`}>
-      <CornerOrnament className="absolute top-0 left-0" />
-      <CornerOrnament className="absolute top-0 right-0 -scale-x-100" />
-      <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100" />
-      <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1]" />
-      <div className="relative z-10">{children}</div>
-    </div>
-  )
-}
+const Card = OrnamentedCard
 
 function Badge({ status }: { status: string }) {
   if (status === 'approved') return (
@@ -129,7 +104,7 @@ function Pagination({ page, totalPages, onPage }: { page: number; totalPages: nu
 }
 
 function Avatar({ name, url }: { name: string; url: string | null }) {
-  if (url) return <img src={url} alt={name} className="w-9 h-9 rounded-full border border-gold-400/20 object-cover" />
+  if (url) return <img src={url} alt={name} className="w-9 h-9 rounded-full border border-gold-400/20 object-cover" loading="lazy" decoding="async" />
   return (
     <div className="w-9 h-9 rounded-full border border-gold-400/20 bg-victorian-800 flex items-center justify-center">
       <span className="text-gold-400 text-xs font-display">{name[0]?.toUpperCase()}</span>
@@ -153,7 +128,7 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
 
 /* ═══════════════════ Main Component ═══════════════════ */
 
-export default function ActionQuestContent({ userId, isAdmin }: { userId: string; isAdmin: boolean }) {
+export default function ActionQuestContent({ userId: _userId, isAdmin }: { userId: string; isAdmin: boolean }) {
   const [isPending, startTransition] = useTransition()
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>('actions')

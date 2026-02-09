@@ -13,7 +13,7 @@ export default async function DashboardPage() {
   const user = session.user
 
   // Fetch profile and pathway info in parallel (not sequential!)
-  const [{ data: profile, error }, { data: playerPathways }] = await Promise.all([
+  const [{ data: profile }, { data: playerPathways }] = await Promise.all([
     supabase
       .from('profiles')
       .select('*')
