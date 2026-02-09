@@ -17,7 +17,8 @@ import {
   getSleepLogs,
   getMapsForQuestDropdown,
 } from '@/app/actions/action-quest'
-import { MapPin } from 'lucide-react'
+import type { ActionRewards } from '@/app/actions/action-quest'
+import { MapPin, Gift } from 'lucide-react'
 
 /* ═══════════════════ Types ═══════════════════ */
 
@@ -26,12 +27,17 @@ interface MapOption { id: string; name: string }
 interface CodeEntry {
   id: string; name: string; code: string; created_by_name: string; created_at: string
   map_id?: string | null; map_name?: string | null
+  reward_hp?: number; reward_sanity?: number; reward_travel?: number; reward_spirituality?: number
+  reward_max_sanity?: number; reward_max_travel?: number; reward_max_spirituality?: number
 }
 interface Submission {
   id: string; player_id: string; player_name: string; player_avatar: string | null
   action_name?: string; action_code?: string; quest_name?: string; quest_code?: string
   evidence_urls: string[]; status: string; rejection_reason: string | null
   reviewed_by_name: string | null; reviewed_at: string | null; created_at: string
+  // Action rewards
+  reward_hp?: number; reward_sanity?: number; reward_travel?: number; reward_spirituality?: number
+  reward_max_sanity?: number; reward_max_travel?: number; reward_max_spirituality?: number
 }
 interface SleepLog {
   id: string; player_id: string; player_name: string; player_avatar: string | null
@@ -168,6 +174,8 @@ export default function ActionQuestContent({ userId, isAdmin }: { userId: string
   const [genError, setGenError] = useState<string | null>(null)
   const [genMapId, setGenMapId] = useState<string>('')  // selected map for quest
   const [mapOptions, setMapOptions] = useState<MapOption[]>([])
+  // ─── Action rewards state ───
+  const [genRewards, setGenRewards] = useState<ActionRewards>({})
 
   // ─── Submit action/quest modals ───
   const [showSubmitAction, setShowSubmitAction] = useState(false)
@@ -299,7 +307,7 @@ export default function ActionQuestContent({ userId, isAdmin }: { userId: string
     if (!genName.trim()) { setGenError('กรุณากรอกชื่อ'); return }
     startTransition(async () => {
       const r = type === 'action'
-        ? await generateActionCode(genName)
+        ? await generateActionCode(genName, genRewards)
         : await generateQuestCode(genName, genMapId || null)
       if (r.error) { setGenError(r.error) }
       else if (r.code && r.name) {
@@ -404,7 +412,7 @@ export default function ActionQuestContent({ userId, isAdmin }: { userId: string
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button type="button"
-                onClick={() => { setShowGenAction(true); setGenName(''); setGenResult(null); setGenError(null) }}
+                onClick={() => { setShowGenAction(true); setGenName(''); setGenResult(null); setGenError(null); setGenRewards({}) }}
                 className="btn-gold !px-5 !py-4 !text-sm flex items-center justify-center gap-2 cursor-pointer">
                 <Swords className="w-5 h-5" /> สร้างโค้ดแอคชั่น
               </button>
@@ -498,12 +506,25 @@ export default function ActionQuestContent({ userId, isAdmin }: { userId: string
                       <tr className="text-victorian-500 text-left border-b border-gold-400/10">
                         <th className="pb-2 pr-3">ชื่อ</th>
                         <th className="pb-2 pr-3">โค้ด</th>
+                        <th className="pb-2 pr-3">รางวัล</th>
                         <th className="pb-2 pr-3">สร้างโดย</th>
                         <th className="pb-2">วันที่</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {actionCodes.map(c => (
+                      {actionCodes.map(c => {
+                        const grants = [
+                          c.reward_hp ? `❤️+${c.reward_hp}` : '',
+                          c.reward_sanity ? `🧠+${c.reward_sanity}` : '',
+                          c.reward_travel ? `🗺️+${c.reward_travel}` : '',
+                          c.reward_spirituality ? `✨+${c.reward_spirituality}` : '',
+                        ].filter(Boolean)
+                        const caps = [
+                          c.reward_max_sanity ? `🧠↑${c.reward_max_sanity}` : '',
+                          c.reward_max_travel ? `🗺️↑${c.reward_max_travel}` : '',
+                          c.reward_max_spirituality ? `✨↑${c.reward_max_spirituality}` : '',
+                        ].filter(Boolean)
+                        return (
                         <tr key={c.id} className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
                           <td className="py-2 pr-3 text-victorian-200">{c.name}</td>
                           <td className="py-2 pr-3">
@@ -512,10 +533,21 @@ export default function ActionQuestContent({ userId, isAdmin }: { userId: string
                               {c.code} <Copy className="w-3 h-3" />
                             </button>
                           </td>
+                          <td className="py-2 pr-3">
+                            {grants.length === 0 && caps.length === 0 ? (
+                              <span className="text-victorian-600 text-xs">—</span>
+                            ) : (
+                              <div className="flex flex-wrap gap-1">
+                                {grants.map((g, i) => <span key={i} className="text-xs bg-emerald-900/40 text-emerald-300 px-1.5 py-0.5 rounded">{g}</span>)}
+                                {caps.map((g, i) => <span key={i} className="text-xs bg-amber-900/40 text-amber-300 px-1.5 py-0.5 rounded">{g}</span>)}
+                              </div>
+                            )}
+                          </td>
                           <td className="py-2 pr-3 text-victorian-400">{c.created_by_name}</td>
                           <td className="py-2 text-victorian-500 text-xs">{fmtDate(c.created_at)}</td>
                         </tr>
-                      ))}
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -670,6 +702,13 @@ export default function ActionQuestContent({ userId, isAdmin }: { userId: string
                               <ExternalLink className="w-3 h-3" /> ลิงก์นอนหลับ
                             </a>
                           </div>
+                          {/* Sleep recovery notification */}
+                          {log.status === 'approved' && (
+                            <div className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-blue-900/30 border border-blue-500/30">
+                              <CheckCircle className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                              <span className="text-blue-300 text-xs">✨ การนอนหลับเสร็จสิ้น — พลังวิญญาณฟื้นกลับมาเต็มที่แล้ว!</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                       {isAdmin && log.status === 'pending' && (
@@ -742,6 +781,52 @@ export default function ActionQuestContent({ userId, isAdmin }: { userId: string
                 <label className="block text-sm text-victorian-300 mb-1.5">ชื่อแอคชั่น <span className="text-nouveau-ruby">*</span></label>
                 <input type="text" value={genName} onChange={e => setGenName(e.target.value)} placeholder="เช่น ต่อสู้กับมังกร" className="input-victorian w-full !py-3 !text-sm" />
               </div>
+
+              {/* ── Grant rewards ── */}
+              <div className="space-y-2">
+                <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+                  <Gift className="w-3.5 h-3.5 text-emerald-400" /> มอบรางวัล <span className="text-victorian-600 text-xs font-normal">(เพิ่มค่าปัจจุบัน)</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    ['reward_hp', 'HP', '❤️'],
+                    ['reward_sanity', 'Sanity', '🧠'],
+                    ['reward_travel', 'Travel', '🗺️'],
+                    ['reward_spirituality', 'Spirituality', '✨'],
+                  ] as const).map(([key, lbl, ico]) => (
+                    <div key={key} className="flex items-center gap-1.5">
+                      <span className="text-sm">{ico}</span>
+                      <input type="number" min={0} placeholder={lbl}
+                        value={genRewards[key] || ''}
+                        onChange={e => setGenRewards(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))}
+                        className="input-victorian w-full !py-1.5 !text-xs" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Max cap rewards ── */}
+              <div className="space-y-2">
+                <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+                  <Gift className="w-3.5 h-3.5 text-amber-400" /> เพิ่มค่าสูงสุด <span className="text-victorian-600 text-xs font-normal">(ขยายลิมิต)</span>
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    ['reward_max_sanity', 'Max Sanity', '🧠'],
+                    ['reward_max_travel', 'Max Travel', '🗺️'],
+                    ['reward_max_spirituality', 'Max Spirit', '✨'],
+                  ] as const).map(([key, lbl, ico]) => (
+                    <div key={key} className="flex items-center gap-1.5">
+                      <span className="text-sm">{ico}</span>
+                      <input type="number" min={0} placeholder={lbl}
+                        value={genRewards[key] || ''}
+                        onChange={e => setGenRewards(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))}
+                        className="input-victorian w-full !py-1.5 !text-xs" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {genError && <div className="p-3 bg-red-900/40 border border-red-500/30 rounded-lg text-red-300 text-sm text-center">{genError}</div>}
               <div className="flex justify-end gap-3">
                 <button type="button" onClick={() => setShowGenAction(false)} className="btn-victorian px-4 py-2 text-sm cursor-pointer">ยกเลิก</button>
@@ -954,6 +1039,31 @@ function SubmissionCard({ s, type, isAdmin, isPending, onApprove, onReject, onVi
                 className="inline-flex items-center gap-1.5 mt-1 px-3 py-1.5 rounded-lg bg-red-950/50 border border-red-500/30 text-red-400 text-xs font-bold hover:bg-red-900/50 transition-colors cursor-pointer">
                 <Eye className="w-3.5 h-3.5" /> ดูเหตุผลที่ปฏิเสธ
               </button>
+            )}
+            {/* Rewards received (action only, approved) */}
+            {type === 'action' && s.status === 'approved' && (
+              (() => {
+                const grants = [
+                  s.reward_hp ? `❤️+${s.reward_hp}` : '',
+                  s.reward_sanity ? `🧠+${s.reward_sanity}` : '',
+                  s.reward_travel ? `🗺️+${s.reward_travel}` : '',
+                  s.reward_spirituality ? `✨+${s.reward_spirituality}` : '',
+                ].filter(Boolean)
+                const caps = [
+                  s.reward_max_sanity ? `🧠↑${s.reward_max_sanity}` : '',
+                  s.reward_max_travel ? `🗺️↑${s.reward_max_travel}` : '',
+                  s.reward_max_spirituality ? `✨↑${s.reward_max_spirituality}` : '',
+                ].filter(Boolean)
+                if (grants.length === 0 && caps.length === 0) return null
+                return (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                    <Gift className="w-3.5 h-3.5 text-gold-400 flex-shrink-0" />
+                    <span className="text-victorian-400 text-xs">รางวัลที่ได้รับ:</span>
+                    {grants.map((g, i) => <span key={i} className="text-xs bg-emerald-900/40 text-emerald-300 px-1.5 py-0.5 rounded">{g}</span>)}
+                    {caps.map((g, i) => <span key={i} className="text-xs bg-amber-900/40 text-amber-300 px-1.5 py-0.5 rounded">{g}</span>)}
+                  </div>
+                )
+              })()
             )}
           </div>
         </div>

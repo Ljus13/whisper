@@ -200,7 +200,17 @@ export async function autoApproveExpiredRequests() {
    ACTION CODES — สร้างโค้ดแอคชั่น
    ══════════════════════════════════════════════ */
 
-export async function generateActionCode(name: string) {
+export interface ActionRewards {
+  reward_hp?: number
+  reward_sanity?: number
+  reward_travel?: number
+  reward_spirituality?: number
+  reward_max_sanity?: number
+  reward_max_travel?: number
+  reward_max_spirituality?: number
+}
+
+export async function generateActionCode(name: string, rewards?: ActionRewards) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
@@ -219,9 +229,22 @@ export async function generateActionCode(name: string) {
     code = generateCode()
   }
 
+  const insertData: Record<string, unknown> = {
+    name: name.trim(), code, created_by: user.id,
+  }
+  if (rewards) {
+    if (rewards.reward_hp) insertData.reward_hp = rewards.reward_hp
+    if (rewards.reward_sanity) insertData.reward_sanity = rewards.reward_sanity
+    if (rewards.reward_travel) insertData.reward_travel = rewards.reward_travel
+    if (rewards.reward_spirituality) insertData.reward_spirituality = rewards.reward_spirituality
+    if (rewards.reward_max_sanity) insertData.reward_max_sanity = rewards.reward_max_sanity
+    if (rewards.reward_max_travel) insertData.reward_max_travel = rewards.reward_max_travel
+    if (rewards.reward_max_spirituality) insertData.reward_max_spirituality = rewards.reward_max_spirituality
+  }
+
   const { data, error } = await supabase
     .from('action_codes')
-    .insert({ name: name.trim(), code, created_by: user.id })
+    .insert(insertData)
     .select()
     .single()
 
@@ -410,7 +433,7 @@ export async function getActionSubmissions(page: number = 1) {
     ? await supabase.from('profiles').select('id, display_name, avatar_url').in('id', allProfileIds)
     : { data: [] }
   const { data: codes } = codeIds.length > 0
-    ? await supabase.from('action_codes').select('id, name, code').in('id', codeIds)
+    ? await supabase.from('action_codes').select('id, name, code, reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality').in('id', codeIds)
     : { data: [] }
 
   const pMap = new Map((profiles || []).map(p => [p.id, p]))
@@ -434,6 +457,14 @@ export async function getActionSubmissions(page: number = 1) {
       reviewed_by_name: reviewer?.display_name || null,
       reviewed_at: r.reviewed_at,
       created_at: r.created_at,
+      // rewards from action_code
+      reward_hp: code?.reward_hp || 0,
+      reward_sanity: code?.reward_sanity || 0,
+      reward_travel: code?.reward_travel || 0,
+      reward_spirituality: code?.reward_spirituality || 0,
+      reward_max_sanity: code?.reward_max_sanity || 0,
+      reward_max_travel: code?.reward_max_travel || 0,
+      reward_max_spirituality: code?.reward_max_spirituality || 0,
     }
   })
 
@@ -446,13 +477,87 @@ export async function approveActionSubmission(id: string) {
   if (!user) return { error: 'Not authenticated' }
   if (!(await requireAdmin(supabase, user.id))) return { error: 'Admin/DM required' }
 
-  const { error } = await supabase
+  // Fetch the submission + action_code rewards in one go
+  const { data: submission } = await supabase
+    .from('action_submissions')
+    .select('id, player_id, action_code_id, status')
+    .eq('id', id)
+    .eq('status', 'pending')
+    .single()
+
+  if (!submission) return { error: 'ไม่พบคำขอหรือคำขอถูกดำเนินการแล้ว' }
+
+  const { data: actionCode } = await supabase
+    .from('action_codes')
+    .select('reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality')
+    .eq('id', submission.action_code_id)
+    .single()
+
+  // Update submission status
+  const { error: updateErr } = await supabase
     .from('action_submissions')
     .update({ status: 'approved', reviewed_by: user.id, reviewed_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('status', 'pending')
 
-  if (error) return { error: error.message }
+  if (updateErr) return { error: updateErr.message }
+
+  // Apply rewards if any
+  if (actionCode) {
+    const hasRewards = (actionCode.reward_hp || 0) + (actionCode.reward_sanity || 0) +
+      (actionCode.reward_travel || 0) + (actionCode.reward_spirituality || 0) +
+      (actionCode.reward_max_sanity || 0) + (actionCode.reward_max_travel || 0) +
+      (actionCode.reward_max_spirituality || 0) > 0
+
+    if (hasRewards) {
+      // Fetch current player profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('hp, sanity, max_sanity, travel_points, max_travel_points, spirituality, max_spirituality')
+        .eq('id', submission.player_id)
+        .single()
+
+      if (profile) {
+        const updates: Record<string, number> = {}
+
+        // Step 1: Expand max caps first (so adding current doesn't exceed new max)
+        let newMaxSanity = profile.max_sanity ?? 10
+        let newMaxTravel = profile.max_travel_points ?? 10
+        let newMaxSpirit = profile.max_spirituality ?? 10
+
+        if (actionCode.reward_max_sanity > 0) {
+          newMaxSanity += actionCode.reward_max_sanity
+          updates.max_sanity = newMaxSanity
+        }
+        if (actionCode.reward_max_travel > 0) {
+          newMaxTravel += actionCode.reward_max_travel
+          updates.max_travel_points = newMaxTravel
+        }
+        if (actionCode.reward_max_spirituality > 0) {
+          newMaxSpirit += actionCode.reward_max_spirituality
+          updates.max_spirituality = newMaxSpirit
+        }
+
+        // Step 2: Add current value rewards (clamped to max)
+        if (actionCode.reward_hp > 0) {
+          updates.hp = (profile.hp ?? 0) + actionCode.reward_hp
+        }
+        if (actionCode.reward_sanity > 0) {
+          updates.sanity = Math.min(newMaxSanity, (profile.sanity ?? 0) + actionCode.reward_sanity)
+        }
+        if (actionCode.reward_travel > 0) {
+          updates.travel_points = Math.min(newMaxTravel, (profile.travel_points ?? 0) + actionCode.reward_travel)
+        }
+        if (actionCode.reward_spirituality > 0) {
+          updates.spirituality = Math.min(newMaxSpirit, (profile.spirituality ?? 0) + actionCode.reward_spirituality)
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await supabase.from('profiles').update(updates).eq('id', submission.player_id)
+        }
+      }
+    }
+  }
+
   revalidatePath('/dashboard/action-quest')
   return { success: true }
 }

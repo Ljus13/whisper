@@ -101,6 +101,13 @@ export interface ActionCode {
   id: string
   name: string
   code: string
+  reward_hp: number
+  reward_sanity: number
+  reward_travel: number
+  reward_spirituality: number
+  reward_max_sanity: number
+  reward_max_travel: number
+  reward_max_spirituality: number
   created_by: string
   created_at: string
 }
