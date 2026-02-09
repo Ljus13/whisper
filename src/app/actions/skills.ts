@@ -23,6 +23,103 @@ async function requireAdmin() {
 }
 
 /* ══════════════════════════════════════════════
+   SKILL USAGE LOGS (ประวัติการใช้สกิล)
+   ══════════════════════════════════════════════ */
+
+const LOGS_PER_PAGE = 20
+
+export async function getSkillUsageLogs(page: number = 1) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated', logs: [], total: 0 }
+
+  // Check role
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) return { error: 'Profile not found', logs: [], total: 0 }
+
+  const isAdmin = profile.role === 'admin' || profile.role === 'dm'
+  const offset = (page - 1) * LOGS_PER_PAGE
+
+  // Build query — admin sees all, player sees only own logs
+  let countQuery = supabase
+    .from('skill_usage_logs')
+    .select('*', { count: 'exact', head: true })
+
+  if (!isAdmin) {
+    countQuery = countQuery.eq('player_id', user.id)
+  }
+
+  const countResult = await countQuery
+  const totalCount = countResult.count || 0
+
+  // Fetch logs (simple query without joins to avoid FK naming issues)
+  let dataQuery = supabase
+    .from('skill_usage_logs')
+    .select('*')
+    .order('used_at', { ascending: false })
+    .range(offset, offset + LOGS_PER_PAGE - 1)
+
+  if (!isAdmin) {
+    dataQuery = dataQuery.eq('player_id', user.id)
+  }
+
+  const dataResult = await dataQuery
+
+  if (dataResult.error) {
+    console.error('skill_usage_logs query error:', dataResult.error)
+    return { error: dataResult.error.message, logs: [], total: 0 }
+  }
+
+  const rawLogs = dataResult.data || []
+
+  // Fetch related player names and skill names in batch
+  const playerIds = [...new Set(rawLogs.map(l => l.player_id))]
+  const skillIds = [...new Set(rawLogs.map(l => l.skill_id))]
+
+  const [playersRes, skillsRes] = await Promise.all([
+    playerIds.length > 0
+      ? supabase.from('profiles').select('id, display_name, avatar_url').in('id', playerIds)
+      : { data: [] },
+    skillIds.length > 0
+      ? supabase.from('skills').select('id, name').in('id', skillIds)
+      : { data: [] },
+  ])
+
+  const playerMap = new Map((playersRes.data || []).map(p => [p.id, p]))
+  const skillMap = new Map((skillsRes.data || []).map(s => [s.id, s]))
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const logs = rawLogs.map((row: any) => {
+    const player = playerMap.get(row.player_id)
+    const skill = skillMap.get(row.skill_id)
+    return {
+      id: row.id,
+      player_id: row.player_id,
+      skill_id: row.skill_id,
+      spirit_cost: row.spirit_cost,
+      reference_code: row.reference_code || '—',
+      used_at: row.used_at,
+      player_name: player?.display_name || 'ไม่ทราบชื่อ',
+      player_avatar: player?.avatar_url || null,
+      skill_name: skill?.name || 'ไม่ทราบสกิล',
+    }
+  })
+
+  return {
+    logs,
+    total: totalCount,
+    page,
+    totalPages: Math.ceil(totalCount / LOGS_PER_PAGE),
+    isAdmin,
+  }
+}
+
+/* ══════════════════════════════════════════════
    SKILL TYPES (กลุ่ม)
    ══════════════════════════════════════════════ */
 
@@ -334,7 +431,7 @@ export async function castSkill(skillId: string) {
   // 1) Fetch skill info
   const { data: skill } = await supabase
     .from('skills')
-    .select('id, name, spirit_cost, pathway_id, sequence_id')
+    .select('id, name, description, spirit_cost, pathway_id, sequence_id')
     .eq('id', skillId)
     .single()
 
@@ -392,11 +489,30 @@ export async function castSkill(skillId: string) {
 
   if (deductErr) return { error: deductErr.message }
 
-  // 7) Log usage
+  // 7) Generate reference code: uid last 4 chars + ddmmyyyy
+  const now = new Date()
+  const dd = String(now.getDate()).padStart(2, '0')
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const yyyy = String(now.getFullYear())
+  const uidSuffix = user.id.replace(/-/g, '').slice(-4).toUpperCase()
+  const referenceCode = `${uidSuffix}${dd}${mm}${yyyy}`
+
+  // 8) Log usage with reference code
   await supabase
     .from('skill_usage_logs')
-    .insert({ player_id: user.id, skill_id: skillId, spirit_cost: skill.spirit_cost })
+    .insert({
+      player_id: user.id,
+      skill_id: skillId,
+      spirit_cost: skill.spirit_cost,
+      reference_code: referenceCode
+    })
 
   revalidatePath('/dashboard/skills')
-  return { success: true, remaining: profile.spirituality - skill.spirit_cost, skillName: skill.name }
+  return {
+    success: true,
+    remaining: profile.spirituality - skill.spirit_cost,
+    skillName: skill.name,
+    skillDescription: skill.description || null,
+    referenceCode
+  }
 }

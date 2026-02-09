@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition, useEffect, useCallback } from 'react'
 import type { Profile, SkillType, SkillPathway, SkillSequence, Skill, PlayerPathway } from '@/lib/types/database'
 import {
   ArrowLeft, ChevronDown, ChevronRight, Plus, Trash2, Sparkles, Zap,
-  GitBranch, Layers, Shield, Lock, BookOpen, Pencil
+  GitBranch, Layers, Shield, Lock, BookOpen, Pencil, Copy, Check, X, ScrollText
 } from 'lucide-react'
 import {
   createSkillType, deleteSkillType,
@@ -55,12 +55,13 @@ interface SkillsContentProps {
    ADMIN PANEL: Manage the skill hierarchy
    ═══════════════════════════════════════ */
 function AdminPanel({
-  skillTypes, pathways, sequences, skills
+  skillTypes, pathways, sequences, skills, onRefresh
 }: {
   skillTypes: SkillType[]
   pathways: SkillPathway[]
   sequences: SkillSequence[]
   skills: Skill[]
+  onRefresh: () => void
 }) {
   const [isPending, startTransition] = useTransition()
   const [openType, setOpenType] = useState<string | null>(null)
@@ -78,6 +79,7 @@ function AdminPanel({
     startTransition(async () => {
       const result = await action()
       if (result?.error) setError(result.error)
+      else onRefresh()
     })
   }
 
@@ -411,8 +413,17 @@ function PlayerSkillView({
   playerPathways: PlayerPathway[]
 }) {
   const [isPending, startTransition] = useTransition()
-  const [usedSkill, setUsedSkill] = useState<{ name: string; remaining: number } | null>(null)
+  const [usedSkill, setUsedSkill] = useState<{
+    name: string
+    description: string | null
+    remaining: number
+    referenceCode: string
+  } | null>(null)
   const [skillError, setSkillError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  // Optimistic spirituality for instant UI feedback
+  const [optimisticSpirit, setOptimisticSpirit] = useState<number | null>(null)
+  const displaySpirit = optimisticSpirit ?? profile?.spirituality ?? 0
 
   // Determine which skills the player can access
   function canAccessSkill(skill: Skill): boolean {
@@ -427,17 +438,47 @@ function PlayerSkillView({
   function handleUseSkill(skillId: string) {
     setSkillError(null)
     setUsedSkill(null)
+    setCopied(false)
+
+    // Find skill for optimistic update
+    const skill = skills.find(s => s.id === skillId)
+    if (skill) {
+      setOptimisticSpirit(displaySpirit - skill.spirit_cost)
+    }
+
     startTransition(async () => {
       const result = await castSkill(skillId)
       if (result.error) {
+        // Rollback optimistic update
+        setOptimisticSpirit(null)
         setSkillError(result.error)
         setTimeout(() => setSkillError(null), 4000)
       } else if (result.success) {
-        setUsedSkill({ name: result.skillName!, remaining: result.remaining! })
-        setTimeout(() => setUsedSkill(null), 3000)
+        setOptimisticSpirit(result.remaining!)
+        setUsedSkill({
+          name: result.skillName!,
+          description: result.skillDescription ?? null,
+          remaining: result.remaining!,
+          referenceCode: result.referenceCode!
+        })
       }
     })
   }
+
+  function handleCopyCode() {
+    if (!usedSkill) return
+    navigator.clipboard.writeText(usedSkill.referenceCode).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  // Reset optimistic spirit when profile updates from realtime
+  useEffect(() => {
+    if (profile?.spirituality !== undefined) {
+      setOptimisticSpirit(null)
+    }
+  }, [profile?.spirituality])
 
   // Get player's accessible pathways
   const accessiblePathways = pathways.filter(p =>
@@ -463,26 +504,98 @@ function PlayerSkillView({
             <Sparkles className="w-6 h-6" /> พลังวิญญาณ
           </span>
           <span className="text-3xl font-bold text-gold-200">
-            {profile?.spirituality ?? 0} <span className="text-lg text-victorian-400">/ {profile?.max_spirituality ?? 0}</span>
+            {displaySpirit} <span className="text-lg text-victorian-400">/ {profile?.max_spirituality ?? 0}</span>
           </span>
         </div>
         <div className="w-full h-4 bg-victorian-900 rounded-full overflow-hidden border border-gold-400/20">
           <div
             className="h-full bg-gradient-to-r from-blue-600 via-purple-500 to-gold-400 rounded-full transition-all duration-700"
-            style={{ width: `${Math.min(100, ((profile?.spirituality ?? 0) / Math.max(1, profile?.max_spirituality ?? 1)) * 100)}%` }}
+            style={{ width: `${Math.min(100, (displaySpirit / Math.max(1, profile?.max_spirituality ?? 1)) * 100)}%` }}
           />
         </div>
       </OrnamentedCard>
 
-      {/* Feedback messages */}
+      {/* Error message */}
       {skillError && (
         <div className="p-4 bg-red-900/40 border-2 border-red-500/40 rounded-xl text-red-300 text-lg text-center font-semibold animate-pulse">
           ⚠️ {skillError}
         </div>
       )}
+
+      {/* ═══ Success Modal with Reference Code ═══ */}
       {usedSkill && (
-        <div className="p-4 bg-green-900/40 border-2 border-green-500/40 rounded-xl text-green-300 text-lg text-center font-semibold">
-          ✨ ใช้ <span className="text-gold-300">{usedSkill.name}</span> สำเร็จ — เหลือพลังวิญญาณ {usedSkill.remaining}
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => setUsedSkill(null)}
+          style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border-2 border-gold-400/30 p-6 md:p-8 space-y-5 animate-in fade-in zoom-in duration-300"
+            style={{ backgroundColor: '#1A1612' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close */}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setUsedSkill(null)}
+                className="text-victorian-400 hover:text-gold-400 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Success icon */}
+            <div className="flex justify-center">
+              <div className="w-20 h-20 rounded-full bg-gold-400/10 border-2 border-gold-400/30 flex items-center justify-center">
+                <Sparkles className="w-10 h-10 text-gold-400" />
+              </div>
+            </div>
+
+            {/* Skill name */}
+            <div className="text-center">
+              <p className="text-victorian-400 text-sm">ใช้สกิลสำเร็จ</p>
+              <h3 className="heading-victorian text-3xl mt-1">{usedSkill.name}</h3>
+              {usedSkill.description && (
+                <p className="text-victorian-300 text-base mt-2">{usedSkill.description}</p>
+              )}
+            </div>
+
+            {/* Reference Code */}
+            <div className="bg-victorian-900/80 border border-gold-400/20 rounded-lg p-4 space-y-2">
+              <p className="text-victorian-400 text-xs uppercase tracking-wider text-center">รหัสอ้างอิง</p>
+              <div className="flex items-center justify-center gap-3">
+                <code className="text-gold-300 text-2xl md:text-3xl font-mono tracking-widest select-all">
+                  {usedSkill.referenceCode}
+                </code>
+                <button
+                  type="button"
+                  onClick={handleCopyCode}
+                  className="p-2 rounded-lg border border-gold-400/20 text-gold-400 hover:bg-gold-400/10 transition-colors cursor-pointer"
+                  title="คัดลอก"
+                >
+                  {copied ? <Check className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5" />}
+                </button>
+              </div>
+              <p className="text-victorian-500 text-xs text-center mt-2">
+                📋 คัดลอกโค้ดนี้ไปอ้างอิงในการโรเพลย์
+              </p>
+            </div>
+
+            {/* Remaining spirit */}
+            <div className="text-center text-victorian-400 text-sm">
+              พลังวิญญาณคงเหลือ: <span className="text-gold-300 font-bold text-lg">{usedSkill.remaining}</span>
+            </div>
+
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={() => setUsedSkill(null)}
+              className="w-full btn-victorian py-3 text-base cursor-pointer"
+            >
+              ปิด
+            </button>
+          </div>
         </div>
       )}
 
@@ -552,6 +665,10 @@ function PlayerSkillView({
               {pathSeqs.map(seq => {
                 const seqSkills = pathwaySkills.filter(s => s.sequence_id === seq.id)
                 if (seqSkills.length === 0) return null
+                
+                // Check if player has reached this sequence
+                const playerSeqNum = playerSeq?.seq_number ?? 0
+                const isSequenceAccessible = seq.seq_number >= playerSeqNum
 
                 return (
                   <div key={seq.id}>
@@ -559,14 +676,16 @@ function PlayerSkillView({
                       seq.seq_number <= 2 ? 'text-red-400 bg-red-400/5' :
                       seq.seq_number <= 5 ? 'text-amber-400 bg-amber-400/5' :
                       'text-gold-400 bg-gold-400/5'
+                    } ${
+                      !isSequenceAccessible ? 'blur-sm select-none' : ''
                     }`}>
-                      ลำดับ {seq.seq_number}: {seq.name}
+                      ลำดับ {seq.seq_number}: {isSequenceAccessible ? seq.name : '???'}
                     </div>
 
                     <div className="space-y-2">
                       {seqSkills.map(skill => {
                         const accessible = canAccessSkill(skill)
-                        const canAfford = (profile?.spirituality ?? 0) >= skill.spirit_cost
+                        const canAfford = displaySpirit >= skill.spirit_cost
 
                         return (
                           <div
@@ -585,27 +704,34 @@ function PlayerSkillView({
                                   ) : (
                                     <Lock className="w-5 h-5 text-victorian-600 flex-shrink-0" />
                                   )}
-                                  <span className={`text-lg font-semibold truncate ${accessible ? 'text-gold-200' : 'text-victorian-500'}`}>
-                                    {skill.name}
+                                  <span className={`text-lg font-semibold truncate ${
+                                    accessible ? 'text-gold-200' : 'text-victorian-500 blur-sm select-none'
+                                  }`}>
+                                    {accessible ? skill.name : '???'}
                                   </span>
                                 </div>
-                                {skill.description && (
-                                  <p className={`text-sm mt-1 ml-7 ${accessible ? 'text-victorian-400' : 'text-victorian-600'}`}>
+                                {accessible && skill.description && (
+                                  <p className="text-sm mt-1 ml-7 text-victorian-400">
                                     {skill.description}
+                                  </p>
+                                )}
+                                {!accessible && (
+                                  <p className="text-sm mt-1 ml-7 text-victorian-600 italic">
+                                    สกิลถูกปิดผนึก...
                                   </p>
                                 )}
                               </div>
 
                               <div className="flex items-center gap-3 flex-shrink-0">
-                                {/* Spirit cost badge */}
+                                {/* Spirit cost badge — blur if not accessible */}
                                 <div className={`flex items-center gap-1 text-base px-3 py-1 rounded-full font-bold ${
                                   accessible && canAfford
                                     ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                                     : accessible && !canAfford
                                     ? 'bg-red-500/20 text-red-400 border border-red-500/30'
                                     : 'bg-victorian-800/50 text-victorian-600'
-                                }`}>
-                                  <Zap className="w-4 h-4" />{skill.spirit_cost}
+                                } ${!accessible ? 'blur-sm select-none' : ''}`}>
+                                  <Zap className="w-4 h-4" />{accessible ? skill.spirit_cost : '?'}
                                 </div>
 
                                 {/* Use button */}
@@ -655,31 +781,31 @@ export default function SkillsContent({ userId }: SkillsContentProps) {
   const [playerPathways, setPlayerPathways] = useState<PlayerPathway[]>(getCached<PlayerPathway[]>(`skills:pp:${userId}`) ?? [])
   const [loaded, setLoaded] = useState(!!getCached('skills:profile'))
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     const supabase = createClient()
+    Promise.all([
+      supabase.from('profiles').select('*').eq('id', userId).single(),
+      supabase.from('skill_types').select('*').order('name'),
+      supabase.from('skill_pathways').select('*').order('name'),
+      supabase.from('skill_sequences').select('*').order('seq_number', { ascending: false }),
+      supabase.from('skills').select('*').order('name'),
+      supabase.from('player_pathways').select('*').eq('player_id', userId),
+    ]).then(([pRes, tRes, pwRes, sqRes, skRes, ppRes]) => {
+      if (pRes.data) { setProfile(pRes.data); setCache('skills:profile', pRes.data) }
+      if (tRes.data) { setSkillTypes(tRes.data); setCache('skills:types', tRes.data, REF_TTL) }
+      if (pwRes.data) { setPathways(pwRes.data); setCache('skills:pathways', pwRes.data, REF_TTL) }
+      if (sqRes.data) { setSequences(sqRes.data); setCache('skills:sequences', sqRes.data, REF_TTL) }
+      if (skRes.data) { setSkills(skRes.data); setCache('skills:skills', skRes.data, REF_TTL) }
+      if (ppRes.data) { setPlayerPathways(ppRes.data); setCache(`skills:pp:${userId}`, ppRes.data) }
+      setLoaded(true)
+    })
+  }, [userId])
 
-    const fetchData = () => {
-      Promise.all([
-        supabase.from('profiles').select('*').eq('id', userId).single(),
-        supabase.from('skill_types').select('*').order('name'),
-        supabase.from('skill_pathways').select('*').order('name'),
-        supabase.from('skill_sequences').select('*').order('seq_number', { ascending: false }),
-        supabase.from('skills').select('*').order('name'),
-        supabase.from('player_pathways').select('*').eq('player_id', userId),
-      ]).then(([pRes, tRes, pwRes, sqRes, skRes, ppRes]) => {
-        if (pRes.data) { setProfile(pRes.data); setCache('skills:profile', pRes.data) }
-        if (tRes.data) { setSkillTypes(tRes.data); setCache('skills:types', tRes.data, REF_TTL) }
-        if (pwRes.data) { setPathways(pwRes.data); setCache('skills:pathways', pwRes.data, REF_TTL) }
-        if (sqRes.data) { setSequences(sqRes.data); setCache('skills:sequences', sqRes.data, REF_TTL) }
-        if (skRes.data) { setSkills(skRes.data); setCache('skills:skills', skRes.data, REF_TTL) }
-        if (ppRes.data) { setPlayerPathways(ppRes.data); setCache(`skills:pp:${userId}`, ppRes.data) }
-        setLoaded(true)
-      })
-    }
-
+  useEffect(() => {
     fetchData()
 
     // ─── Realtime Subscription ───
+    const supabase = createClient()
     const channel = supabase
       .channel('skills_realtime')
       .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
@@ -690,7 +816,7 @@ export default function SkillsContent({ userId }: SkillsContentProps) {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [userId])
+  }, [userId, fetchData])
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
   const [showAdmin, setShowAdmin] = useState(false)
@@ -735,15 +861,24 @@ export default function SkillsContent({ userId }: SkillsContentProps) {
             </div>
           </div>
 
-          {isAdmin && (
-            <button
-              onClick={() => setShowAdmin(!showAdmin)}
-              className={`btn-victorian px-4 py-2 text-sm flex items-center gap-2 ${showAdmin ? 'border-gold-400/40 text-gold-300' : ''}`}
+          <div className="flex items-center gap-2">
+            <a
+              href="/dashboard/skills/logs"
+              className="btn-victorian px-4 py-2 text-sm flex items-center gap-2"
             >
-              <Shield className="w-4 h-4" />
-              {showAdmin ? 'ดูแบบผู้เล่น' : 'จัดการสกิล'}
-            </button>
-          )}
+              <ScrollText className="w-4 h-4" />
+              <span className="hidden sm:inline">ประวัติ</span>
+            </a>
+            {isAdmin && (
+              <button
+                onClick={() => setShowAdmin(!showAdmin)}
+                className={`btn-victorian px-4 py-2 text-sm flex items-center gap-2 ${showAdmin ? 'border-gold-400/40 text-gold-300' : ''}`}
+              >
+                <Shield className="w-4 h-4" />
+                {showAdmin ? 'ดูแบบผู้เล่น' : 'จัดการสกิล'}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Ornamental divider */}
@@ -756,6 +891,7 @@ export default function SkillsContent({ userId }: SkillsContentProps) {
             pathways={pathways}
             sequences={sequences}
             skills={skills}
+            onRefresh={fetchData}
           />
         )}
 

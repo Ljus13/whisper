@@ -8,6 +8,7 @@ import {
 import {
   ArrowLeft, ZoomIn, ZoomOut, Maximize, Move, Trash2, Lock,
   Users, X, Save, Code, MapPin, UserPlus, Ghost, Shield, Crown, Footprints,
+  Info,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useState, useRef, useCallback, useEffect, useTransition } from 'react'
@@ -92,6 +93,11 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const imgRef = useRef<HTMLImageElement>(null)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  /* ── Fix #3: Track pending moves to prevent realtime overwrite ── */
+  const pendingMovesRef = useRef<Map<string, { x: number; y: number }>>(new Map())
+  /* ── Fix #4: Track if a drag just ended to prevent click handler ── */
+  const justDraggedRef = useRef(false)
+
   /* ── client-side data ── */
   const currentUserId = userId
   const [map, setMap] = useState<GameMap>(getCached(`mv:${mapId}:map`) ?? {} as GameMap)
@@ -124,7 +130,6 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         supabase.from('map_locked_zones').select('*').eq('map_id', mapId),
       ]).then(async ([mapRes, profileRes, rawTokensRes, zonesRes]) => {
         if (mapRes.error || !mapRes.data || !profileRes.data) {
-          // If map deleted or error, maybe redirect? For now just log
           if (mapRes.error) console.error('Map fetch error:', mapRes.error)
           return
         }
@@ -148,12 +153,22 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         if (playerProfiles.data) {
           profileMap = Object.fromEntries(playerProfiles.data.map(p => [p.id, p]))
         }
-        const builtTokens = rawTokens.map(t => ({
+        let builtTokens = rawTokens.map(t => ({
           ...t,
           display_name: t.user_id ? (profileMap[t.user_id]?.display_name ?? null) : t.npc_name,
           avatar_url: t.user_id ? (profileMap[t.user_id]?.avatar_url ?? null) : t.npc_image_url,
           role: t.user_id ? (profileMap[t.user_id]?.role ?? null) : null,
         })) as MapTokenWithProfile[]
+
+        /* ── Fix #3: Preserve pending optimistic positions ── */
+        const pending = pendingMovesRef.current
+        if (pending.size > 0) {
+          builtTokens = builtTokens.map(t => {
+            const p = pending.get(t.id)
+            if (p) return { ...t, position_x: p.x, position_y: p.y }
+            return t
+          })
+        }
 
         const ap = (adminPlayers.data ?? []) as AllPlayer[]
         setMap(mapData); setCurrentUser(profile); setIsAdmin(admin); setAllPlayers(ap)
@@ -191,6 +206,9 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const [editingZone, setEditingZone] = useState<MapLockedZone | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: 'error' | 'info' } | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  /* ── Fix #3: Move notification modal ── */
+  const [moveNotif, setMoveNotif] = useState<{ name: string; status: 'moving' | 'success' | 'error'; msg?: string } | null>(null)
 
   // ── Modal form state (lifted to parent to survive re-renders) ──
   const [npcName, setNpcName] = useState('')
@@ -231,7 +249,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     return () => el.removeEventListener('wheel', handleWheel)
   }, [])
 
-  // ── Image load (also handle cached images whose onLoad fires before React attaches) ──
+  // ── Image load ──
   function onImageLoad() {
     setImageLoaded(true)
     if (imgRef.current) {
@@ -314,8 +332,6 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
   /* ════════════════════════════════════════════
      POINTER events: token drag move + drop
-     (pointer events are NOT suppressed by
-      preventDefault on pointerdown, unlike mouse)
      ════════════════════════════════════════════ */
   function handlePointerMove(e: React.PointerEvent) {
     if (drag?.active) {
@@ -336,14 +352,11 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     const container = containerRef.current
     if (!img || !container) return null
     const cr = container.getBoundingClientRect()
-    // Center of the container
     const centerX = cr.width / 2 + cr.left
     const centerY = cr.height / 2 + cr.top
-    // The image rendered size at scale=1
     const imgRect = img.getBoundingClientRect()
     const imgW = imgRect.width / scale
     const imgH = imgRect.height / scale
-    // Position relative to the map image origin (top-left)
     const mapX = (clientX - centerX - position.x) / scale + imgW / 2
     const mapY = (clientY - centerY - position.y) / scale + imgH / 2
     return {
@@ -362,6 +375,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     }
   }
 
+  /* ── Fix #5: Only allow dragging own token (unless admin) ── */
   function canDragToken(token: MapTokenWithProfile) {
     if (isAdmin) return true
     return token.token_type === 'player' && token.user_id === currentUserId
@@ -387,7 +401,6 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     clearLongPress()
     longPressTimer.current = setTimeout(() => {
       setDrag(prev => prev ? { ...prev, active: true, longPressReady: true } : null)
-      // Haptic feedback on mobile
       if (navigator.vibrate) navigator.vibrate(30)
     }, LONG_PRESS_MS)
   }
@@ -397,26 +410,33 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     if (drag?.active) {
       finalizeDrag()
     } else {
-      // Short tap — show info or cluster
       clearLongPress()
       setDrag(null)
       setDragPreview(null)
-      handleTokenClick(token)
+      /* ── Fix #4: Only open info on short tap, not after drag ── */
+      if (!justDraggedRef.current) {
+        handleTokenClick(token)
+      }
     }
   }
 
   function handleTokenClick(token: MapTokenWithProfile) {
+    /* ── Fix #4: Skip if drag just ended ── */
+    if (justDraggedRef.current) return
     setSelectedToken(token)
     setSelectedCluster(null)
   }
 
   function handleClusterClick(cluster: TokenCluster) {
+    /* ── Fix #4: Skip if drag just ended ── */
+    if (justDraggedRef.current) return
     setSelectedCluster(cluster)
     setSelectedToken(null)
   }
 
   /* ════════════════════════════════════════════
-     TOKEN: finalize drag (optimistic + rollback)
+     TOKEN: finalize drag (optimistic + small notification)
+     Fix #3: Proper optimistic UI with pending tracking
      ════════════════════════════════════════════ */
   function finalizeDrag() {
     if (!drag || !dragPreview) {
@@ -425,27 +445,62 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       return
     }
 
+    /* ── Fix #4: Flag that a drag just ended ── */
+    justDraggedRef.current = true
+    setTimeout(() => { justDraggedRef.current = false }, 300)
+
     const tokenId = drag.tokenId
     const newX = dragPreview.x
     const newY = dragPreview.y
     const origX = drag.origPosX
     const origY = drag.origPosY
 
-    // Optimistic update
+    // Find the token for name display
+    const draggedToken = tokens.find(t => t.id === tokenId)
+    const tokenName = draggedToken?.display_name || draggedToken?.npc_name || 'ตัวละคร'
+
+    /* ── Optimistic update: position ── */
     setTokens(prev => prev.map(t => t.id === tokenId ? { ...t, position_x: newX, position_y: newY } : t))
+    
+    /* ── Optimistic update: travel points (own token, non-admin) ── */
+    const isOwnToken = draggedToken?.user_id === currentUserId
+    if (!isAdmin && isOwnToken) {
+      setCurrentUser(prev => ({ ...prev, travel_points: Math.max(0, prev.travel_points - 1) }))
+    }
+
+    /* ── Track pending move so realtime won't overwrite ── */
+    pendingMovesRef.current.set(tokenId, { x: newX, y: newY })
+
     setDrag(null)
     setDragPreview(null)
+
+    /* ── Show small notification ── */
+    setMoveNotif({ name: tokenName, status: 'moving' })
 
     // Send to server
     startTransition(async () => {
       const result = await moveToken(tokenId, newX, newY)
+
+      /* ── Clear pending move ── */
+      pendingMovesRef.current.delete(tokenId)
+
       if (result?.error) {
-        // Rollback
+        // Rollback position
         setTokens(prev => prev.map(t => t.id === tokenId ? { ...t, position_x: origX, position_y: origY } : t))
-        showToast(result.error, 'error')
-      } else if (result?.cost && result.cost > 0) {
-        showToast(`เดินทางสำเร็จ (−${result.cost} แต้มเดินทาง)`, 'info')
-        router.refresh()
+        // Rollback travel points
+        if (!isAdmin && isOwnToken) {
+          setCurrentUser(prev => ({ ...prev, travel_points: prev.travel_points + 1 }))
+        }
+        setMoveNotif({ name: tokenName, status: 'error', msg: result.error })
+        setTimeout(() => setMoveNotif(null), 3000)
+      } else {
+        const cost = result?.cost ?? 0
+        setMoveNotif({
+          name: tokenName,
+          status: 'success',
+          msg: cost > 0 ? `−${cost} แต้มเดินทาง` : 'สำเร็จ',
+        })
+        setTimeout(() => setMoveNotif(null), 2000)
       }
     })
   }
@@ -478,7 +533,6 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     const [allowed, setAllowed] = useState<string[]>(zone?.allowed_user_ids ?? [])
     const [err, setErr] = useState('')
 
-    // ── Resizable preview overlay ──
     const _zoneRef = useRef<HTMLDivElement>(null)
     const resizing = useRef<string | null>(null)
     const resizeStart = useRef({ x: 0, y: 0, zx: 0, zy: 0, zw: 0, zh: 0 })
@@ -558,7 +612,6 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         onTouchStart={e => e.stopPropagation()}
         onTouchMove={e => e.stopPropagation()}
         onTouchEnd={e => e.stopPropagation()}>
-          {/* Resize handles — scaled inversely so they stay usable at any zoom */}
           {['tl', 'tr', 'bl', 'br', 't', 'b', 'l', 'r', 'move'].map(h => {
             const handleSize = h === 'move' ? undefined : Math.max(16, 16 / scale)
             return (
@@ -681,248 +734,275 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const clusters = clusterTokens(tokens, scale, imgDisplay.w, imgDisplay.h)
 
   /* ════════════════════════════════════════════
-     RENDER
+     RENDER — NEW LAYOUT
+     Fix #1: Left sidebar for tools, right for map (no overlays)
+     Fix #2: All tools visible on all screen sizes
      ════════════════════════════════════════════ */
   return (
     <div className="fixed inset-0 z-40 flex flex-col" style={{ backgroundColor: '#0D0B09' }}>
-      {/* ── TOP BAR ── */}
-      <div className="relative z-20 flex items-center justify-between px-6 py-4 border-b border-gold-400/10 gap-4"
+      {/* ── TOP BAR (simplified: back + title only) ── */}
+      <div className="relative z-20 flex items-center px-4 py-3 lg:px-6 lg:py-4 border-b border-gold-400/10 gap-3"
         style={{ backgroundColor: '#1A1612' }}>
-        <div className="flex items-center gap-4 min-w-0">
-          <Link href="/dashboard/maps"
-            className="p-4 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm transition-all shrink-0 cursor-pointer">
-            <ArrowLeft className="w-8 h-8" />
-          </Link>
-          <div className="min-w-0">
-            <h1 className="font-display text-gold-400 text-4xl truncate leading-tight">{map.name}</h1>
-            {map.description && <p className="text-victorian-500 text-lg truncate">{map.description}</p>}
-          </div>
+        <Link href="/dashboard/maps"
+          className="p-2 lg:p-3 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm transition-all shrink-0 cursor-pointer">
+          <ArrowLeft className="w-5 h-5 lg:w-7 lg:h-7" />
+        </Link>
+        <div className="min-w-0 flex-1">
+          <h1 className="font-display text-gold-400 text-xl lg:text-3xl truncate leading-tight">{map.name}</h1>
+          {map.description && <p className="text-victorian-500 text-xs lg:text-sm truncate">{map.description}</p>}
         </div>
+      </div>
 
-        <div className="flex items-center gap-3 shrink-0">
-          {/* Travel points indicator - progress bar */}
-          <div className="hidden sm:flex flex-col gap-1 text-victorian-400 text-xs mr-4 border border-gold-400/10 rounded-sm px-4 py-2 bg-black/20 min-w-[200px]">
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-gold-400 font-display text-sm">แต้มเดินทาง</span>
-              <span className="tabular-nums font-bold text-nouveau-cream text-sm">{currentUser.travel_points}/{currentUser.max_travel_points}</span>
+      {/* ── MAIN CONTENT: Sidebar + Map ── */}
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+
+        {/* ══ LEFT SIDEBAR (desktop) / TOP PANEL (mobile) ══ */}
+        <aside className="shrink-0 lg:w-72 border-b lg:border-b-0 lg:border-r border-gold-400/10 overflow-y-auto overflow-x-hidden"
+          style={{ backgroundColor: '#1A1612' }}>
+
+          {/* ── You are here indicator ── */}
+          {isOnThisMap && (
+            <div className="flex items-center gap-2 px-4 py-2 lg:py-3 border-b border-gold-400/20"
+              style={{ backgroundColor: '#1d1a14' }}>
+              <span className="relative flex h-3 w-3 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-gold-400" />
+              </span>
+              <span className="text-gold-400 font-display text-xs lg:text-sm tracking-wider uppercase">คุณกำลังอยู่ในแมพนี้</span>
             </div>
-            <div className="w-full h-2 bg-victorian-800 rounded-full overflow-hidden">
-              <div 
+          )}
+
+          {/* ── Travel Points (visible on ALL screen sizes) ── */}
+          <div className="px-4 py-2 lg:py-3 border-b border-gold-400/10">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-gold-400 font-display text-[10px] lg:text-xs uppercase tracking-wider">แต้มเดินทาง</span>
+              <span className="tabular-nums font-bold text-nouveau-cream text-xs lg:text-sm">{currentUser.travel_points}/{currentUser.max_travel_points}</span>
+            </div>
+            <div className="w-full h-1.5 lg:h-2 bg-victorian-800 rounded-full overflow-hidden">
+              <div
                 className="h-full bg-gradient-to-r from-gold-400 to-gold-300 transition-all duration-300"
                 style={{ width: `${(currentUser.travel_points / currentUser.max_travel_points) * 100}%` }}
               />
             </div>
           </div>
 
-          <button onClick={zoomOut} className="p-3 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><ZoomOut className="w-8 h-8" /></button>
-          <span className="text-victorian-400 text-xl font-display min-w-[3.5rem] text-center tabular-nums">{Math.round(scale * 100)}%</span>
-          <button onClick={zoomIn} className="p-3 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><ZoomIn className="w-8 h-8" /></button>
-          <button onClick={fitToScreen} className="p-3 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><Maximize className="w-8 h-8" /></button>
-
-          {/* Admin controls */}
-          {isAdmin && (
-            <>
-              <div className="w-px h-10 bg-gold-400/10 mx-2" />
-              <button onClick={() => { setNpcName(''); setNpcUrl(''); setShowNpcModal(true) }} title="เพิ่ม NPC"
-                className="p-3 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><Ghost className="w-8 h-8" /></button>
-              <button onClick={() => { setSelectedPlayerId(''); setShowAddPlayer(true) }} title="เพิ่มผู้เล่น"
-                className="p-3 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><UserPlus className="w-8 h-8" /></button>
-              <button onClick={() => { setShowZoneCreator(true); setEditingZone(null) }} title="ล็อคพื้นที่"
-                className="p-3 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><Lock className="w-8 h-8" /></button>
-              <button onClick={() => setShowEmbedModal(true)} title="Embed"
-                className="p-3 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer"><Code className="w-8 h-8" /></button>
-            </>
+          {/* ── Join Map Button ── */}
+          {!isOnThisMap && !isAdmin && (
+            <div className="px-4 py-2 lg:py-3 border-b border-gold-400/10">
+              <button onClick={handleJoinMap} disabled={isPending}
+                className="btn-gold !py-2 !px-4 !text-xs lg:!text-sm w-full flex items-center justify-center gap-2 disabled:opacity-50">
+                <MapPin className="w-4 h-4" />
+                {myToken ? `ย้ายมาแมพนี้ (−3 แต้ม)` : 'เข้าร่วมแมพนี้'}
+              </button>
+              {myToken && (
+                <p className="text-victorian-500 text-[10px] lg:text-xs text-center mt-1">แต้มเดินทาง: {currentUser.travel_points}</p>
+              )}
+            </div>
           )}
-        </div>
-      </div>
 
-      {/* ── YOU ARE HERE banner ── */}
-      {isOnThisMap && (
-        <div className="relative z-10 flex items-center justify-center gap-3 px-6 py-4 border-b border-gold-400/20 shadow-lg shadow-gold-900/10"
-          style={{ backgroundColor: '#1d1a14' }}>
-          <span className="relative flex h-4 w-4">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-4 w-4 bg-gold-400" />
-          </span>
-          <span className="text-gold-400 text-2xl font-display tracking-widest uppercase text-shadow-glow">คุณกำลังอยู่ในแมพนี้</span>
-        </div>
-      )}
-
-      {/* ── PLAYER JOIN BUTTON ── */}
-      {!isOnThisMap && !isAdmin && (
-        <div className="relative z-10 flex items-center justify-center gap-4 px-6 py-4 border-b border-gold-400/10"
-          style={{ backgroundColor: '#1d1a14' }}>
-          <button onClick={handleJoinMap} disabled={isPending}
-            className="btn-gold !py-3 !px-8 !text-xl flex items-center gap-3 disabled:opacity-50">
-            <MapPin className="w-6 h-6" />
-            {myToken ? `ย้ายมาแมพนี้ (−3 แต้ม)` : 'เข้าร่วมแมพนี้'}
-          </button>
-          {myToken && (
-            <span className="text-victorian-500 text-lg">แต้มเดินทาง: {currentUser.travel_points}</span>
-          )}
-        </div>
-      )}
-
-      {/* ── MAP CANVAS ── */}
-      <div ref={containerRef}
-        className={`flex-1 overflow-hidden relative ${showZoneCreator ? 'cursor-default' : drag?.active ? 'cursor-grabbing' : isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
-        onMouseDown={handleBgMouseDown}
-        onMouseMove={handleBgMouseMove}
-        onMouseUp={handleBgMouseUp}
-        onMouseLeave={handleBgMouseUp}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
-        onTouchStart={handleBgTouchStart}
-        onTouchMove={handleBgTouchMove}
-        onTouchEnd={handleBgTouchEnd}
-        style={{ touchAction: 'none' }}>
-
-        {/* Loading */}
-        {!imageLoaded && (
-          <div className="absolute inset-0 flex items-center justify-center z-10">
-            <div className="text-center">
-              <div className="w-8 h-8 border-2 border-gold-400/30 border-t-gold-400 rounded-full animate-spin mx-auto mb-3" />
-              <p className="text-victorian-500 text-sm font-display">กำลังโหลดแผนที่...</p>
+          {/* ── Zoom Controls ── */}
+          <div className="px-4 py-2 lg:py-3 border-b border-gold-400/10">
+            <p className="text-gold-400 font-display text-[10px] lg:text-xs uppercase tracking-wider mb-1.5 hidden lg:block">ซูม</p>
+            <div className="flex items-center gap-1.5 lg:gap-2">
+              <button onClick={zoomOut} className="p-1.5 lg:p-2 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer">
+                <ZoomOut className="w-4 h-4 lg:w-5 lg:h-5" />
+              </button>
+              <span className="text-victorian-400 text-xs lg:text-sm font-display min-w-[2.5rem] lg:min-w-[3rem] text-center tabular-nums">{Math.round(scale * 100)}%</span>
+              <button onClick={zoomIn} className="p-1.5 lg:p-2 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer">
+                <ZoomIn className="w-4 h-4 lg:w-5 lg:h-5" />
+              </button>
+              <button onClick={fitToScreen} className="p-1.5 lg:p-2 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer">
+                <Maximize className="w-4 h-4 lg:w-5 lg:h-5" />
+              </button>
             </div>
           </div>
-        )}
 
-        {/* Map image + token layer + zone layer */}
-        <div className="absolute inset-0 flex items-center justify-center"
-          style={{
-            transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-            transition: isPanning || drag?.active ? 'none' : 'transform 0.15s ease-out',
-          }}>
-          {/* Image */}
-          <div className="relative">
-            <img ref={imgRef} src={map.image_url} alt={map.name}
-              className="max-w-full max-h-full object-contain select-none block"
-              draggable={false} onLoad={onImageLoad} />
-
-            {/* ── LOCKED ZONES ── */}
-            {imageLoaded && zones.map(z => (
-              <div key={z.id}
-                className="absolute group/zone"
-                style={{ left: `${z.zone_x}%`, top: `${z.zone_y}%`, width: `${z.zone_width}%`, height: `${z.zone_height}%` }}
-                onClick={e => { e.stopPropagation(); if (isAdmin) { setEditingZone(z); setShowZoneCreator(true) } }}>
-                <div className="absolute inset-0 bg-black/60 border border-gold-400/20" />
-                <Lock className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-gold-400/40"
-                  style={{ width: `${Math.min(24, 24 / scale)}px`, height: `${Math.min(24, 24 / scale)}px` }} />
-                {isAdmin && (
-                  <div className="absolute -top-6 left-0 opacity-0 group-hover/zone:opacity-100 transition-opacity bg-victorian-900/90 border border-gold-400/20 rounded-sm px-2 py-0.5 text-[10px] text-gold-400 whitespace-nowrap"
-                    style={{ transform: `scale(${1 / scale})`, transformOrigin: 'bottom left' }}>
-                    คลิกเพื่อแก้ไข
-                  </div>
-                )}
+          {/* ── Admin Tools ── */}
+          {isAdmin && (
+            <div className="px-4 py-2 lg:py-3 border-b border-gold-400/10">
+              <p className="text-gold-400 font-display text-[10px] lg:text-xs uppercase tracking-wider mb-1.5">เครื่องมือ DM</p>
+              <div className="flex flex-wrap gap-1.5 lg:gap-2">
+                <button onClick={() => { setNpcName(''); setNpcUrl(''); setShowNpcModal(true) }} title="เพิ่ม NPC"
+                  className="p-1.5 lg:p-2 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer flex items-center gap-1.5">
+                  <Ghost className="w-4 h-4 lg:w-5 lg:h-5" />
+                  <span className="text-[10px] lg:text-xs">NPC</span>
+                </button>
+                <button onClick={() => { setSelectedPlayerId(''); setShowAddPlayer(true) }} title="เพิ่มผู้เล่น"
+                  className="p-1.5 lg:p-2 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer flex items-center gap-1.5">
+                  <UserPlus className="w-4 h-4 lg:w-5 lg:h-5" />
+                  <span className="text-[10px] lg:text-xs">ผู้เล่น</span>
+                </button>
+                <button onClick={() => { setShowZoneCreator(true); setEditingZone(null) }} title="ล็อคพื้นที่"
+                  className="p-1.5 lg:p-2 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer flex items-center gap-1.5">
+                  <Lock className="w-4 h-4 lg:w-5 lg:h-5" />
+                  <span className="text-[10px] lg:text-xs">ล็อค</span>
+                </button>
+                <button onClick={() => setShowEmbedModal(true)} title="Embed"
+                  className="p-1.5 lg:p-2 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer flex items-center gap-1.5">
+                  <Code className="w-4 h-4 lg:w-5 lg:h-5" />
+                  <span className="text-[10px] lg:text-xs">Embed</span>
+                </button>
               </div>
-            ))}
+            </div>
+          )}
 
-            {/* ── Zone editor live preview ── */}
-            {showZoneCreator && (
-              <ZoneEditor zone={editingZone} onClose={() => { setShowZoneCreator(false); setEditingZone(null) }} />
-            )}
+          {/* ── Tips (in sidebar, not overlaying map) ── */}
+          <div className="px-4 py-2 lg:py-3 space-y-1.5">
+            <div className="flex items-center gap-2 text-victorian-400 text-[10px] lg:text-xs">
+              <Info className="w-3.5 h-3.5 text-gold-400/60 shrink-0" />
+              <span>กดค้างที่ตัวละครเพื่อเดิน (ใช้ 1 แต้ม)</span>
+            </div>
+            <div className="flex items-center gap-2 text-victorian-400 text-[10px] lg:text-xs">
+              <Move className="w-3.5 h-3.5 text-gold-400/60 shrink-0" />
+              <span>ลากพื้นหลังเพื่อเลื่อน</span>
+            </div>
+            <div className="flex items-center gap-2 text-victorian-400 text-[10px] lg:text-xs">
+              <ZoomIn className="w-3.5 h-3.5 text-gold-400/60 shrink-0" />
+              <span>ซูมด้วยสกรอลล์</span>
+            </div>
+          </div>
+        </aside>
 
-            {/* ── TOKEN CLUSTERS ── */}
-            {imageLoaded && clusters.map((cluster, ci) => {
-              const isCluster = cluster.tokens.length > 1
-              const displayToken = cluster.tokens[0]
-              const isDragTarget = drag?.active && cluster.tokens.some(t => t.id === drag.tokenId)
+        {/* ══ MAP CANVAS (right side, full area) ══ */}
+        <div ref={containerRef}
+          className={`flex-1 min-h-0 overflow-hidden relative ${showZoneCreator ? 'cursor-default' : drag?.active ? 'cursor-grabbing' : isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+          onMouseDown={handleBgMouseDown}
+          onMouseMove={handleBgMouseMove}
+          onMouseUp={handleBgMouseUp}
+          onMouseLeave={handleBgMouseUp}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
+          onTouchStart={handleBgTouchStart}
+          onTouchMove={handleBgTouchMove}
+          onTouchEnd={handleBgTouchEnd}
+          style={{ touchAction: 'none' }}>
 
-              // If dragging this token, use preview position
-              const cx = isDragTarget && dragPreview ? dragPreview.x : cluster.centerX
-              const cy = isDragTarget && dragPreview ? dragPreview.y : cluster.centerY
+          {/* Loading */}
+          {!imageLoaded && (
+            <div className="absolute inset-0 flex items-center justify-center z-10">
+              <div className="text-center">
+                <div className="w-8 h-8 border-2 border-gold-400/30 border-t-gold-400 rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-victorian-500 text-sm font-display">กำลังโหลดแผนที่...</p>
+              </div>
+            </div>
+          )}
 
-              return (
-                <div key={ci}
-                  className={`absolute ${isDragTarget ? 'z-50' : 'z-20'}`}
-                  style={{
-                    left: `${cx}%`, top: `${cy}%`,
-                    transform: `translate(-50%, -50%) scale(${1 / scale})`,
-                    transition: isDragTarget ? 'none' : 'left 0.3s ease, top 0.3s ease',
-                  }}>
-                  {/* Token circle */}
-                  <div
-                    className={`relative select-none touch-none cursor-pointer
-                      ${isDragTarget ? 'ring-2 ring-gold-400 scale-125' : ''}
-                      ${drag?.tokenId === displayToken.id && !drag.active ? 'ring-2 ring-gold-400/50 animate-pulse' : ''}
-                    `}
-                    style={{ width: TOKEN_SIZE, height: TOKEN_SIZE }}
-                    onPointerDown={e => !isCluster && handleTokenPointerDown(e, displayToken)}
-                    onPointerUp={e => !isCluster && handleTokenPointerUp(e, displayToken)}
-                    onClick={e => { e.stopPropagation(); if (isCluster) { handleClusterClick(cluster) } else { handleTokenClick(displayToken) } }}
-                  >
-                    <div className={`w-full h-full rounded-full overflow-hidden border-2 
-                      ${displayToken.user_id === currentUserId ? 'border-gold-400 shadow-[0_0_8px_rgba(212,175,55,0.5)]' : 
-                        displayToken.token_type === 'npc' ? 'border-nouveau-ruby/60' : 'border-victorian-400/60'}`}>
-                      {(displayToken.avatar_url || displayToken.npc_image_url) ? (
-                        <img src={displayToken.avatar_url || displayToken.npc_image_url || ''}
-                          className="w-full h-full object-cover" draggable={false} alt="" />
-                      ) : (
-                        <div className="w-full h-full bg-victorian-800 flex items-center justify-center text-gold-400 text-xs font-display">
-                          {(displayToken.display_name || displayToken.npc_name || '?')[0]}
+          {/* Map image + token layer + zone layer */}
+          <div className="absolute inset-0 flex items-center justify-center"
+            style={{
+              transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+              transition: isPanning || drag?.active ? 'none' : 'transform 0.15s ease-out',
+            }}>
+            {/* Image */}
+            <div className="relative">
+              <img ref={imgRef} src={map.image_url} alt={map.name}
+                className="max-w-full max-h-full object-contain select-none block"
+                draggable={false} onLoad={onImageLoad} />
+
+              {/* ── LOCKED ZONES ── */}
+              {imageLoaded && zones.map(z => (
+                <div key={z.id}
+                  className="absolute group/zone"
+                  style={{ left: `${z.zone_x}%`, top: `${z.zone_y}%`, width: `${z.zone_width}%`, height: `${z.zone_height}%` }}
+                  onClick={e => { e.stopPropagation(); if (isAdmin) { setEditingZone(z); setShowZoneCreator(true) } }}>
+                  <div className="absolute inset-0 bg-black/60 border border-gold-400/20" />
+                  <Lock className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-gold-400/40"
+                    style={{ width: `${Math.min(24, 24 / scale)}px`, height: `${Math.min(24, 24 / scale)}px` }} />
+                  {isAdmin && (
+                    <div className="absolute -top-6 left-0 opacity-0 group-hover/zone:opacity-100 transition-opacity bg-victorian-900/90 border border-gold-400/20 rounded-sm px-2 py-0.5 text-[10px] text-gold-400 whitespace-nowrap"
+                      style={{ transform: `scale(${1 / scale})`, transformOrigin: 'bottom left' }}>
+                      คลิกเพื่อแก้ไข
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* ── Zone editor live preview ── */}
+              {showZoneCreator && (
+                <ZoneEditor zone={editingZone} onClose={() => { setShowZoneCreator(false); setEditingZone(null) }} />
+              )}
+
+              {/* ── TOKEN CLUSTERS ── */}
+              {imageLoaded && clusters.map((cluster, ci) => {
+                const isCluster = cluster.tokens.length > 1
+                const displayToken = cluster.tokens[0]
+                const isDragTarget = drag?.active && cluster.tokens.some(t => t.id === drag.tokenId)
+
+                const cx = isDragTarget && dragPreview ? dragPreview.x : cluster.centerX
+                const cy = isDragTarget && dragPreview ? dragPreview.y : cluster.centerY
+
+                return (
+                  <div key={ci}
+                    className={`absolute ${isDragTarget ? 'z-50' : 'z-20'}`}
+                    style={{
+                      left: `${cx}%`, top: `${cy}%`,
+                      transform: `translate(-50%, -50%) scale(${1 / scale})`,
+                      transition: isDragTarget ? 'none' : 'left 0.3s ease, top 0.3s ease',
+                    }}>
+                    {/* Token circle */}
+                    <div
+                      className={`relative select-none touch-none cursor-pointer
+                        ${isDragTarget ? 'ring-2 ring-gold-400 scale-125' : ''}
+                        ${drag?.tokenId === displayToken.id && !drag.active ? 'ring-2 ring-gold-400/50 animate-pulse' : ''}
+                      `}
+                      style={{ width: TOKEN_SIZE, height: TOKEN_SIZE }}
+                      onPointerDown={e => !isCluster && handleTokenPointerDown(e, displayToken)}
+                      onPointerUp={e => !isCluster && handleTokenPointerUp(e, displayToken)}
+                      onClick={e => {
+                        e.stopPropagation()
+                        /* ── Fix #4: Don't open dialog if just finished dragging ── */
+                        if (justDraggedRef.current) return
+                        if (isCluster) { handleClusterClick(cluster) } else { handleTokenClick(displayToken) }
+                      }}
+                    >
+                      <div className={`w-full h-full rounded-full overflow-hidden border-2 
+                        ${displayToken.user_id === currentUserId ? 'border-gold-400 shadow-[0_0_8px_rgba(212,175,55,0.5)]' : 
+                          displayToken.token_type === 'npc' ? 'border-nouveau-ruby/60' : 'border-victorian-400/60'}`}>
+                        {(displayToken.avatar_url || displayToken.npc_image_url) ? (
+                          <img src={displayToken.avatar_url || displayToken.npc_image_url || ''}
+                            className="w-full h-full object-cover" draggable={false} alt="" />
+                        ) : (
+                          <div className="w-full h-full bg-victorian-800 flex items-center justify-center text-gold-400 text-xs font-display">
+                            {(displayToken.display_name || displayToken.npc_name || '?')[0]}
+                          </div>
+                        )}
+                      </div>
+                      {/* Name label */}
+                      <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-display text-nouveau-cream/80 bg-black/60 px-1 rounded-sm">
+                        {displayToken.display_name || displayToken.npc_name || '?'}
+                      </div>
+                      {/* Cluster count badge */}
+                      {isCluster && (
+                        <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-nouveau-ruby text-white text-[10px] flex items-center justify-center font-bold">
+                          {cluster.tokens.length}
                         </div>
                       )}
+                      {/* Role icon */}
+                      {displayToken.role === 'admin' && (
+                        <Crown className="absolute -top-2 left-1/2 -translate-x-1/2 w-3 h-3 text-gold-400" />
+                      )}
+                      {displayToken.role === 'dm' && (
+                        <Shield className="absolute -top-2 left-1/2 -translate-x-1/2 w-3 h-3 text-gold-400" />
+                      )}
                     </div>
-                    {/* Name label */}
-                    <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-display text-nouveau-cream/80 bg-black/60 px-1 rounded-sm">
-                      {displayToken.display_name || displayToken.npc_name || '?'}
-                    </div>
-                    {/* Cluster count badge */}
-                    {isCluster && (
-                      <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-nouveau-ruby text-white text-[10px] flex items-center justify-center font-bold">
-                        {cluster.tokens.length}
-                      </div>
-                    )}
-                    {/* Role icon */}
-                    {displayToken.role === 'admin' && (
-                      <Crown className="absolute -top-2 left-1/2 -translate-x-1/2 w-3 h-3 text-gold-400" />
-                    )}
-                    {displayToken.role === 'dm' && (
-                      <Shield className="absolute -top-2 left-1/2 -translate-x-1/2 w-3 h-3 text-gold-400" />
-                    )}
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
+
+          {/* ── Drag active indicator (minimal, top of canvas only) ── */}
+          {drag?.active && (
+            <div className="absolute top-4 inset-x-0 z-50 flex justify-center pointer-events-none px-4">
+              <div className="bg-black/90 border border-gold-400/60 text-gold-400 text-sm font-display font-bold 
+                              px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+                <Footprints className="w-4 h-4" />
+                <span>ปล่อยเพื่อวาง (−1 แต้ม)</span>
+              </div>
+            </div>
+          )}
         </div>
-
-        {/* ── Drag hint ── */}
-        {imageLoaded && !drag && (
-          <div className="absolute bottom-8 inset-x-0 z-50 flex flex-col items-center justify-center gap-2
-                          pointer-events-none animate-fade-in text-center px-4">
-             <div className="flex flex-col items-center gap-1 px-8 py-4 bg-black/90 border-2 border-gold-400 
-                             rounded-2xl text-gold-400 shadow-[0_0_40px_rgba(0,0,0,0.8)] backdrop-blur-md">
-                <div className="flex items-center gap-3 text-xl sm:text-2xl font-display font-bold text-shadow-glow">
-                  <Move className="w-6 h-6 animate-pulse" />
-                  <span>กดค้างที่ตัวละครเพื่อเดิน</span>
-                </div>
-                <div className="text-nouveau-ruby font-bold text-lg bg-nouveau-ruby/10 px-3 py-0.5 rounded border border-nouveau-ruby/30">
-                  ( ใช้ 1 แต้มการเดินทาง )
-                </div>
-             </div>
-             <div className="text-victorian-300 text-sm font-sans bg-black/60 px-4 py-1.5 rounded-full backdrop-blur-sm border border-white/10 shadow-lg">
-                ลากพื้นหลังเพื่อเลื่อน • ซูมด้วยสกรอลล์
-             </div>
-          </div>
-        )}
-
-        {/* ── Drag active indicator ── */}
-        {drag?.active && (
-          <div className="absolute top-[20%] inset-x-0 z-50 flex flex-col items-center justify-center gap-4
-                          pointer-events-none px-4">
-            <div className="bg-black/95 border-2 border-gold-400 text-gold-400 text-3xl font-display font-bold 
-                            px-10 py-6 rounded-2xl shadow-[0_0_50px_rgba(251,191,36,0.4)] flex items-center gap-4 animate-bounce">
-              <Footprints className="w-10 h-10" />
-              <span>ปล่อยเพื่อวาง</span>
-            </div>
-            <div className="bg-nouveau-ruby border-2 border-white/20 text-white text-2xl font-bold 
-                            px-6 py-3 rounded-xl shadow-xl animate-pulse">
-              − 1 แต้มการเดินทาง
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ══ MODALS / POPUPS ══ */}
@@ -951,7 +1031,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         />
       )}
 
-      {/* NPC Modal — inline to avoid inner-component re-mount */}
+      {/* NPC Modal */}
       {showNpcModal && (
         <ModalOverlay onClose={() => setShowNpcModal(false)} title="เพิ่ม NPC">
           <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">ชื่อ NPC *</label>
@@ -970,7 +1050,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         </ModalOverlay>
       )}
 
-      {/* Add Player — inline to avoid inner-component re-mount */}
+      {/* Add Player */}
       {showAddPlayer && (
         <ModalOverlay onClose={() => setShowAddPlayer(false)} title="เพิ่มผู้เล่นเข้าแมพ">
           <select value={selectedPlayerId} onChange={e => setSelectedPlayerId(e.target.value)}
@@ -996,6 +1076,31 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
       {/* Embed Modal */}
       {showEmbedModal && <EmbedModal />}
+
+      {/* ── Fix #3: Move notification (small modal, top-right) ── */}
+      {moveNotif && (
+        <div className="fixed top-4 right-4 z-[60] animate-fade-in">
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border shadow-xl backdrop-blur-sm text-sm font-display
+            ${moveNotif.status === 'error'
+              ? 'bg-nouveau-ruby/20 border-nouveau-ruby/40 text-nouveau-ruby'
+              : moveNotif.status === 'success'
+                ? 'bg-emerald-900/30 border-emerald-500/40 text-emerald-400'
+                : 'bg-gold-400/10 border-gold-400/30 text-gold-400'
+            }`}>
+            {moveNotif.status === 'moving' && (
+              <div className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+            )}
+            {moveNotif.status === 'success' && <Footprints className="w-4 h-4" />}
+            {moveNotif.status === 'error' && <X className="w-4 h-4" />}
+            <div>
+              <p className="font-bold">{moveNotif.name}</p>
+              <p className="text-xs opacity-80">
+                {moveNotif.status === 'moving' ? 'กำลังย้าย...' : moveNotif.msg}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (

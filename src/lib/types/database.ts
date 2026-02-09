@@ -78,7 +78,64 @@ export interface SkillUsageLog {
   player_id: string
   skill_id: string
   spirit_cost: number
+  reference_code: string
   used_at: string
+}
+
+export type SleepRequestStatus = 'pending' | 'approved' | 'rejected'
+
+export interface SleepRequest {
+  id: string
+  player_id: string
+  meal_url: string
+  sleep_url: string
+  status: SleepRequestStatus
+  reviewed_by: string | null
+  reviewed_at: string | null
+  created_at: string
+}
+
+export type SubmissionStatus = 'pending' | 'approved' | 'rejected'
+
+export interface ActionCode {
+  id: string
+  name: string
+  code: string
+  created_by: string
+  created_at: string
+}
+
+export interface QuestCode {
+  id: string
+  name: string
+  code: string
+  map_id: string | null
+  created_by: string
+  created_at: string
+}
+
+export interface ActionSubmission {
+  id: string
+  player_id: string
+  action_code_id: string
+  evidence_urls: string[]
+  status: SubmissionStatus
+  rejection_reason: string | null
+  reviewed_by: string | null
+  reviewed_at: string | null
+  created_at: string
+}
+
+export interface QuestSubmission {
+  id: string
+  player_id: string
+  quest_code_id: string
+  evidence_urls: string[]
+  status: SubmissionStatus
+  rejection_reason: string | null
+  reviewed_by: string | null
+  reviewed_at: string | null
+  created_at: string
 }
 
 export interface GameMap {
