@@ -4,33 +4,31 @@ import DashboardContent from '@/components/dashboard/dashboard-content'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
 
-  if (!user) {
+  if (!session?.user) {
     redirect('/')
   }
 
-  // Fetch profile from profiles table
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
+  const user = session.user
 
-  if (error) {
-    console.error('Error fetching profile:', error)
-  }
-
-  // Fetch pathway info
-  const { data: playerPathways } = await supabase
-    .from('player_pathways')
-    .select(`
-      *,
-      skill_pathways (name),
-      skill_sequences (name, seq_number)
-    `)
-    .eq('player_id', user.id)
-    .limit(1)
+  // Fetch profile and pathway info in parallel (not sequential!)
+  const [{ data: profile, error }, { data: playerPathways }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single(),
+    supabase
+      .from('player_pathways')
+      .select(`
+        *,
+        skill_pathways (name),
+        skill_sequences (name, seq_number)
+      `)
+      .eq('player_id', user.id)
+      .limit(1),
+  ])
 
   let rankDisplay = 'นักผจญภัย'
   

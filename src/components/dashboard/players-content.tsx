@@ -2,10 +2,11 @@
 
 import AdminEditModal from '@/components/admin/admin-edit-modal'
 import { ArrowLeft, Crown, Shield, Swords, Pencil, Users } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import type { User } from '@supabase/supabase-js'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
+import { createClient } from '@/lib/supabase/client'
+import { getCached, setCache, REF_TTL } from '@/lib/client-cache'
 
 interface Profile {
   id: string
@@ -65,28 +66,48 @@ function RoleIcon({ role }: { role: string }) {
   return <Swords className="w-4 h-4 text-metal-silver" />
 }
 
-export default function PlayersContent({
-  currentUser,
-  currentProfile,
-  players,
-  playerPathways,
-  pathways,
-  sequences,
-}: {
-  currentUser: User
-  currentProfile: Profile | null
-  players: Profile[]
-  playerPathways: PlayerPathway[]
-  pathways: Pathway[]
-  sequences: Sequence[]
-}) {
+export default function PlayersContent({ userId }: { userId: string }) {
   const router = useRouter()
+  const [currentProfile, setCurrentProfile] = useState<Profile | null>(getCached<Profile>('players:me'))
+  const [players, setPlayers] = useState<Profile[]>(getCached<Profile[]>('players:all') ?? [])
+  const [playerPathways, setPlayerPathways] = useState<PlayerPathway[]>(getCached<PlayerPathway[]>('players:pp') ?? [])
+  const [pathways, setPathways] = useState<Pathway[]>(getCached<Pathway[]>('players:pw') ?? [])
+  const [sequences, setSequences] = useState<Sequence[]>(getCached<Sequence[]>('players:seq') ?? [])
+  const [loaded, setLoaded] = useState(!!getCached('players:me'))
   const [editingPlayer, setEditingPlayer] = useState<Profile | null>(null)
 
+  useEffect(() => {
+    const supabase = createClient()
+    Promise.all([
+      supabase.from('profiles').select('*').eq('id', userId).single(),
+      supabase.from('profiles').select('*').order('display_name'),
+      supabase.from('player_pathways').select('*'),
+      supabase.from('skill_pathways').select('*'),
+      supabase.from('skill_sequences').select('*'),
+    ]).then(([meRes, allRes, ppRes, pwRes, seqRes]) => {
+      setCurrentProfile(meRes.data); setCache('players:me', meRes.data)
+      setPlayers(allRes.data ?? []); setCache('players:all', allRes.data ?? [])
+      setPlayerPathways(ppRes.data ?? []); setCache('players:pp', ppRes.data ?? [])
+      setPathways(pwRes.data ?? []); setCache('players:pw', pwRes.data ?? [], REF_TTL)
+      setSequences(seqRes.data ?? []); setCache('players:seq', seqRes.data ?? [], REF_TTL)
+      setLoaded(true)
+    })
+  }, [userId])
+
   const isAdmin = currentProfile?.role === 'admin' || currentProfile?.role === 'dm'
-  
-  // ตรวจสอบว่าสติเหลือ 0 หรือไม่
   const isSanityLocked = (currentProfile?.sanity ?? 10) === 0
+
+  if (!loaded) return (
+    <div className="min-h-screen bg-[#0F0D0A] flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="relative w-16 h-16">
+          <div className="absolute inset-0 border-2 border-[#D4AF37]/20 rounded-full" />
+          <div className="absolute inset-0 border-2 border-transparent border-t-[#D4AF37] rounded-full animate-spin" />
+        </div>
+        <p className="text-[#A89070] text-sm font-[Kanit] animate-pulse">กำลังโหลดผู้เล่น...</p>
+      </div>
+    </div>
+  )
 
   // Helper: get pathways for a player
   function getPlayerPathwayInfo(playerId: string) {

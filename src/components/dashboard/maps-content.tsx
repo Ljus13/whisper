@@ -3,15 +3,14 @@
 import { createMap, updateMap, deleteMap } from '@/app/actions/maps'
 import type { GameMap } from '@/lib/types/database'
 import { ArrowLeft, Plus, Pencil, Trash2, X, Save, MapIcon } from 'lucide-react'
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
+import { createClient } from '@/lib/supabase/client'
+import { getCached, setCache } from '@/lib/client-cache'
 
 interface MapsContentProps {
-  maps: GameMap[]
-  isAdmin: boolean
-  myMapId: string | null
-  sanity: number
+  userId: string
 }
 
 /* ── Art Nouveau Corner Ornament ── */
@@ -170,13 +169,50 @@ function MapModal({
 /* ══════════════════════════════════════════════
    MAIN: Maps Gallery Content
    ══════════════════════════════════════════════ */
-export default function MapsContent({ maps, isAdmin, myMapId, sanity }: MapsContentProps) {
+export default function MapsContent({ userId }: MapsContentProps) {
   const router = useRouter()
   const [showModal, setShowModal] = useState(false)
   const [editingMap, setEditingMap] = useState<GameMap | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
-  
+
+  /* ── client-side data ── */
+  const [maps, setMaps] = useState<GameMap[]>(getCached('maps:all') ?? [])
+  const [isAdmin, setIsAdmin] = useState<boolean>(getCached('maps:admin') ?? false)
+  const [myMapId, setMyMapId] = useState<string | null>(getCached('maps:mymap') ?? null)
+  const [sanity, setSanity] = useState<number>(getCached('maps:sanity') ?? 10)
+  const [loaded, setLoaded] = useState(!!getCached('maps:all'))
+
+  useEffect(() => {
+    const supabase = createClient()
+    Promise.all([
+      supabase.from('profiles').select('role, sanity').eq('id', userId).single(),
+      supabase.from('maps').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: false }),
+      supabase.from('map_tokens').select('map_id').eq('user_id', userId).eq('token_type', 'player').single(),
+    ]).then(([profileRes, mapsRes, tokenRes]) => {
+      const p = profileRes.data
+      const admin = p?.role === 'admin' || p?.role === 'dm'
+      const mList = mapsRes.data ?? []
+      const mId = tokenRes.data?.map_id ?? null
+      const san = p?.sanity ?? 10
+
+      setMaps(mList); setIsAdmin(admin); setMyMapId(mId); setSanity(san)
+      setCache('maps:all', mList); setCache('maps:admin', admin); setCache('maps:mymap', mId); setCache('maps:sanity', san)
+      setLoaded(true)
+    })
+  }, [userId])
+
+  if (!loaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#1A1612' }}>
+        <div className="text-center">
+          <div className="inline-block w-10 h-10 border-2 border-gold-400/30 border-t-gold-400 rounded-full animate-spin mb-4" />
+          <p className="text-victorian-400 font-display">กำลังโหลดแผนที่...</p>
+        </div>
+      </div>
+    )
+  }
+
   // ตรวจสอบว่าสติเหลือ 0 หรือไม่
   const isSanityLocked = sanity === 0
 

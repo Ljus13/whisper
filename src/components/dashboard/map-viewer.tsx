@@ -13,19 +13,18 @@ import Link from 'next/link'
 import { useState, useRef, useCallback, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
+import { createClient } from '@/lib/supabase/client'
+import { getCached, setCache } from '@/lib/client-cache'
 
 /* ══════════════════════════════════════════════
    TYPES
    ══════════════════════════════════════════════ */
 interface MapViewerProps {
-  map: GameMap
-  tokens: MapTokenWithProfile[]
-  zones: MapLockedZone[]
-  currentUser: Profile
-  currentUserId: string
-  isAdmin: boolean
-  allPlayers: { id: string; display_name: string | null; avatar_url: string | null; role: string }[]
+  userId: string
+  mapId: string
 }
+
+type AllPlayer = { id: string; display_name: string | null; avatar_url: string | null; role: string }
 
 interface DragState {
   tokenId: string
@@ -87,14 +86,19 @@ function clusterTokens(
 /* ══════════════════════════════════════════════
    MAIN COMPONENT
    ══════════════════════════════════════════════ */
-export default function MapViewer({
-  map, tokens: initialTokens, zones: initialZones,
-  currentUser, currentUserId, isAdmin, allPlayers,
-}: MapViewerProps) {
+export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const router = useRouter()
   const containerRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  /* ── client-side data ── */
+  const currentUserId = userId
+  const [map, setMap] = useState<GameMap>(getCached(`mv:${mapId}:map`) ?? {} as GameMap)
+  const [currentUser, setCurrentUser] = useState<Profile>(getCached(`mv:${mapId}:me`) ?? {} as Profile)
+  const [isAdmin, setIsAdmin] = useState<boolean>(getCached(`mv:${mapId}:admin`) ?? false)
+  const [allPlayers, setAllPlayers] = useState<AllPlayer[]>(getCached(`mv:${mapId}:players`) ?? [])
+  const [loaded, setLoaded] = useState(!!getCached(`mv:${mapId}:map`))
 
   // ── Transform state ──
   const [scale, setScale] = useState(1)
@@ -106,10 +110,57 @@ export default function MapViewer({
   const [imgNatural, setImgNatural] = useState({ w: 1, h: 1 })
 
   // ── Data state (local copy for optimistic updates) ──
-  const [tokens, setTokens] = useState(initialTokens)
-  const [zones, setZones] = useState(initialZones)
-  useEffect(() => { setTokens(initialTokens) }, [initialTokens])
-  useEffect(() => { setZones(initialZones) }, [initialZones])
+  const [tokens, setTokens] = useState<MapTokenWithProfile[]>(getCached(`mv:${mapId}:tokens`) ?? [])
+  const [zones, setZones] = useState<MapLockedZone[]>(getCached(`mv:${mapId}:zones`) ?? [])
+
+  useEffect(() => {
+    const supabase = createClient()
+    Promise.all([
+      supabase.from('maps').select('*').eq('id', mapId).single(),
+      supabase.from('profiles').select('*').eq('id', userId).single(),
+      supabase.from('map_tokens').select('*').eq('map_id', mapId),
+      supabase.from('map_locked_zones').select('*').eq('map_id', mapId),
+    ]).then(async ([mapRes, profileRes, rawTokensRes, zonesRes]) => {
+      if (mapRes.error || !mapRes.data || !profileRes.data) {
+        router.replace('/dashboard/maps')
+        return
+      }
+      const mapData = mapRes.data as GameMap
+      const profile = profileRes.data as Profile
+      const rawTokens = rawTokensRes.data ?? []
+      const zoneData = (zonesRes.data ?? []) as MapLockedZone[]
+      const admin = profile.role === 'admin' || profile.role === 'dm'
+
+      const playerIds = rawTokens.filter(t => t.token_type === 'player' && t.user_id).map(t => t.user_id!)
+      const [playerProfiles, adminPlayers] = await Promise.all([
+        playerIds.length > 0
+          ? supabase.from('profiles').select('id, display_name, avatar_url, role').in('id', playerIds)
+          : Promise.resolve({ data: null }),
+        admin
+          ? supabase.from('profiles').select('id, display_name, avatar_url, role').order('display_name')
+          : Promise.resolve({ data: null }),
+      ])
+
+      let profileMap: Record<string, { display_name: string | null; avatar_url: string | null; role: string }> = {}
+      if (playerProfiles.data) {
+        profileMap = Object.fromEntries(playerProfiles.data.map(p => [p.id, p]))
+      }
+      const builtTokens = rawTokens.map(t => ({
+        ...t,
+        display_name: t.user_id ? (profileMap[t.user_id]?.display_name ?? null) : t.npc_name,
+        avatar_url: t.user_id ? (profileMap[t.user_id]?.avatar_url ?? null) : t.npc_image_url,
+        role: t.user_id ? (profileMap[t.user_id]?.role ?? null) : null,
+      })) as MapTokenWithProfile[]
+
+      const ap = (adminPlayers.data ?? []) as AllPlayer[]
+      setMap(mapData); setCurrentUser(profile); setIsAdmin(admin); setAllPlayers(ap)
+      setTokens(builtTokens); setZones(zoneData)
+      setCache(`mv:${mapId}:map`, mapData); setCache(`mv:${mapId}:me`, profile)
+      setCache(`mv:${mapId}:admin`, admin); setCache(`mv:${mapId}:players`, ap)
+      setCache(`mv:${mapId}:tokens`, builtTokens); setCache(`mv:${mapId}:zones`, zoneData)
+      setLoaded(true)
+    })
+  }, [userId, mapId, router])
 
   // ── Token drag state ──
   const [drag, setDrag] = useState<DragState | null>(null)
@@ -179,6 +230,18 @@ export default function MapViewer({
       setImgNatural({ w: img.naturalWidth, h: img.naturalHeight })
     }
   }, [])
+
+  /* ── Loading guard (after all hooks) ── */
+  if (!loaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#1A1612' }}>
+        <div className="text-center">
+          <div className="inline-block w-10 h-10 border-2 border-gold-400/30 border-t-gold-400 rounded-full animate-spin mb-4" />
+          <p className="text-victorian-400 font-display">กำลังโหลดแผนที่...</p>
+        </div>
+      </div>
+    )
+  }
 
   /* ════════════════════════════════════════════
      PAN: mouse drag on background

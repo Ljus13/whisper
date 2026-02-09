@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { User } from '@supabase/supabase-js'
+import { useState, useTransition, useEffect } from 'react'
 import type { Profile, SkillType, SkillPathway, SkillSequence, Skill, PlayerPathway } from '@/lib/types/database'
 import {
   ArrowLeft, ChevronDown, ChevronRight, Plus, Trash2, Sparkles, Zap,
@@ -15,6 +14,8 @@ import {
   castSkill
 } from '@/app/actions/skills'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
+import { createClient } from '@/lib/supabase/client'
+import { getCached, setCache, REF_TTL } from '@/lib/client-cache'
 
 /* ─── Art Nouveau Corner Ornament ─── */
 function CornerOrnament({ className }: { className?: string }) {
@@ -47,13 +48,7 @@ function OrnamentedCard({ children, className = '' }: { children: React.ReactNod
 
 /* ─── Props ─── */
 interface SkillsContentProps {
-  user: User
-  profile: Profile | null
-  skillTypes: SkillType[]
-  pathways: SkillPathway[]
-  sequences: SkillSequence[]
-  skills: Skill[]
-  playerPathways: PlayerPathway[]
+  userId: string
 }
 
 /* ═══════════════════════════════════════
@@ -651,14 +646,52 @@ function PlayerSkillView({
 /* ═══════════════════════════════════════
    MAIN COMPONENT
    ═══════════════════════════════════════ */
-export default function SkillsContent({
-  profile, skillTypes, pathways, sequences, skills, playerPathways
-}: SkillsContentProps) {
+export default function SkillsContent({ userId }: SkillsContentProps) {
+  const [profile, setProfile] = useState<Profile | null>(getCached<Profile>('skills:profile'))
+  const [skillTypes, setSkillTypes] = useState<SkillType[]>(getCached<SkillType[]>('skills:types') ?? [])
+  const [pathways, setPathways] = useState<SkillPathway[]>(getCached<SkillPathway[]>('skills:pathways') ?? [])
+  const [sequences, setSequences] = useState<SkillSequence[]>(getCached<SkillSequence[]>('skills:sequences') ?? [])
+  const [skills, setSkills] = useState<Skill[]>(getCached<Skill[]>('skills:skills') ?? [])
+  const [playerPathways, setPlayerPathways] = useState<PlayerPathway[]>(getCached<PlayerPathway[]>(`skills:pp:${userId}`) ?? [])
+  const [loaded, setLoaded] = useState(!!getCached('skills:profile'))
+
+  useEffect(() => {
+    const supabase = createClient()
+    Promise.all([
+      supabase.from('profiles').select('*').eq('id', userId).single(),
+      supabase.from('skill_types').select('*').order('name'),
+      supabase.from('skill_pathways').select('*').order('name'),
+      supabase.from('skill_sequences').select('*').order('seq_number', { ascending: false }),
+      supabase.from('skills').select('*').order('name'),
+      supabase.from('player_pathways').select('*').eq('player_id', userId),
+    ]).then(([pRes, tRes, pwRes, sqRes, skRes, ppRes]) => {
+      setProfile(pRes.data); setCache('skills:profile', pRes.data)
+      setSkillTypes(tRes.data ?? []); setCache('skills:types', tRes.data ?? [], REF_TTL)
+      setPathways(pwRes.data ?? []); setCache('skills:pathways', pwRes.data ?? [], REF_TTL)
+      setSequences(sqRes.data ?? []); setCache('skills:sequences', sqRes.data ?? [], REF_TTL)
+      setSkills(skRes.data ?? []); setCache('skills:skills', skRes.data ?? [], REF_TTL)
+      setPlayerPathways(ppRes.data ?? []); setCache(`skills:pp:${userId}`, ppRes.data ?? [])
+      setLoaded(true)
+    })
+  }, [userId])
+
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
   const [showAdmin, setShowAdmin] = useState(false)
   
   // ตรวจสอบว่าสติเหลือ 0 หรือไม่
   const isSanityLocked = (profile?.sanity ?? 10) === 0
+
+  if (!loaded) return (
+    <div className="min-h-screen bg-[#0F0D0A] flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="relative w-16 h-16">
+          <div className="absolute inset-0 border-2 border-[#D4AF37]/20 rounded-full" />
+          <div className="absolute inset-0 border-2 border-transparent border-t-[#D4AF37] rounded-full animate-spin" />
+        </div>
+        <p className="text-[#A89070] text-sm font-[Kanit] animate-pulse">กำลังโหลดทักษะ...</p>
+      </div>
+    </div>
+  )
 
   return (
     <div className="min-h-screen bg-victorian-950 text-victorian-100">
