@@ -385,52 +385,57 @@ export default function PlayersContent({ userId }: { userId: string }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {religions.map(rel => (
             <div key={rel.id} className="card-victorian relative overflow-hidden group">
-              <CornerOrnament className="absolute top-0 left-0" size={40} />
-              <CornerOrnament className="absolute top-0 right-0 -scale-x-100" size={40} />
-              <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100" size={40} />
-              <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1]" size={40} />
+              <CornerOrnament className="absolute top-0 left-0 z-20" size={40} />
+              <CornerOrnament className="absolute top-0 right-0 -scale-x-100 z-20" size={40} />
+              <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 z-20" size={40} />
+              <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] z-20" size={40} />
 
-              {/* Background */}
-              {rel.bg_url && (
-                <div className="absolute inset-0 z-0">
-                  <img src={rel.bg_url} alt="" className="w-full h-full object-cover opacity-10" loading="lazy" decoding="async" />
-                  <div className="absolute inset-0 bg-gradient-to-b from-victorian-950/50 to-victorian-950/90" />
-                </div>
-              )}
-
-              <div className="relative z-10 p-6">
+              {/* Banner header with bg image */}
+              <div className="relative h-32 overflow-hidden">
+                {rel.bg_url ? (
+                  <>
+                    <img src={rel.bg_url} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-victorian-950/90" />
+                  </>
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-victorian-800/60 via-victorian-900/80 to-victorian-950" />
+                )}
                 {/* Admin actions */}
                 {isAdmin && (
-                  <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                  <div className="absolute top-2 right-2 z-30 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
                     <button onClick={() => openReligionForm(rel)}
-                      className="p-2 text-victorian-400 hover:text-gold-400 bg-victorian-900/80 rounded-sm border border-gold-400/10 hover:border-gold-400/30 cursor-pointer"
-                      title="แก้ไข"><Pencil className="w-4 h-4" /></button>
+                      className="p-1.5 text-victorian-300 hover:text-gold-400 bg-black/60 backdrop-blur-sm rounded-sm border border-gold-400/10 hover:border-gold-400/30 cursor-pointer"
+                      title="แก้ไข"><Pencil className="w-3.5 h-3.5" /></button>
                     <button onClick={() => handleDeleteReligion(rel.id)}
-                      className="p-2 text-nouveau-ruby/70 hover:text-nouveau-ruby bg-victorian-900/80 rounded-sm border border-nouveau-ruby/10 hover:border-nouveau-ruby/30 cursor-pointer"
-                      title="ลบ"><Trash2 className="w-4 h-4" /></button>
+                      className="p-1.5 text-nouveau-ruby/70 hover:text-nouveau-ruby bg-black/60 backdrop-blur-sm rounded-sm border border-nouveau-ruby/10 hover:border-nouveau-ruby/30 cursor-pointer"
+                      title="ลบ"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
                 )}
+              </div>
 
-                {/* Logo + Name */}
-                <div className="flex items-center gap-4 mb-4">
+              {/* Logo overlapping the banner */}
+              <div className="relative z-10 -mt-10 px-6">
+                <div className="flex items-end gap-4">
                   {rel.logo_url ? (
-                    <img src={rel.logo_url} alt={rel.name_th} className="w-16 h-16 rounded-full border-2 border-gold-400/30 object-cover flex-shrink-0" loading="lazy" decoding="async" />
+                    <img src={rel.logo_url} alt={rel.name_th} className="w-20 h-20 rounded-full border-3 border-gold-400/40 object-cover flex-shrink-0 shadow-lg shadow-black/50 bg-victorian-950" loading="lazy" decoding="async" />
                   ) : (
-                    <div className="w-16 h-16 rounded-full border-2 border-gold-400/30 bg-victorian-800 flex items-center justify-center flex-shrink-0">
-                      <Church className="w-8 h-8 text-gold-400" />
+                    <div className="w-20 h-20 rounded-full border-3 border-gold-400/40 bg-victorian-900 flex items-center justify-center flex-shrink-0 shadow-lg shadow-black/50">
+                      <Church className="w-10 h-10 text-gold-400" />
                     </div>
                   )}
-                  <div className="min-w-0">
-                    <h3 className="font-display text-lg text-gold-400 truncate">{rel.name_th}</h3>
+                  <div className="min-w-0 pb-1">
+                    <h3 className="font-display font-semibold text-lg text-gold-400 truncate leading-tight">{rel.name_th}</h3>
                     <p className="text-victorian-400 text-sm">{rel.name_en}</p>
                   </div>
                 </div>
+              </div>
 
+              <div className="relative z-10 px-6 pb-6 pt-3">
                 {/* Deity */}
                 {(rel.deity_th || rel.deity_en) && (
                   <div className="px-3 py-2 bg-victorian-950/60 border border-gold-400/10 rounded-sm mb-3">
                     <p className="text-[10px] text-gold-400 uppercase tracking-wider font-display mb-0.5">เทพเจ้า</p>
-                    <p className="text-nouveau-cream text-sm">{rel.deity_th || rel.deity_en}</p>
+                    <p className="text-nouveau-cream text-sm font-semibold">{rel.deity_th || rel.deity_en}</p>
                     {rel.deity_th && rel.deity_en && <p className="text-victorian-400 text-xs">{rel.deity_en}</p>}
                   </div>
                 )}
@@ -461,27 +466,47 @@ export default function PlayersContent({ userId }: { userId: string }) {
       {/* ═══ Religion Detail Modal ═══ */}
       {viewingReligion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setViewingReligion(null)} style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}>
-          <div className="w-full max-w-lg rounded-sm border border-gold-400/20 p-6 md:p-8 max-h-[90vh] overflow-y-auto" style={{ backgroundColor: '#1A1612' }} onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="heading-victorian text-2xl">{viewingReligion.name_th}</h3>
-              <button onClick={() => setViewingReligion(null)} className="text-victorian-400 hover:text-gold-400 cursor-pointer"><X className="w-5 h-5" /></button>
+          <div className="w-full max-w-lg rounded-sm border border-gold-400/20 overflow-hidden max-h-[90vh] overflow-y-auto" style={{ backgroundColor: '#1A1612' }} onClick={e => e.stopPropagation()}>
+            {/* Banner header */}
+            <div className="relative h-40 overflow-hidden">
+              {viewingReligion.bg_url ? (
+                <>
+                  <img src={viewingReligion.bg_url} alt="" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-[#1A1612]" />
+                </>
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-victorian-800/60 via-victorian-900/80 to-[#1A1612]" />
+              )}
+              <button onClick={() => setViewingReligion(null)} className="absolute top-3 right-3 text-victorian-300 hover:text-gold-400 cursor-pointer bg-black/40 backdrop-blur-sm rounded-full p-1.5 z-10">
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            {viewingReligion.logo_url && (
-              <div className="flex justify-center mb-6">
-                <img src={viewingReligion.logo_url} alt={viewingReligion.name_th} className="w-24 h-24 rounded-full border-2 border-gold-400/30 object-cover" />
-              </div>
-            )}
-            <div className="space-y-4 text-sm">
-              <div><span className="text-gold-400 font-display">ชื่อไทย:</span> <span className="text-nouveau-cream">{viewingReligion.name_th}</span></div>
-              <div><span className="text-gold-400 font-display">ชื่ออังกฤษ:</span> <span className="text-nouveau-cream">{viewingReligion.name_en}</span></div>
-              {viewingReligion.deity_th && <div><span className="text-gold-400 font-display">เทพเจ้า (ไทย):</span> <span className="text-nouveau-cream">{viewingReligion.deity_th}</span></div>}
-              {viewingReligion.deity_en && <div><span className="text-gold-400 font-display">เทพเจ้า (อังกฤษ):</span> <span className="text-nouveau-cream">{viewingReligion.deity_en}</span></div>}
-              {viewingReligion.overview && (
-                <div>
-                  <span className="text-gold-400 font-display block mb-1">ข้อมูลภาพรวม:</span>
-                  <p className="text-victorian-300 whitespace-pre-wrap leading-relaxed">{viewingReligion.overview}</p>
+
+            {/* Logo overlapping banner */}
+            <div className="relative z-10 -mt-14 flex justify-center">
+              {viewingReligion.logo_url ? (
+                <img src={viewingReligion.logo_url} alt={viewingReligion.name_th} className="w-28 h-28 rounded-full border-4 border-gold-400/40 object-cover shadow-xl shadow-black/60 bg-victorian-950" />
+              ) : (
+                <div className="w-28 h-28 rounded-full border-4 border-gold-400/40 bg-victorian-900 flex items-center justify-center shadow-xl shadow-black/60">
+                  <Church className="w-14 h-14 text-gold-400" />
                 </div>
               )}
+            </div>
+
+            <div className="px-6 md:px-8 pb-6 md:pb-8 pt-4">
+              <h3 className="heading-victorian text-2xl text-center mb-6">{viewingReligion.name_th}</h3>
+              <div className="space-y-4 text-sm">
+                <div className="border-b border-gold-400/10 pb-3"><span className="text-gold-400 font-semibold">ชื่อไทย:</span> <span className="text-nouveau-cream font-semibold">{viewingReligion.name_th}</span></div>
+                <div className="border-b border-gold-400/10 pb-3"><span className="text-gold-400 font-semibold">ชื่ออังกฤษ:</span> <span className="text-nouveau-cream">{viewingReligion.name_en}</span></div>
+                {viewingReligion.deity_th && <div className="border-b border-gold-400/10 pb-3"><span className="text-gold-400 font-semibold">เทพเจ้า (ไทย):</span> <span className="text-nouveau-cream font-semibold">{viewingReligion.deity_th}</span></div>}
+                {viewingReligion.deity_en && <div className="border-b border-gold-400/10 pb-3"><span className="text-gold-400 font-semibold">เทพเจ้า (อังกฤษ):</span> <span className="text-nouveau-cream">{viewingReligion.deity_en}</span></div>}
+                {viewingReligion.overview && (
+                  <div>
+                    <span className="text-gold-400 font-semibold block mb-2">ข้อมูลภาพรวม:</span>
+                    <p className="text-victorian-300 whitespace-pre-wrap leading-relaxed">{viewingReligion.overview}</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -55,7 +55,7 @@ const config: Config = {
         },
       },
       fontFamily: {
-        display: ['Uncial Antiqua', 'cursive'],
+        display: ['var(--font-kanit)', 'Kanit', 'sans-serif'],
         body:    ['var(--font-kanit)', 'Kanit', 'sans-serif'],
         ui:      ['var(--font-kanit)', 'Kanit', 'sans-serif'],
       },
