@@ -48,6 +48,29 @@ export async function getMapsForQuestDropdown() {
   return data ?? []
 }
 
+/* ── Fetch all NPC tokens for quest NPC dropdown ── */
+export async function getNpcsForQuestDropdown() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data } = await supabase
+    .from('map_tokens')
+    .select('id, npc_name, npc_image_url, map_id, interaction_radius, maps:map_id(name)')
+    .eq('token_type', 'npc')
+    .order('npc_name', { ascending: true })
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((t: any) => ({
+    id: t.id,
+    npc_name: t.npc_name,
+    npc_image_url: t.npc_image_url,
+    map_id: t.map_id,
+    map_name: t.maps?.name || null,
+    interaction_radius: t.interaction_radius || 0,
+  }))
+}
+
 export async function submitSleepRequest(mealUrl: string, sleepUrl: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -291,12 +314,27 @@ export async function getActionCodes(page: number = 1) {
    QUEST CODES — สร้างโค้ดภารกิจ
    ══════════════════════════════════════════════ */
 
-export async function generateQuestCode(name: string, mapId?: string | null) {
+export async function generateQuestCode(name: string, mapId?: string | null, npcTokenId?: string | null) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
   if (!(await requireAdmin(supabase, user.id))) return { error: 'Admin/DM required' }
   if (!name?.trim()) return { error: 'กรุณากรอกชื่อภารกิจ' }
+
+  // If NPC is selected, auto-fill map from the NPC's map (and validate radius)
+  let resolvedMapId = mapId || null
+  if (npcTokenId) {
+    const { data: npcToken } = await supabase
+      .from('map_tokens')
+      .select('map_id, interaction_radius')
+      .eq('id', npcTokenId)
+      .eq('token_type', 'npc')
+      .single()
+    if (!npcToken) return { error: 'ไม่พบ NPC นี้ในระบบ' }
+    if (npcToken.interaction_radius <= 0) return { error: 'NPC นี้ยังไม่ได้กำหนดเขตทำการ กรุณาตั้งค่ารัศมีในแมพก่อน' }
+    // Auto-set map to NPC's map
+    resolvedMapId = npcToken.map_id
+  }
 
   let code = generateCode()
   for (let i = 0; i < 5; i++) {
@@ -309,10 +347,11 @@ export async function generateQuestCode(name: string, mapId?: string | null) {
     code = generateCode()
   }
 
-  const insertData: { name: string; code: string; created_by: string; map_id?: string } = {
+  const insertData: { name: string; code: string; created_by: string; map_id?: string; npc_token_id?: string } = {
     name: name.trim(), code, created_by: user.id
   }
-  if (mapId) insertData.map_id = mapId
+  if (resolvedMapId) insertData.map_id = resolvedMapId
+  if (npcTokenId) insertData.npc_token_id = npcTokenId
 
   const { data, error } = await supabase
     .from('quest_codes')
@@ -346,19 +385,25 @@ export async function getQuestCodes(page: number = 1) {
 
   const creatorIds = [...new Set((data || []).map(c => c.created_by))]
   const mapIds = [...new Set((data || []).filter(c => c.map_id).map(c => c.map_id!))]
+  const npcIds = [...new Set((data || []).filter(c => c.npc_token_id).map(c => c.npc_token_id!))]
   const { data: profiles } = creatorIds.length > 0
     ? await supabase.from('profiles').select('id, display_name').in('id', creatorIds)
     : { data: [] }
   const { data: maps } = mapIds.length > 0
     ? await supabase.from('maps').select('id, name').in('id', mapIds)
     : { data: [] }
+  const { data: npcTokens } = npcIds.length > 0
+    ? await supabase.from('map_tokens').select('id, npc_name').in('id', npcIds)
+    : { data: [] }
   const pMap = new Map((profiles || []).map(p => [p.id, p.display_name]))
   const mMap = new Map((maps || []).map(m => [m.id, m.name]))
+  const nMap = new Map((npcTokens || []).map(n => [n.id, n.npc_name]))
 
   const codes = (data || []).map(c => ({
     ...c,
     created_by_name: pMap.get(c.created_by) || 'ไม่ทราบ',
     map_name: c.map_id ? (mMap.get(c.map_id) || null) : null,
+    npc_name: c.npc_token_id ? (nMap.get(c.npc_token_id) || null) : null,
   }))
 
   return { codes, total: count || 0, page, totalPages: Math.ceil((count || 0) / PAGE_SIZE) }
@@ -411,11 +456,19 @@ export async function getActionSubmissions(page: number = 1) {
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
   const offset = (page - 1) * PAGE_SIZE
 
+  // Use foreign key joins to get all related data in one query
+  const selectFields = `
+    *,
+    player:player_id(id, display_name, avatar_url),
+    reviewer:reviewed_by(id, display_name, avatar_url),
+    action_code:action_code_id(id, name, code, reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality)
+  `
+
   let countQ = supabase.from('action_submissions').select('*', { count: 'exact', head: true })
   if (!isAdmin) countQ = countQ.eq('player_id', user.id)
   const { count } = await countQ
 
-  let dataQ = supabase.from('action_submissions').select('*')
+  let dataQ = supabase.from('action_submissions').select(selectFields)
     .order('created_at', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1)
   if (!isAdmin) dataQ = dataQ.eq('player_id', user.id)
@@ -424,26 +477,11 @@ export async function getActionSubmissions(page: number = 1) {
   if (error) return { submissions: [], total: 0 }
   const rows = data || []
 
-  const playerIds = [...new Set(rows.map(r => r.player_id))]
-  const reviewerIds = [...new Set(rows.filter(r => r.reviewed_by).map(r => r.reviewed_by!))]
-  const codeIds = [...new Set(rows.map(r => r.action_code_id))]
-  const allProfileIds = [...new Set([...playerIds, ...reviewerIds])]
-
-  const { data: profiles } = allProfileIds.length > 0
-    ? await supabase.from('profiles').select('id, display_name, avatar_url').in('id', allProfileIds)
-    : { data: [] }
-  const { data: codes } = codeIds.length > 0
-    ? await supabase.from('action_codes').select('id, name, code, reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality').in('id', codeIds)
-    : { data: [] }
-
-  const pMap = new Map((profiles || []).map(p => [p.id, p]))
-  const cMap = new Map((codes || []).map(c => [c.id, c]))
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const submissions = rows.map((r: any) => {
-    const player = pMap.get(r.player_id)
-    const reviewer = r.reviewed_by ? pMap.get(r.reviewed_by) : null
-    const code = cMap.get(r.action_code_id)
+    const player = r.player
+    const reviewer = r.reviewer
+    const code = r.action_code
     return {
       id: r.id,
       player_id: r.player_id,
@@ -602,22 +640,22 @@ export async function submitQuest(codeStr: string, evidenceUrls: string[]) {
 
   const { data: codeRow } = await supabase
     .from('quest_codes')
-    .select('id, name, map_id')
+    .select('id, name, map_id, npc_token_id')
     .eq('code', codeStr.trim())
     .maybeSingle()
 
   if (!codeRow) return { error: 'ไม่พบรหัสภารกิจนี้ กรุณาตรวจสอบรหัสอีกครั้ง' }
 
+  // ── ดึง token ผู้เล่น (ใช้ทั้ง map check และ NPC proximity check) ──
+  const { data: playerToken } = await supabase
+    .from('map_tokens')
+    .select('map_id, position_x, position_y')
+    .eq('user_id', user.id)
+    .single()
+
   // ── ตรวจสอบว่าผู้เล่นอยู่ในแมพที่ภารกิจกำหนดหรือไม่ ──
   if (codeRow.map_id) {
-    const { data: playerToken } = await supabase
-      .from('map_tokens')
-      .select('map_id')
-      .eq('user_id', user.id)
-      .single()
-
     if (!playerToken) {
-      // Player doesn't have a token on any map
       const { data: requiredMap } = await supabase
         .from('maps')
         .select('name')
@@ -628,7 +666,6 @@ export async function submitQuest(codeStr: string, evidenceUrls: string[]) {
     }
 
     if (playerToken.map_id !== codeRow.map_id) {
-      // Player is on a different map
       const { data: requiredMap } = await supabase
         .from('maps')
         .select('name')
@@ -636,6 +673,34 @@ export async function submitQuest(codeStr: string, evidenceUrls: string[]) {
         .single()
       const mapName = requiredMap?.name || 'สถานที่ที่กำหนด'
       return { error: `คุณต้องเดินทางไปยัง "${mapName}" ในแผนที่ก่อนจึงจะส่งภารกิจนี้ได้` }
+    }
+  }
+
+  // ── ตรวจสอบว่าผู้เล่นอยู่ใกล้ NPC ที่กำหนดหรือไม่ ──
+  if (codeRow.npc_token_id) {
+    const { data: npcToken } = await supabase
+      .from('map_tokens')
+      .select('map_id, position_x, position_y, interaction_radius, npc_name')
+      .eq('id', codeRow.npc_token_id)
+      .single()
+
+    if (npcToken && npcToken.interaction_radius > 0) {
+      if (!playerToken) {
+        return { error: `คุณต้องอยู่ใกล้ NPC "${npcToken.npc_name}" บนแผนที่ก่อนจึงจะส่งภารกิจนี้ได้` }
+      }
+
+      if (playerToken.map_id !== npcToken.map_id) {
+        return { error: `คุณต้องอยู่บนแมพเดียวกับ NPC "${npcToken.npc_name}" ก่อนจึงจะส่งภารกิจนี้ได้` }
+      }
+
+      // คำนวณระยะห่าง (% ของแมพ) — ใช้ Euclidean distance
+      const dx = playerToken.position_x - npcToken.position_x
+      const dy = playerToken.position_y - npcToken.position_y
+      const distance = Math.sqrt(dx * dx + dy * dy)
+
+      if (distance > npcToken.interaction_radius) {
+        return { error: `คุณอยู่ไกลจาก NPC "${npcToken.npc_name}" เกินไป กรุณาเดินเข้าใกล้เขตทำการของ NPC ก่อน` }
+      }
     }
   }
 
@@ -663,11 +728,19 @@ export async function getQuestSubmissions(page: number = 1) {
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
   const offset = (page - 1) * PAGE_SIZE
 
+  // Use foreign key joins to get all related data in one query
+  const selectFields = `
+    *,
+    player:player_id(id, display_name, avatar_url),
+    reviewer:reviewed_by(id, display_name, avatar_url),
+    quest_code:quest_code_id(id, name, code)
+  `
+
   let countQ = supabase.from('quest_submissions').select('*', { count: 'exact', head: true })
   if (!isAdmin) countQ = countQ.eq('player_id', user.id)
   const { count } = await countQ
 
-  let dataQ = supabase.from('quest_submissions').select('*')
+  let dataQ = supabase.from('quest_submissions').select(selectFields)
     .order('created_at', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1)
   if (!isAdmin) dataQ = dataQ.eq('player_id', user.id)
@@ -676,26 +749,11 @@ export async function getQuestSubmissions(page: number = 1) {
   if (error) return { submissions: [], total: 0 }
   const rows = data || []
 
-  const playerIds = [...new Set(rows.map(r => r.player_id))]
-  const reviewerIds = [...new Set(rows.filter(r => r.reviewed_by).map(r => r.reviewed_by!))]
-  const codeIds = [...new Set(rows.map(r => r.quest_code_id))]
-  const allProfileIds = [...new Set([...playerIds, ...reviewerIds])]
-
-  const { data: profiles } = allProfileIds.length > 0
-    ? await supabase.from('profiles').select('id, display_name, avatar_url').in('id', allProfileIds)
-    : { data: [] }
-  const { data: codes } = codeIds.length > 0
-    ? await supabase.from('quest_codes').select('id, name, code').in('id', codeIds)
-    : { data: [] }
-
-  const pMap = new Map((profiles || []).map(p => [p.id, p]))
-  const cMap = new Map((codes || []).map(c => [c.id, c]))
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const submissions = rows.map((r: any) => {
-    const player = pMap.get(r.player_id)
-    const reviewer = r.reviewed_by ? pMap.get(r.reviewed_by) : null
-    const code = cMap.get(r.quest_code_id)
+    const player = r.player
+    const reviewer = r.reviewer
+    const code = r.quest_code
     return {
       id: r.id,
       player_id: r.player_id,
@@ -769,11 +827,18 @@ export async function getSleepLogs(page: number = 1) {
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
   const offset = (page - 1) * PAGE_SIZE
 
+  // Use foreign key joins to get player and reviewer info in one query
+  const selectFields = `
+    *,
+    player:player_id(id, display_name, avatar_url),
+    reviewer:reviewed_by(id, display_name, avatar_url)
+  `
+
   let countQ = supabase.from('sleep_requests').select('*', { count: 'exact', head: true })
   if (!isAdmin) countQ = countQ.eq('player_id', user.id)
   const { count } = await countQ
 
-  let dataQ = supabase.from('sleep_requests').select('*')
+  let dataQ = supabase.from('sleep_requests').select(selectFields)
     .order('created_at', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1)
   if (!isAdmin) dataQ = dataQ.eq('player_id', user.id)
@@ -782,19 +847,10 @@ export async function getSleepLogs(page: number = 1) {
   if (error) return { logs: [], total: 0 }
   const rows = data || []
 
-  const playerIds = [...new Set(rows.map(r => r.player_id))]
-  const reviewerIds = [...new Set(rows.filter(r => r.reviewed_by).map(r => r.reviewed_by!))]
-  const allIds = [...new Set([...playerIds, ...reviewerIds])]
-
-  const { data: profiles } = allIds.length > 0
-    ? await supabase.from('profiles').select('id, display_name, avatar_url').in('id', allIds)
-    : { data: [] }
-  const pMap = new Map((profiles || []).map(p => [p.id, p]))
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const logs = rows.map((r: any) => {
-    const player = pMap.get(r.player_id)
-    const reviewer = r.reviewed_by ? pMap.get(r.reviewed_by) : null
+    const player = r.player
+    const reviewer = r.reviewer
     return {
       id: r.id,
       player_id: r.player_id,

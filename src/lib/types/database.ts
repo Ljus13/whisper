@@ -7,10 +7,12 @@ export type UserRole = 'player' | 'admin' | 'dm'
 export interface Profile {
   id: string
   display_name: string | null
+  display_name_set: boolean
   avatar_url: string | null
   background_url: string | null
   bio: string | null
   role: UserRole
+  religion_id: string | null
   spirituality: number
   max_spirituality: number
   travel_points: number
@@ -119,6 +121,7 @@ export interface QuestCode {
   name: string
   code: string
   map_id: string | null
+  npc_token_id: string | null
   created_by: string
   created_at: string
 }
@@ -170,6 +173,7 @@ export interface MapToken {
   token_type: TokenType
   position_x: number
   position_y: number
+  interaction_radius: number
   created_by: string | null
   created_at: string
   updated_at: string
@@ -194,6 +198,48 @@ export interface MapLockedZone {
   created_by: string | null
   created_at: string
   updated_at: string
+}
+
+/* ═══════════ Religion System ═══════════ */
+
+export interface Religion {
+  id: string
+  name_th: string
+  name_en: string
+  deity_th: string | null
+  deity_en: string | null
+  overview: string | null
+  bg_url: string | null
+  logo_url: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MapChurch {
+  id: string
+  map_id: string
+  religion_id: string
+  position_x: number
+  position_y: number
+  radius: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MapChurchWithReligion extends MapChurch {
+  religion_name_th: string
+  religion_logo_url: string | null
+}
+
+export interface PrayerLog {
+  id: string
+  player_id: string
+  church_id: string
+  evidence_urls: string[]
+  sanity_gained: number
+  created_at: string
 }
 
 /* Supabase Database type helper */
@@ -347,12 +393,14 @@ export interface Database {
           token_type?: TokenType
           position_x?: number
           position_y?: number
+          interaction_radius?: number
           created_by?: string | null
         }
         Update: {
           map_id?: string
           position_x?: number
           position_y?: number
+          interaction_radius?: number
         }
       }
       map_locked_zones: {

@@ -109,14 +109,22 @@ export default function SkillLogsContent() {
 
         {/* Loading */}
         {loading && (
-          <div className="flex items-center justify-center py-20">
-            <div className="flex flex-col items-center gap-4">
-              <div className="relative w-16 h-16">
-                <div className="absolute inset-0 border-2 border-[#D4AF37]/20 rounded-full" />
-                <div className="absolute inset-0 border-2 border-transparent border-t-[#D4AF37] rounded-full animate-spin" />
+          <div className="space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="border border-[#D4AF37]/10 rounded-sm p-4 md:p-5" style={{ backgroundColor: 'rgba(26,22,18,0.6)' }}>
+                <div className="flex items-center gap-3 md:gap-4">
+                  <div className="w-10 h-10 rounded-full bg-[#2A2520] animate-pulse flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-28 rounded bg-[#2A2520] animate-pulse" />
+                      <div className="h-4 w-10 rounded bg-[#2A2520] animate-pulse" />
+                    </div>
+                    <div className="h-3 w-40 rounded bg-[#2A2520] animate-pulse" />
+                  </div>
+                  <div className="h-6 w-24 rounded bg-[#2A2520] animate-pulse flex-shrink-0" />
+                </div>
               </div>
-              <p className="text-victorian-400 text-sm animate-pulse">กำลังโหลดประวัติ...</p>
-            </div>
+            ))}
           </div>
         )}
 

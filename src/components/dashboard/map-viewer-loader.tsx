@@ -5,13 +5,19 @@ import dynamic from 'next/dynamic'
 const MapViewer = dynamic(() => import('@/components/dashboard/map-viewer'), {
   ssr: false,
   loading: () => (
-    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#0F0D0A' }}>
-      <div className="flex flex-col items-center gap-4">
-        <div className="relative w-16 h-16">
-          <div className="absolute inset-0 border-2 border-[#D4AF37]/20 rounded-full" />
-          <div className="absolute inset-0 border-2 border-transparent border-t-[#D4AF37] rounded-full animate-spin" />
+    <div className="min-h-screen" style={{ backgroundColor: '#1A1612' }}>
+      <div className="border-b border-[#D4AF37]/10" style={{ backgroundColor: 'rgba(15,13,10,0.9)' }}>
+        <div className="max-w-7xl mx-auto px-4 md:px-8 py-3 flex items-center gap-4">
+          <div className="w-9 h-9 rounded border border-[#D4AF37]/10 bg-[#2A2520] animate-pulse" />
+          <div className="h-6 w-40 rounded bg-[#2A2520] animate-pulse" />
         </div>
-        <p className="text-[#A89070] text-sm animate-pulse">กำลังโหลดแผนที่...</p>
+      </div>
+      <div className="flex items-center justify-center" style={{ height: 'calc(100vh - 60px)' }}>
+        <div className="w-full h-full bg-[#2A2520] animate-pulse relative">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="h-4 w-32 rounded bg-[#1A1612]/60 animate-pulse" />
+          </div>
+        </div>
       </div>
     </div>
   ),

@@ -130,6 +130,20 @@ export default function EmbedMapViewer({ map, tokens, zones }: Props) {
               </div>
             ))}
 
+            {/* NPC Interaction Radius Circles */}
+            {imageLoaded && tokens.filter(t => t.token_type === 'npc' && (t.interaction_radius ?? 0) > 0).map(npc => (
+              <div key={`radius-${npc.id}`} className="absolute pointer-events-none" style={{
+                left: `${npc.position_x}%`, top: `${npc.position_y}%`,
+                width: `${(npc.interaction_radius ?? 0) * 2}%`,
+                height: `${(npc.interaction_radius ?? 0) * 2}%`,
+                transform: 'translate(-50%, -50%)',
+                zIndex: 10,
+              }}>
+                <div className="w-full h-full rounded-full"
+                  style={{ border: '2px solid rgba(180,60,60,0.3)', backgroundColor: 'rgba(180,60,60,0.06)' }} />
+              </div>
+            ))}
+
             {/* Tokens */}
             {imageLoaded && tokens.map(t => (
               <div key={t.id} className="absolute" style={{

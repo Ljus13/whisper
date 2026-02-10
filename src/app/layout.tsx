@@ -17,8 +17,8 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: 'Whisper — DND 5e Campaign Table',
-  description: 'A Victorian-styled online tabletop companion for DND 5e campaigns',
+  title: 'Whisper of the Shadow',
+  description: 'ระบบควบคุมการโรลเพลย์ โลกแห่งศาสตร์เร้นรับ',
   icons: { icon: '/favicon.ico' },
 }
 

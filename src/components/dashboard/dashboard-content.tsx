@@ -3,11 +3,12 @@
 import { signOut, updateProfile } from '@/app/actions/auth'
 import { applySanityDecay } from '@/app/actions/players'
 import AdminEditModal from '@/components/admin/admin-edit-modal'
+import DisplayNameSetup from '@/components/dashboard/display-name-setup'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
 import { CornerOrnament, OrnamentedCard } from '@/components/ui/ornaments'
 import dynamic from 'next/dynamic'
 import type { User } from '@supabase/supabase-js'
-import { LogOut, Shield, Swords, Crown, Settings, X, Camera, Map, Zap, Users, Footprints, Flame, Brain, Heart, Pencil, Lock, Image as ImageIcon, BookOpen } from 'lucide-react'
+import { LogOut, Shield, Swords, Crown, Settings, X, Camera, Map, Zap, Users, Footprints, Flame, Brain, Heart, Pencil, Lock, Image as ImageIcon, BookOpen, FileText } from 'lucide-react'
 import { useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -17,6 +18,7 @@ const BioEditor = dynamic(() => import('@/components/bio-editor'), { ssr: false 
 interface Profile {
   id: string
   display_name: string | null
+  display_name_set: boolean
   avatar_url: string | null
   background_url: string | null
   bio: string | null
@@ -75,6 +77,9 @@ export default function DashboardContent({
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
   
+  // ตรวจสอบว่าผู้เล่นยืนยันชื่อแล้วหรือยัง
+  const needsDisplayNameSetup = profile && !profile.display_name_set
+
   // ตรวจสอบว่าสติเหลือ 0 หรือไม่ (Sanity Lock)
   const isSanityLocked = profile?.sanity === 0
   
@@ -480,6 +485,24 @@ export default function DashboardContent({
                 แก้ไขประวัติ
               </button>
 
+              <a
+                href={isSanityLocked ? "#" : "/dashboard/bio-templates"}
+                className={`w-full flex items-center justify-center gap-3 px-4 py-3
+                           border border-gold-400/20 rounded-sm
+                           text-nouveau-cream hover:text-gold-400 hover:border-gold-400/40
+                           transition-colors text-base
+                           ${isSanityLocked ? 'opacity-40 cursor-not-allowed pointer-events-none' : 'cursor-pointer'}`}
+                style={{ backgroundColor: '#231C14' }}
+                title={isSanityLocked ? "ถูกล็อค: สติของคุณเหลือ 0" : ""}
+              >
+                {isSanityLocked ? (
+                  <Lock className="w-5 h-5 text-red-500" />
+                ) : (
+                  <FileText className="w-5 h-5" />
+                )}
+                เทมเพลตประวัติ
+              </a>
+
               <button
                 type="button"
                 onClick={() => {
@@ -708,6 +731,11 @@ export default function DashboardContent({
 
       {/* Sanity Lock Overlay - แสดงเมื่อสติเหลือ 0 */}
       {isSanityLocked && <SanityLockOverlay />}
+
+      {/* Display Name Setup - บังคับตั้งชื่อเมื่อล็อกอินครั้งแรก */}
+      {needsDisplayNameSetup && (
+        <DisplayNameSetup currentName={displayName} />
+      )}
     </div>
   )
 }

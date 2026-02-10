@@ -398,6 +398,34 @@ export async function toggleMapEmbed(mapId: string, enabled: boolean) {
 }
 
 /* ══════════════════════════════════════════════
+   UPDATE NPC INTERACTION RADIUS (admin/dm only)
+   ══════════════════════════════════════════════ */
+export async function updateNpcRadius(tokenId: string, radius: number) {
+  const { supabase } = await requireAdmin()
+
+  if (radius < 0 || radius > 50) return { error: 'รัศมีต้องอยู่ระหว่าง 0-50%' }
+
+  const { data: token } = await supabase
+    .from('map_tokens')
+    .select('token_type')
+    .eq('id', tokenId)
+    .single()
+
+  if (!token) return { error: 'ไม่พบ Token' }
+  if (token.token_type !== 'npc') return { error: 'เฉพาะ NPC เท่านั้นที่ตั้งค่ารัศมีได้' }
+
+  const { error } = await supabase
+    .from('map_tokens')
+    .update({ interaction_radius: radius })
+    .eq('id', tokenId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/dashboard/maps', 'layout')
+  return { success: true }
+}
+
+/* ══════════════════════════════════════════════
    GET ALL PLAYERS (for admin add-to-map UI)
    ══════════════════════════════════════════════ */
 export async function getAllPlayers() {

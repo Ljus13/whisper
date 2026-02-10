@@ -9,14 +9,55 @@ import TextAlign from '@tiptap/extension-text-align'
 import Color from '@tiptap/extension-color'
 import { TextStyle } from '@tiptap/extension-text-style'
 import Highlight from '@tiptap/extension-highlight'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   AlignLeft, AlignCenter, AlignRight, Image as ImageIcon,
   Link as LinkIcon, List, ListOrdered, Quote, Code, Heading1,
   Heading2, Heading3, Undo, Redo, Palette, Highlighter,
-  Code2, Eye, MonitorPlay,
+  Code2, Eye, MonitorPlay, X,
 } from 'lucide-react'
+
+/* ══════ Inline Prompt Modal ══════ */
+function PromptModal({ title, placeholder, onConfirm, onCancel }: {
+  title: string; placeholder: string
+  onConfirm: (value: string) => void; onCancel: () => void
+}) {
+  const [value, setValue] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => { inputRef.current?.focus() }, [])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      onClick={onCancel} style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}>
+      <div className="w-full max-w-sm rounded-xl border-2 border-gold-400/15 p-5 space-y-4"
+        style={{ backgroundColor: '#1A1612' }} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-gold-400 font-display text-lg">{title}</h3>
+          <button type="button" onClick={onCancel} className="text-victorian-400 hover:text-gold-400 cursor-pointer">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && value.trim()) onConfirm(value.trim()) }}
+          placeholder={placeholder}
+          className="input-victorian w-full !py-2.5 !text-sm"
+        />
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onCancel}
+            className="btn-victorian px-4 py-1.5 text-sm cursor-pointer">ยกเลิก</button>
+          <button type="button" onClick={() => { if (value.trim()) onConfirm(value.trim()) }}
+            disabled={!value.trim()}
+            className="btn-gold !px-4 !py-1.5 !text-sm disabled:opacity-50">ตกลง</button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 interface BioEditorProps {
   initialContent: string
@@ -27,6 +68,9 @@ interface BioEditorProps {
 export default function BioEditor({ initialContent, onSave, saving }: BioEditorProps) {
   const [mode, setMode] = useState<'visual' | 'code' | 'preview'>('visual')
   const [codeContent, setCodeContent] = useState(initialContent || '')
+  const [promptModal, setPromptModal] = useState<{
+    title: string; placeholder: string; onConfirm: (value: string) => void
+  } | null>(null)
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -54,24 +98,36 @@ export default function BioEditor({ initialContent, onSave, saving }: BioEditorP
   })
 
   const addImage = useCallback(() => {
-    const url = window.prompt('ใส่ URL ของรูปภาพ:')
-    if (url && editor) {
-      editor.chain().focus().setImage({ src: url }).run()
-    }
+    setPromptModal({
+      title: 'แทรกรูปภาพ',
+      placeholder: 'ใส่ URL ของรูปภาพ...',
+      onConfirm: (url) => {
+        if (editor) editor.chain().focus().setImage({ src: url }).run()
+        setPromptModal(null)
+      },
+    })
   }, [editor])
 
   const addLink = useCallback(() => {
-    const url = window.prompt('ใส่ URL ลิงก์:')
-    if (url && editor) {
-      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
-    }
+    setPromptModal({
+      title: 'แทรกลิงก์',
+      placeholder: 'ใส่ URL ลิงก์...',
+      onConfirm: (url) => {
+        if (editor) editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+        setPromptModal(null)
+      },
+    })
   }, [editor])
 
   const setColor = useCallback(() => {
-    const color = window.prompt('ใส่สี (เช่น #D4AF37, red):')
-    if (color && editor) {
-      editor.chain().focus().setColor(color).run()
-    }
+    setPromptModal({
+      title: 'เลือกสีตัวอักษร',
+      placeholder: 'ใส่สี เช่น #D4AF37, red...',
+      onConfirm: (color) => {
+        if (editor) editor.chain().focus().setColor(color).run()
+        setPromptModal(null)
+      },
+    })
   }, [editor])
 
   function handleSwitchToVisual() {
@@ -265,6 +321,16 @@ export default function BioEditor({ initialContent, onSave, saving }: BioEditorP
           {saving ? 'กำลังบันทึก...' : 'บันทึกประวัติ'}
         </button>
       </div>
+
+      {/* Prompt Modal */}
+      {promptModal && (
+        <PromptModal
+          title={promptModal.title}
+          placeholder={promptModal.placeholder}
+          onConfirm={promptModal.onConfirm}
+          onCancel={() => setPromptModal(null)}
+        />
+      )}
     </div>
   )
 }

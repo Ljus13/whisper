@@ -30,7 +30,7 @@ export default async function DashboardPage() {
       .limit(1),
   ])
 
-  let rankDisplay = 'นักผจญภัย'
+  let rankDisplay = 'ผู้มาเยือน'
   
   if (playerPathways && playerPathways.length > 0) {
     const main = playerPathways[0]

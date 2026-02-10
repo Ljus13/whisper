@@ -102,6 +102,38 @@ export async function signInWithDiscord() {
   }
 }
 
+export async function updateDisplayName(displayName: string) {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { error: 'Not authenticated' }
+  }
+
+  const trimmed = displayName.trim()
+  if (!trimmed || trimmed.length < 1) {
+    return { error: 'Display name cannot be empty' }
+  }
+  if (trimmed.length > 100) {
+    return { error: 'Display name is too long' }
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      display_name: trimmed,
+      display_name_set: true,
+    })
+    .eq('id', user.id)
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath('/dashboard')
+  return { success: true }
+}
+
 export async function signOut() {
   const supabase = await createClient()
   await supabase.auth.signOut()

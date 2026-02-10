@@ -1,14 +1,18 @@
 'use client'
 
-import type { GameMap, MapTokenWithProfile, MapLockedZone, Profile } from '@/lib/types/database'
+import type { GameMap, MapTokenWithProfile, MapLockedZone, Profile, MapChurchWithReligion, Religion } from '@/lib/types/database'
 import {
   addPlayerToMap, addNpcToMap, moveToken, removeTokenFromMap,
   createLockedZone, updateLockedZone, deleteLockedZone, toggleMapEmbed,
+  updateNpcRadius,
 } from '@/app/actions/map-tokens'
+import {
+  getReligions, addChurchToMap, moveChurch, updateChurchRadius, deleteChurch,
+} from '@/app/actions/religions'
 import {
   ArrowLeft, ZoomIn, ZoomOut, Maximize, Move, Trash2, Lock,
   Users, X, Save, Code, MapPin, UserPlus, Ghost, Shield, Crown, Footprints,
-  Info,
+  Info, Church,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useState, useRef, useCallback, useEffect, useTransition } from 'react'
@@ -104,6 +108,8 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   // ── Data state (local copy for optimistic updates) ──
   const [tokens, setTokens] = useState<MapTokenWithProfile[]>(getCached(`mv:${mapId}:tokens`) ?? [])
   const [zones, setZones] = useState<MapLockedZone[]>(getCached(`mv:${mapId}:zones`) ?? [])
+  const [churches, setChurches] = useState<MapChurchWithReligion[]>(getCached(`mv:${mapId}:churches`) ?? [])
+  const [religions, setReligions] = useState<Religion[]>([])
 
   useEffect(() => {
     const supabase = createClient()
@@ -114,7 +120,8 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         supabase.from('profiles').select('*').eq('id', userId).single(),
         supabase.from('map_tokens').select('*').eq('map_id', mapId),
         supabase.from('map_locked_zones').select('*').eq('map_id', mapId),
-      ]).then(async ([mapRes, profileRes, rawTokensRes, zonesRes]) => {
+        supabase.from('map_churches').select('*, religions(name_th, logo_url)').eq('map_id', mapId),
+      ]).then(async ([mapRes, profileRes, rawTokensRes, zonesRes, churchesRes]) => {
         if (mapRes.error || !mapRes.data || !profileRes.data) {
           if (mapRes.error) console.error('Map fetch error:', mapRes.error)
           return
@@ -159,9 +166,31 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         const ap = (adminPlayers.data ?? []) as AllPlayer[]
         setMap(mapData); setCurrentUser(profile); setIsAdmin(admin); setAllPlayers(ap)
         setTokens(builtTokens); setZones(zoneData)
+
+        // Build church data with religion join
+        const rawChurches = churchesRes.data ?? []
+        const builtChurches: MapChurchWithReligion[] = rawChurches.map((c: Record<string, unknown>) => {
+          const rel = c.religions as { name_th: string; logo_url: string | null } | null
+          return {
+            id: c.id as string,
+            map_id: c.map_id as string,
+            religion_id: c.religion_id as string,
+            position_x: c.position_x as number,
+            position_y: c.position_y as number,
+            radius: c.radius as number,
+            created_by: c.created_by as string | null,
+            created_at: c.created_at as string,
+            updated_at: c.updated_at as string,
+            religion_name_th: rel?.name_th ?? 'ไม่ทราบ',
+            religion_logo_url: rel?.logo_url ?? null,
+          }
+        })
+        setChurches(builtChurches)
+
         setCache(`mv:${mapId}:map`, mapData); setCache(`mv:${mapId}:me`, profile)
         setCache(`mv:${mapId}:admin`, admin); setCache(`mv:${mapId}:players`, ap)
         setCache(`mv:${mapId}:tokens`, builtTokens); setCache(`mv:${mapId}:zones`, zoneData)
+        setCache(`mv:${mapId}:churches`, builtChurches)
         setLoaded(true)
       })
     }
@@ -173,6 +202,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       .channel(`map_view:${mapId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'map_tokens', filter: `map_id=eq.${mapId}` }, fetchMapData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'map_locked_zones', filter: `map_id=eq.${mapId}` }, fetchMapData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_churches', filter: `map_id=eq.${mapId}` }, fetchMapData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'maps', filter: `id=eq.${mapId}` }, fetchMapData)
       .subscribe()
 
@@ -194,6 +224,12 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const [toast, setToast] = useState<{ msg: string; type: 'error' | 'info' } | null>(null)
   const [isPending, startTransition] = useTransition()
 
+  /* ── Church UI state ── */
+  const [showChurchModal, setShowChurchModal] = useState(false)
+  const [selectedChurch, setSelectedChurch] = useState<MapChurchWithReligion | null>(null)
+  const [movingChurchId, setMovingChurchId] = useState<string | null>(null)
+  const [churchMovePreview, setChurchMovePreview] = useState<{ x: number; y: number } | null>(null)
+
   /* ── Move notification modal ── */
   const [moveNotif, setMoveNotif] = useState<{ name: string; status: 'moving' | 'success' | 'error'; msg?: string } | null>(null)
 
@@ -201,6 +237,8 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const [npcName, setNpcName] = useState('')
   const [npcUrl, setNpcUrl] = useState('')
   const [selectedPlayerId, setSelectedPlayerId] = useState('')
+  const [churchReligionId, setChurchReligionId] = useState('')
+  const [churchRadius, setChurchRadius] = useState(10)
 
   // ── My token ──
   const myToken = tokens.find(t => t.user_id === currentUserId)
@@ -256,22 +294,31 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
      ════════════════════════════════════════════ */
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape' && movingTokenId) {
-        setMovingTokenId(null)
-        setMovePreview(null)
+      if (e.key === 'Escape') {
+        if (movingTokenId) { setMovingTokenId(null); setMovePreview(null) }
+        if (movingChurchId) { setMovingChurchId(null); setChurchMovePreview(null) }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [movingTokenId])
+  }, [movingTokenId, movingChurchId])
 
   /* ── Loading guard (after all hooks) ── */
   if (!loaded) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#1A1612' }}>
-        <div className="text-center">
-          <div className="inline-block w-10 h-10 border-2 border-gold-400/30 border-t-gold-400 rounded-full animate-spin mb-4" />
-          <p className="text-victorian-400 font-display">กำลังโหลดแผนที่...</p>
+      <div className="min-h-screen" style={{ backgroundColor: '#1A1612' }}>
+        <div className="border-b border-[#D4AF37]/10" style={{ backgroundColor: 'rgba(15,13,10,0.9)' }}>
+          <div className="max-w-7xl mx-auto px-4 md:px-8 py-3 flex items-center gap-4">
+            <div className="w-9 h-9 rounded border border-[#D4AF37]/10 bg-[#2A2520] animate-pulse" />
+            <div className="h-6 w-40 rounded bg-[#2A2520] animate-pulse" />
+          </div>
+        </div>
+        <div className="flex items-center justify-center" style={{ height: 'calc(100vh - 60px)' }}>
+          <div className="w-full h-full bg-[#2A2520] animate-pulse relative">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-4 w-32 rounded bg-[#1A1612]/60 animate-pulse" />
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -285,6 +332,12 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       e.preventDefault()
       const pos = screenToMapPercent(e.clientX, e.clientY)
       if (pos) finalizeMove(pos.x, pos.y)
+      return
+    }
+    if (movingChurchId) {
+      e.preventDefault()
+      const pos = screenToMapPercent(e.clientX, e.clientY)
+      if (pos) finalizeChurchMove(pos.x, pos.y)
       return
     }
     if (e.button !== 0) return
@@ -358,9 +411,12 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
      POINTER events: move preview tracking
      ════════════════════════════════════════════ */
   function handlePointerMove(e: React.PointerEvent) {
-    if (movingTokenId) {
+    if (movingTokenId || movingChurchId) {
       const pos = screenToMapPercent(e.clientX, e.clientY)
-      if (pos) setMovePreview(pos)
+      if (pos) {
+        if (movingTokenId) setMovePreview(pos)
+        if (movingChurchId) setChurchMovePreview(pos)
+      }
     }
   }
 
@@ -484,6 +540,77 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         })
         setTimeout(() => setMoveNotif(null), 2000)
       }
+    })
+  }
+
+  /* ════════════════════════════════════════════
+     CHURCH: move mode
+     ════════════════════════════════════════════ */
+  function startChurchMoveMode(church: MapChurchWithReligion) {
+    setMovingChurchId(church.id)
+    setChurchMovePreview({ x: church.position_x, y: church.position_y })
+    setSelectedChurch(null)
+  }
+
+  function cancelChurchMoveMode() {
+    setMovingChurchId(null)
+    setChurchMovePreview(null)
+  }
+
+  function finalizeChurchMove(targetX: number, targetY: number) {
+    if (!movingChurchId) return
+    const churchId = movingChurchId
+    const church = churches.find(c => c.id === churchId)
+    if (!church) return
+
+    // Optimistic update
+    setChurches(prev => prev.map(c => c.id === churchId ? { ...c, position_x: targetX, position_y: targetY } : c))
+    setMovingChurchId(null)
+    setChurchMovePreview(null)
+
+    startTransition(async () => {
+      const r = await moveChurch(churchId, targetX, targetY)
+      if (r?.error) {
+        // Rollback
+        setChurches(prev => prev.map(c => c.id === churchId ? { ...c, position_x: church.position_x, position_y: church.position_y } : c))
+        showToast(r.error, 'error')
+      } else {
+        showToast(`ย้ายโบสถ์ ${church.religion_name_th} สำเร็จ`, 'info')
+      }
+    })
+  }
+
+  function openChurchModal() {
+    setChurchReligionId('')
+    setChurchRadius(10)
+    // Fetch religions for dropdown
+    getReligions().then(res => setReligions(res.religions ?? []))
+    setShowChurchModal(true)
+  }
+
+  function handleAddChurch() {
+    if (!churchReligionId) return
+    startTransition(async () => {
+      const r = await addChurchToMap(map.id, churchReligionId, churchRadius)
+      if (r?.error) showToast(r.error, 'error')
+      else { setShowChurchModal(false); fetchMapDataRef.current?.() }
+    })
+  }
+
+  function handleDeleteChurch(churchId: string) {
+    if (!confirm('ลบโบสถ์นี้ออกจากแมพ?')) return
+    startTransition(async () => {
+      const r = await deleteChurch(churchId)
+      if (r?.error) showToast(r.error, 'error')
+      else { setSelectedChurch(null); fetchMapDataRef.current?.() }
+    })
+  }
+
+  function handleUpdateChurchRadius(churchId: string, radius: number) {
+    startTransition(async () => {
+      const r = await updateChurchRadius(churchId, radius)
+      if (r?.error) showToast(r.error, 'error')
+      else { setSelectedChurch(null); fetchMapDataRef.current?.() }
     })
   }
 
@@ -824,6 +951,11 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                   <Code className="w-4 h-4 lg:w-5 lg:h-5" />
                   <span className="text-[10px] lg:text-xs">Embed</span>
                 </button>
+                <button onClick={openChurchModal} title="วางโบสถ์"
+                  className="p-1.5 lg:p-2 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer flex items-center gap-1.5">
+                  <Church className="w-4 h-4 lg:w-5 lg:h-5" />
+                  <span className="text-[10px] lg:text-xs">โบสถ์</span>
+                </button>
               </div>
             </div>
           )}
@@ -847,7 +979,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
         {/* ══ MAP CANVAS (right side, full area) ══ */}
         <div ref={containerRef}
-          className={`flex-1 min-h-0 overflow-hidden relative ${showZoneCreator ? 'cursor-default' : movingTokenId ? 'cursor-crosshair' : isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+          className={`flex-1 min-h-0 overflow-hidden relative ${showZoneCreator ? 'cursor-default' : (movingTokenId || movingChurchId) ? 'cursor-crosshair' : isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
           onMouseDown={handleBgMouseDown}
           onMouseMove={handleBgMouseMove}
           onMouseUp={handleBgMouseUp}
@@ -861,9 +993,9 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
           {/* Loading */}
           {!imageLoaded && (
             <div className="absolute inset-0 flex items-center justify-center z-10">
-              <div className="text-center">
-                <div className="w-8 h-8 border-2 border-gold-400/30 border-t-gold-400 rounded-full animate-spin mx-auto mb-3" />
-                <p className="text-victorian-500 text-sm font-display">กำลังโหลดแผนที่...</p>
+              <div className="w-3/4 max-w-md space-y-3">
+                <div className="h-48 w-full bg-[#2A2520] animate-pulse rounded" />
+                <div className="h-4 w-32 mx-auto bg-[#2A2520] animate-pulse rounded" />
               </div>
             </div>
           )}
@@ -902,6 +1034,95 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
               {showZoneCreator && (
                 <ZoneEditor zone={editingZone} onClose={() => { setShowZoneCreator(false); setEditingZone(null) }} />
               )}
+
+              {/* ── NPC INTERACTION RADIUS CIRCLES ── */}
+              {imageLoaded && tokens.filter(t => t.token_type === 'npc' && (t.interaction_radius ?? 0) > 0).map(npc => (
+                <div key={`radius-${npc.id}`}
+                  className="absolute z-10 pointer-events-none"
+                  style={{
+                    left: `${npc.position_x}%`,
+                    top: `${npc.position_y}%`,
+                    width: `${(npc.interaction_radius ?? 0) * 2}%`,
+                    height: `${(npc.interaction_radius ?? 0) * 2}%`,
+                    transform: 'translate(-50%, -50%)',
+                  }}>
+                  <div className="w-full h-full rounded-full border-2 border-nouveau-ruby/40 bg-nouveau-ruby/8"
+                    style={{ boxShadow: '0 0 16px rgba(190, 49, 68, 0.15)' }} />
+                  <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[8px] text-nouveau-ruby/60 font-display"
+                    style={{ transform: `translateX(-50%) scale(${1 / scale})`, transformOrigin: 'center top' }}>
+                    เขตทำการ {npc.npc_name}
+                  </div>
+                </div>
+              ))}
+
+              {/* ── CHURCH RADIUS CIRCLES + MARKERS ── */}
+              {imageLoaded && churches.map(ch => (
+                <div key={`church-${ch.id}`} className="absolute z-10">
+                  {/* Radius circle */}
+                  <div className="absolute pointer-events-none"
+                    style={{
+                      left: `${ch.position_x}%`,
+                      top: `${ch.position_y}%`,
+                      width: `${ch.radius * 2}%`,
+                      height: `${ch.radius * 2}%`,
+                      transform: 'translate(-50%, -50%)',
+                    }}>
+                    <div className="w-full h-full rounded-full border-2 border-amber-400/30 bg-amber-400/5"
+                      style={{ boxShadow: '0 0 20px rgba(245, 158, 11, 0.1)' }} />
+                    <div className="absolute -bottom-5 left-1/2 whitespace-nowrap text-[8px] text-amber-400/60 font-display"
+                      style={{ transform: `translateX(-50%) scale(${1 / scale})`, transformOrigin: 'center top' }}>
+                      เขตโบสถ์ {ch.religion_name_th}
+                    </div>
+                  </div>
+                  {/* Church marker icon */}
+                  <div
+                    className={`absolute z-20 cursor-pointer group/church ${movingChurchId === ch.id ? 'animate-wiggle' : ''}`}
+                    style={{
+                      left: `${ch.position_x}%`,
+                      top: `${ch.position_y}%`,
+                      transform: `translate(-50%, -50%) scale(${1 / scale})`,
+                    }}
+                    onClick={e => {
+                      e.stopPropagation()
+                      if (movingChurchId) {
+                        const pos = screenToMapPercent(e.clientX, e.clientY)
+                        if (pos) finalizeChurchMove(pos.x, pos.y)
+                        return
+                      }
+                      if (isAdmin) setSelectedChurch(ch)
+                    }}>
+                    <div className="w-10 h-10 rounded-full border-2 border-amber-400/70 bg-[#1A1612] flex items-center justify-center shadow-lg shadow-amber-900/30
+                      group-hover/church:border-amber-400 group-hover/church:shadow-amber-400/30 transition-all">
+                      {ch.religion_logo_url ? (
+                        <img src={ch.religion_logo_url} alt="" className="w-6 h-6 rounded-full object-cover" />
+                      ) : (
+                        <Church className="w-5 h-5 text-amber-400" />
+                      )}
+                    </div>
+                    <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-display text-amber-300/80 bg-black/60 px-1 rounded-sm">
+                      {ch.religion_name_th}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* ── Church move ghost preview ── */}
+              {movingChurchId && churchMovePreview && imageLoaded && (() => {
+                const ch = churches.find(c => c.id === movingChurchId)
+                if (!ch) return null
+                return (
+                  <div className="absolute z-40 pointer-events-none"
+                    style={{
+                      left: `${churchMovePreview.x}%`,
+                      top: `${churchMovePreview.y}%`,
+                      transform: `translate(-50%, -50%) scale(${1 / scale})`,
+                    }}>
+                    <div className="w-10 h-10 rounded-full border-2 border-amber-400 bg-[#1A1612]/60 flex items-center justify-center opacity-50 shadow-[0_0_16px_rgba(245,158,11,0.6)]">
+                      <Church className="w-5 h-5 text-amber-400" />
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* ── TOKEN CLUSTERS ── */}
               {imageLoaded && clusters.map((cluster, ci) => {
@@ -1011,6 +1232,21 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
               </div>
             </div>
           )}
+
+          {/* ── Church move mode indicator ── */}
+          {movingChurchId && (
+            <div className="absolute top-4 inset-x-0 z-50 flex justify-center px-4">
+              <div className="bg-black/90 border border-amber-400/60 text-amber-400 text-sm font-display font-bold 
+                              px-4 py-2 rounded-lg shadow-lg flex items-center gap-3 pointer-events-auto">
+                <Church className="w-4 h-4 animate-bounce" />
+                <span>คลิกบนแผนที่เพื่อวางโบสถ์</span>
+                <button onClick={cancelChurchMoveMode}
+                  className="ml-1 px-3 py-1 text-xs bg-victorian-700 hover:bg-victorian-600 text-victorian-300 hover:text-nouveau-cream rounded cursor-pointer transition-colors">
+                  ยกเลิก
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1030,6 +1266,14 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
             })
           }}
           onMove={() => startMoveMode(selectedToken)}
+          onSaveRadius={(radius) => {
+            startTransition(async () => {
+              const r = await updateNpcRadius(selectedToken.id, radius)
+              if (r?.error) showToast(r.error, 'error')
+              else { setSelectedToken(null); fetchMapDataRef.current?.() }
+            })
+          }}
+          isPending={isPending}
         />
       )}
 
@@ -1086,6 +1330,44 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
       {/* Embed Modal */}
       {showEmbedModal && <EmbedModal />}
+
+      {/* Add Church Modal */}
+      {showChurchModal && (
+        <ModalOverlay onClose={() => setShowChurchModal(false)} title="วางโบสถ์บนแมพ">
+          <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">ศาสนา *</label>
+          <select value={churchReligionId} onChange={e => setChurchReligionId(e.target.value)}
+            className="input-victorian !py-2 !px-3 w-full mb-3">
+            <option value="">— เลือกศาสนา —</option>
+            {religions.map(r => (
+              <option key={r.id} value={r.id}>{r.name_th} ({r.name_en})</option>
+            ))}
+          </select>
+          <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">รัศมีเขตทำการ (%)</label>
+          <div className="flex items-center gap-3 mb-4">
+            <input type="range" min={1} max={50} step={0.5} value={churchRadius}
+              onChange={e => setChurchRadius(parseFloat(e.target.value))}
+              className="flex-1 accent-amber-400" />
+            <span className="text-amber-400 font-mono text-sm w-14 text-right">{churchRadius}%</span>
+          </div>
+          <p className="text-victorian-500 text-xs mb-4">โบสถ์จะถูกวางที่กลางแมพ แล้วลากย้ายได้ทีหลัง</p>
+          <button onClick={handleAddChurch} disabled={isPending || !churchReligionId}
+            className="btn-gold !py-2 !px-4 !text-sm w-full flex items-center justify-center gap-2 disabled:opacity-50">
+            <Church className="w-4 h-4" />{isPending ? 'กำลังเพิ่ม...' : 'วางโบสถ์'}
+          </button>
+        </ModalOverlay>
+      )}
+
+      {/* Church Info Popup (admin) */}
+      {selectedChurch && (
+        <ChurchInfoPopup
+          church={selectedChurch}
+          onClose={() => setSelectedChurch(null)}
+          onMove={() => startChurchMoveMode(selectedChurch)}
+          onDelete={() => handleDeleteChurch(selectedChurch.id)}
+          onSaveRadius={(radius) => handleUpdateChurchRadius(selectedChurch.id, radius)}
+          isPending={isPending}
+        />
+      )}
 
       {/* ── Fix #3: Move notification (small modal, top-right) ── */}
       {moveNotif && (
@@ -1150,11 +1432,14 @@ function ModalOverlay({ onClose, title, children }: { onClose: () => void; title
   )
 }
 
-function TokenInfoPopup({ token, isAdmin, isMe, canMove, onClose, onRemove, onMove }: {
+function TokenInfoPopup({ token, isAdmin, isMe, canMove, onClose, onRemove, onMove, onSaveRadius, isPending }: {
   token: MapTokenWithProfile; isAdmin: boolean; isMe: boolean;
   canMove: boolean;
   onClose: () => void; onRemove: () => void; onMove: () => void
+  onSaveRadius: (radius: number) => void; isPending: boolean
 }) {
+  const [editRadius, setEditRadius] = useState<number>(token.interaction_radius ?? 0)
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}
       style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
@@ -1181,6 +1466,39 @@ function TokenInfoPopup({ token, isAdmin, isMe, canMove, onClose, onRemove, onMo
           </div>
           <button onClick={onClose} className="self-start -mt-2 -mr-2 text-victorian-400 hover:text-gold-400 cursor-pointer p-2"><X className="w-8 h-8" /></button>
         </div>
+
+        {/* NPC Interaction Radius Editor (admin only) */}
+        {isAdmin && token.token_type === 'npc' && (
+          <div className="mb-4 p-4 rounded-sm border border-nouveau-ruby/20 bg-nouveau-ruby/5">
+            <label className="block text-sm font-display text-nouveau-ruby/80 mb-2 uppercase tracking-wider">
+              เขตทำการ (รัศมี %)
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min={0} max={50} step={0.5}
+                value={editRadius}
+                onChange={e => setEditRadius(parseFloat(e.target.value))}
+                className="flex-1 accent-nouveau-ruby"
+              />
+              <span className="text-nouveau-ruby font-mono text-sm w-14 text-right">{editRadius}%</span>
+            </div>
+            <p className="text-victorian-500 text-xs mt-1.5">
+              {editRadius === 0
+                ? 'ไม่แสดงรัศมี (ไม่สามารถใช้เป็นเงื่อนไขภารกิจได้)'
+                : `ผู้เล่นต้องอยู่ภายในรัศมี ${editRadius}% ของแมพ เพื่อส่งภารกิจกับ NPC นี้`}
+            </p>
+            {editRadius !== (token.interaction_radius ?? 0) && (
+              <button
+                onClick={() => onSaveRadius(editRadius)}
+                disabled={isPending}
+                className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-nouveau-cream border-2 border-nouveau-ruby/40 hover:border-nouveau-ruby/70 rounded-sm cursor-pointer hover:bg-nouveau-ruby/10 transition-colors disabled:opacity-50">
+                <Save className="w-4 h-4" /> {isPending ? 'กำลังบันทึก...' : 'บันทึกรัศมี'}
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="space-y-3">
           {canMove && (
             <button onClick={onMove}
@@ -1236,6 +1554,78 @@ function ClusterPopup({ cluster, currentUserId, isAdmin: _isAdmin, onSelectToken
               </div>
             </button>
           ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ChurchInfoPopup({ church, onClose, onMove, onDelete, onSaveRadius, isPending }: {
+  church: MapChurchWithReligion
+  onClose: () => void
+  onMove: () => void
+  onDelete: () => void
+  onSaveRadius: (radius: number) => void
+  isPending: boolean
+}) {
+  const [editRadius, setEditRadius] = useState<number>(church.radius)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}
+      style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+      <div className="w-full max-w-lg border-2 border-amber-400/40 rounded-sm p-8 shadow-2xl shadow-amber-900/20"
+        style={{ backgroundColor: '#1A1612' }}
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-6 mb-6">
+          <div className="w-20 h-20 rounded-full overflow-hidden border-4 shrink-0 shadow-lg border-amber-400/60">
+            {church.religion_logo_url ? (
+              <img src={church.religion_logo_url} className="w-full h-full object-cover" alt="" />
+            ) : (
+              <div className="w-full h-full bg-victorian-800 flex items-center justify-center">
+                <Church className="w-10 h-10 text-amber-400" />
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-amber-400 text-2xl truncate mb-1">โบสถ์ {church.religion_name_th}</p>
+            <p className="text-sm text-victorian-400">ตำแหน่ง: {church.position_x.toFixed(1)}%, {church.position_y.toFixed(1)}%</p>
+          </div>
+          <button onClick={onClose} className="self-start -mt-2 -mr-2 text-victorian-400 hover:text-gold-400 cursor-pointer p-2">
+            <X className="w-8 h-8" />
+          </button>
+        </div>
+
+        {/* Radius editor */}
+        <div className="mb-4 p-4 rounded-sm border border-amber-400/20 bg-amber-400/5">
+          <label className="block text-sm font-display text-amber-400/80 mb-2 uppercase tracking-wider">
+            เขตทำการโบสถ์ (รัศมี %)
+          </label>
+          <div className="flex items-center gap-3">
+            <input type="range" min={1} max={50} step={0.5} value={editRadius}
+              onChange={e => setEditRadius(parseFloat(e.target.value))}
+              className="flex-1 accent-amber-400" />
+            <span className="text-amber-400 font-mono text-sm w-14 text-right">{editRadius}%</span>
+          </div>
+          <p className="text-victorian-500 text-xs mt-1.5">
+            ผู้เล่นต้องอยู่ภายในรัศมี {editRadius}% เพื่อภาวนาที่โบสถ์นี้
+          </p>
+          {editRadius !== church.radius && (
+            <button onClick={() => onSaveRadius(editRadius)} disabled={isPending}
+              className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-nouveau-cream border-2 border-amber-400/40 hover:border-amber-400/70 rounded-sm cursor-pointer hover:bg-amber-400/10 transition-colors disabled:opacity-50">
+              <Save className="w-4 h-4" /> {isPending ? 'กำลังบันทึก...' : 'บันทึกรัศมี'}
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <button onClick={onMove}
+            className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-amber-400 border-2 border-amber-400/30 hover:border-amber-400/60 rounded-sm cursor-pointer hover:bg-amber-400/10 transition-colors">
+            <Move className="w-6 h-6" /> ย้ายตำแหน่ง
+          </button>
+          <button onClick={onDelete}
+            className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-nouveau-ruby border-2 border-nouveau-ruby/30 hover:border-nouveau-ruby/60 rounded-sm cursor-pointer hover:bg-nouveau-ruby/10 transition-colors">
+            <Trash2 className="w-6 h-6" /> ลบออกจากแมพ
+          </button>
         </div>
       </div>
     </div>

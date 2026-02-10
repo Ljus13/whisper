@@ -12,15 +12,8 @@ export default function MapDetailLoading() {
       {/* Map Viewer Skeleton */}
       <div className="flex items-center justify-center" style={{ height: 'calc(100vh - 60px)' }}>
         <div className="w-full h-full bg-[#2A2520] animate-pulse relative">
-          {/* Center spinner overlay */}
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="flex flex-col items-center gap-4">
-              <div className="relative w-12 h-12">
-                <div className="absolute inset-0 border-2 border-[#D4AF37]/20 rounded-full" />
-                <div className="absolute inset-0 border-2 border-transparent border-t-[#D4AF37] rounded-full animate-spin" />
-              </div>
-              <div className="h-4 w-32 rounded bg-[#1A1612]/60 animate-pulse" />
-            </div>
+            <div className="h-4 w-32 rounded bg-[#1A1612]/60 animate-pulse" />
           </div>
         </div>
       </div>
