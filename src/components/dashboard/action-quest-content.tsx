@@ -75,13 +75,65 @@ function fmtDate(d: string) {
   return `${String(x.getDate()).padStart(2,'0')}/${String(x.getMonth()+1).padStart(2,'0')}/${x.getFullYear()} ${String(x.getHours()).padStart(2,'0')}:${String(x.getMinutes()).padStart(2,'0')}`
 }
 
-function Spinner() {
+function SkeletonSubmission() {
   return (
-    <div className="flex items-center justify-center py-10">
-      <div className="relative w-10 h-10">
-        <div className="absolute inset-0 border-2 border-[#D4AF37]/20 rounded-full" />
-        <div className="absolute inset-0 border-2 border-transparent border-t-[#D4AF37] rounded-full animate-spin" />
-      </div>
+    <div className="space-y-3">
+      {[1, 2, 3].map(i => (
+        <Card key={i} className="p-4 md:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <div className="w-10 h-10 rounded-full bg-[#2A2520] animate-pulse flex-shrink-0" />
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-[#2A2520] animate-pulse rounded" />
+                  <div className="h-4 w-32 bg-[#2A2520] animate-pulse rounded" />
+                  <div className="h-4 w-16 bg-[#2A2520] animate-pulse rounded" />
+                  <div className="h-5 w-20 bg-[#2A2520] animate-pulse rounded-full" />
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="h-3 w-24 bg-[#2A2520] animate-pulse rounded" />
+                  <div className="h-3 w-28 bg-[#2A2520] animate-pulse rounded" />
+                </div>
+                <div className="flex gap-2 mt-1">
+                  <div className="h-5 w-20 bg-[#2A2520] animate-pulse rounded" />
+                  <div className="h-5 w-20 bg-[#2A2520] animate-pulse rounded" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+function SkeletonSleep() {
+  return (
+    <div className="space-y-3">
+      {[1, 2, 3].map(i => (
+        <Card key={i} className="p-4 md:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="w-10 h-10 rounded-full bg-[#2A2520] animate-pulse flex-shrink-0" />
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-[#2A2520] animate-pulse rounded" />
+                  <div className="h-4 w-24 bg-[#2A2520] animate-pulse rounded" />
+                  <div className="h-5 w-20 bg-[#2A2520] animate-pulse rounded-full" />
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="h-3 w-24 bg-[#2A2520] animate-pulse rounded" />
+                  <div className="h-3 w-28 bg-[#2A2520] animate-pulse rounded" />
+                </div>
+                <div className="flex items-center gap-3 mt-2">
+                  <div className="h-5 w-28 bg-[#2A2520] animate-pulse rounded" />
+                  <div className="h-5 w-28 bg-[#2A2520] animate-pulse rounded" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      ))}
     </div>
   )
 }
@@ -537,7 +589,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                 <span className="text-victorian-500 text-xs font-normal ml-1">({asTotal})</span>
               </h3>
 
-              {asLoading ? <Spinner /> : actionSubs.length === 0 ? (
+              {asLoading ? <SkeletonSubmission /> : actionSubs.length === 0 ? (
                 <Card className="p-8 text-center">
                   <Swords className="w-10 h-10 text-gold-400/30 mx-auto mb-2" />
                   <p className="text-victorian-400 heading-victorian">ยังไม่มีประวัติแอคชั่น</p>
@@ -614,7 +666,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                 <span className="text-victorian-500 text-xs font-normal ml-1">({qsTotal})</span>
               </h3>
 
-              {qsLoading ? <Spinner /> : questSubs.length === 0 ? (
+              {qsLoading ? <SkeletonSubmission /> : questSubs.length === 0 ? (
                 <Card className="p-8 text-center">
                   <Target className="w-10 h-10 text-gold-400/30 mx-auto mb-2" />
                   <p className="text-victorian-400 heading-victorian">ยังไม่มีประวัติภารกิจ</p>
@@ -644,7 +696,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
               <span className="text-victorian-500 text-xs font-normal ml-1">({slTotal})</span>
             </h3>
 
-            {slLoading ? <Spinner /> : sleepLogs.length === 0 ? (
+            {slLoading ? <SkeletonSleep /> : sleepLogs.length === 0 ? (
               <Card className="p-8 text-center">
                 <Moon className="w-10 h-10 text-blue-400/30 mx-auto mb-2" />
                 <p className="text-victorian-400 heading-victorian">ยังไม่มีประวัตินอนหลับ</p>
