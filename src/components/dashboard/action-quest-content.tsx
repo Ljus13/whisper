@@ -19,7 +19,7 @@ import {
   getNpcsForQuestDropdown,
 } from '@/app/actions/action-quest'
 import type { ActionRewards } from '@/app/actions/action-quest'
-import { submitPrayer } from '@/app/actions/religions'
+import { submitPrayer, getPrayerLogs, getAllPrayerLogs } from '@/app/actions/religions'
 import { OrnamentedCard } from '@/components/ui/ornaments'
 import { MapPin, Gift, Ghost } from 'lucide-react'
 
@@ -50,7 +50,7 @@ interface SleepLog {
   reviewed_by_name: string | null; reviewed_at: string | null; created_at: string
 }
 
-type TabKey = 'actions' | 'quests' | 'sleep'
+type TabKey = 'actions' | 'quests' | 'sleep' | 'prayer'
 
 /* ═══════════════════ Shared UI ═══════════════════ */
 
@@ -227,6 +227,10 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   const [slTotal, setSlTotal] = useState(0)
   const [slLoading, setSlLoading] = useState(true)
 
+  // ─── Prayer logs ───
+  const [prayerLogs, setPrayerLogs] = useState<any[]>([])
+  const [plLoading, setPlLoading] = useState(true)
+
   // ─── Toast helper ───
   function toast(type: 'success' | 'error', text: string) {
     setMsg({ type, text })
@@ -278,6 +282,21 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
     setSlLoading(false)
   }, [])
 
+  const fetchPrayerLogs = useCallback(async () => {
+    setPlLoading(true)
+    let logs: any[] = []
+    if (isAdmin) {
+      const res = await getAllPrayerLogs()
+      if ('logs' in res && Array.isArray(res.logs)) {
+        logs = res.logs
+      }
+    } else {
+      logs = await getPrayerLogs()
+    }
+    setPrayerLogs(logs)
+    setPlLoading(false)
+  }, [isAdmin])
+
   // ─── Init ───
   useEffect(() => {
     getTodaySleepStatus().then(r => { setSleepSubmitted(r.submitted); setSleepStatus(r.status || null) })
@@ -291,7 +310,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
     fetchActionSubs(1)
     fetchQuestSubs(1)
     fetchSleepLogs(1)
-  }, [isAdmin, fetchActionCodes, fetchQuestCodes, fetchActionSubs, fetchQuestSubs, fetchSleepLogs])
+    fetchPrayerLogs()
+  }, [isAdmin, fetchActionCodes, fetchQuestCodes, fetchActionSubs, fetchQuestSubs, fetchSleepLogs, fetchPrayerLogs])
 
   // ─── Handlers ───
   function handleSleepSubmit() {
@@ -386,7 +406,10 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
     startTransition(async () => {
       const r = await submitPrayer(urls.map(u => u.trim()))
       if (r.error) { setPrayerError(r.error) }
-      else { setPrayerSuccess({ gained: r.gained ?? 0, newSanity: r.newSanity ?? 0 }) }
+      else {
+        setPrayerSuccess({ gained: r.gained ?? 0, newSanity: r.newSanity ?? 0 })
+        fetchPrayerLogs()
+      }
     })
   }
 
@@ -394,6 +417,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     { key: 'actions', label: 'แอคชั่น', icon: <Swords className="w-4 h-4" /> },
     { key: 'quests', label: 'ภารกิจ', icon: <Target className="w-4 h-4" /> },
+    { key: 'prayer', label: 'ภาวนา', icon: <Church className="w-4 h-4" /> },
     { key: 'sleep', label: 'นอนหลับ', icon: <Moon className="w-4 h-4" /> },
   ]
 
@@ -684,6 +708,87 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                 </>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════ */}
+        {/*  TAB: PRAYER                            */}
+        {/* ═══════════════════════════════════════ */}
+        {activeTab === 'prayer' && (
+          <div className="space-y-3">
+            <h3 className="heading-victorian text-lg flex items-center gap-2">
+              <Church className="w-4 h-4 text-purple-400" /> ประวัติการภาวนา
+              <span className="text-victorian-500 text-xs font-normal ml-1">({prayerLogs.length})</span>
+            </h3>
+
+            {plLoading ? <SkeletonTable /> : prayerLogs.length === 0 ? (
+              <div className="p-8 text-center border border-gold-400/10 rounded-sm" style={{ backgroundColor: 'rgba(26,22,18,0.6)' }}>
+                <p className="text-victorian-400 heading-victorian">ยังไม่มีประวัติการภาวนา</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-victorian-500 text-left border-b border-gold-400/10">
+                      {isAdmin && <th className="pb-2 pr-3">ผู้เล่น</th>}
+                      <th className="pb-2 pr-3">สถานที่</th>
+                      <th className="pb-2 pr-3">ผลลัพธ์</th>
+                      <th className="pb-2 pr-3">หลักฐาน</th>
+                      <th className="pb-2">วันที่</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {prayerLogs.map(log => {
+                      const church = log.map_churches
+                      const religion = church?.religions
+                      const mapName = church?.maps?.name
+                      const player = log.profiles
+                      return (
+                        <tr key={log.id} className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
+                          {isAdmin && (
+                            <td className="py-2.5 pr-3">
+                              <div className="flex items-center gap-2">
+                                <Avatar name={player?.display_name || '?'} url={player?.avatar_url} />
+                                <span className="text-victorian-200 text-xs">{player?.display_name || 'Unknown'}</span>
+                              </div>
+                            </td>
+                          )}
+                          <td className="py-2.5 pr-3">
+                            <div className="flex items-center gap-2">
+                              {religion?.logo_url ? (
+                                <img src={religion.logo_url} className="w-6 h-6 rounded-full border border-gold-400/20" />
+                              ) : (
+                                <Church className="w-4 h-4 text-gold-400/50" />
+                              )}
+                              <div>
+                                <div className="text-victorian-200 text-xs font-semibold">{religion?.name_th || 'ไม่ทราบศาสนา'}</div>
+                                <div className="text-victorian-500 text-[10px]">{mapName || 'ไม่ทราบแผนที่'}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-2.5 pr-3">
+                            <span className="inline-flex items-center gap-1 text-cyan-400 text-xs font-bold bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20">
+                              🧠 +{log.sanity_gained}
+                            </span>
+                          </td>
+                          <td className="py-2.5 pr-3">
+                            <div className="flex flex-wrap gap-1">
+                              {(log.evidence_urls as string[]).map((url, i) => (
+                                <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                  className="text-xs text-gold-400/70 hover:text-gold-400 transition-colors bg-gold-400/5 px-1 rounded flex items-center gap-1">
+                                  <ExternalLink className="w-3 h-3" /> ลิงก์ {i + 1}
+                                </a>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="py-2.5 text-victorian-500 text-xs">{fmtDate(log.created_at)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 

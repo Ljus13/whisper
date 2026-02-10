@@ -192,3 +192,12 @@
 .animate-wiggle {
   animation: token-wiggle 0.6s ease-in-out infinite;
 }
+
+/* ── Ripple effect for map radius ── */
+@keyframes ripple-effect {
+  0% { transform: scale(0.95); opacity: 0.5; border-width: 2px; }
+  100% { transform: scale(1.5); opacity: 0; border-width: 0px; }
+}
+.animate-ripple {
+  animation: ripple-effect 3s infinite cubic-bezier(0, 0.2, 0.8, 1);
+}

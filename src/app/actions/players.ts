@@ -31,6 +31,7 @@ export async function adminUpdatePlayer(playerId: string, formData: FormData) {
   const display_name = formData.get('display_name') as string | null
   const avatar_url = formData.get('avatar_url') as string | null
   const role = formData.get('role') as string | null
+  const religion_id = formData.get('religion_id') as string | null
   const hp_delta = formData.get('hp_delta')
   const sanity_delta = formData.get('sanity_delta')
   const max_sanity = formData.get('max_sanity')
@@ -50,6 +51,10 @@ export async function adminUpdatePlayer(playerId: string, formData: FormData) {
   }
   if (role && ['player', 'admin', 'dm'].includes(role)) {
     updates.role = role
+  }
+  // Religion — '' means clear, a UUID means set, null means untouched
+  if (religion_id !== null) {
+    updates.religion_id = religion_id.trim() || null
   }
   // HP & Sanity use delta (add/subtract from current value)
   let hpDelta = 0
@@ -134,7 +139,7 @@ export async function getAllPlayers() {
 
   const { data: players, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select('*, religions(id, name_th, logo_url)')
     .order('display_name')
 
   if (error) return { error: error.message, players: [] }

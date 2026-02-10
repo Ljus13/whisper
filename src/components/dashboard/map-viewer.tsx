@@ -1046,9 +1046,13 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                     height: `${(npc.interaction_radius ?? 0) * 2}%`,
                     transform: 'translate(-50%, -50%)',
                   }}>
-                  <div className="w-full h-full rounded-full border-2 border-nouveau-ruby/40 bg-nouveau-ruby/8"
-                    style={{ boxShadow: '0 0 16px rgba(190, 49, 68, 0.15)' }} />
-                  <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[8px] text-nouveau-ruby/60 font-display"
+                  {/* Ripple effect */}
+                  <div className="absolute inset-0 rounded-full border border-nouveau-ruby/40 animate-ripple" />
+                  <div className="absolute inset-0 rounded-full border border-nouveau-ruby/30 animate-ripple" style={{ animationDelay: '1.5s' }} />
+                  {/* Core circle */}
+                  <div className="relative w-full h-full rounded-full border-2 border-nouveau-ruby/50 bg-nouveau-ruby/10 backdrop-blur-[1px]"
+                    style={{ boxShadow: '0 0 20px rgba(190, 49, 68, 0.2), inset 0 0 10px rgba(190, 49, 68, 0.1)' }} />
+                  <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[8px] text-nouveau-ruby/80 font-display font-semibold drop-shadow-md"
                     style={{ transform: `translateX(-50%) scale(${1 / scale})`, transformOrigin: 'center top' }}>
                     เขตทำการ {npc.npc_name}
                   </div>
@@ -1057,7 +1061,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
               {/* ── CHURCH RADIUS CIRCLES + MARKERS ── */}
               {imageLoaded && churches.map(ch => (
-                <div key={`church-${ch.id}`} className="absolute z-10">
+                <div key={`church-${ch.id}`} className="absolute inset-0 z-10 pointer-events-none">
                   {/* Radius circle */}
                   <div className="absolute pointer-events-none"
                     style={{
@@ -1067,16 +1071,20 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                       height: `${ch.radius * 2}%`,
                       transform: 'translate(-50%, -50%)',
                     }}>
-                    <div className="w-full h-full rounded-full border-2 border-amber-400/30 bg-amber-400/5"
-                      style={{ boxShadow: '0 0 20px rgba(245, 158, 11, 0.1)' }} />
-                    <div className="absolute -bottom-5 left-1/2 whitespace-nowrap text-[8px] text-amber-400/60 font-display"
+                    {/* Ripple effect */}
+                    <div className="absolute inset-0 rounded-full border border-amber-400/40 animate-ripple" />
+                    <div className="absolute inset-0 rounded-full border border-amber-400/30 animate-ripple" style={{ animationDelay: '1.5s' }} />
+                    {/* Core circle */}
+                    <div className="relative w-full h-full rounded-full border-2 border-amber-400/40 bg-amber-400/5 backdrop-blur-[1px]"
+                      style={{ boxShadow: '0 0 25px rgba(245, 158, 11, 0.15), inset 0 0 10px rgba(245, 158, 11, 0.1)' }} />
+                    <div className="absolute -bottom-5 left-1/2 whitespace-nowrap text-[8px] text-amber-400/80 font-display font-semibold drop-shadow-md"
                       style={{ transform: `translateX(-50%) scale(${1 / scale})`, transformOrigin: 'center top' }}>
                       เขตโบสถ์ {ch.religion_name_th}
                     </div>
                   </div>
                   {/* Church marker icon */}
                   <div
-                    className={`absolute z-20 cursor-pointer group/church ${movingChurchId === ch.id ? 'animate-wiggle' : ''}`}
+                    className={`absolute z-20 cursor-pointer pointer-events-auto group/church ${movingChurchId === ch.id ? 'animate-wiggle' : ''}`}
                     style={{
                       left: `${ch.position_x}%`,
                       top: `${ch.position_y}%`,

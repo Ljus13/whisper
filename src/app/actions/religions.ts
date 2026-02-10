@@ -294,10 +294,79 @@ export async function getPrayerLogs() {
 
   const { data } = await supabase
     .from('prayer_logs')
-    .select('*')
+    .select(`
+      *,
+      map_churches (
+        id, map_id, religion_id,
+        maps ( name ),
+        religions ( name_th, logo_url )
+      )
+    `)
     .eq('player_id', user.id)
     .order('created_at', { ascending: false })
     .limit(20)
 
   return data ?? []
+}
+
+/* ══════════════════════════════════════════════
+   GET: All prayer logs (admin/dm only)
+   ══════════════════════════════════════════════ */
+export async function getAllPrayerLogs() {
+  const { supabase } = await requireAdmin()
+
+  // 1. Fetch logs with church details using implicit join involved with public tables
+  // We avoid joining 'profiles' directly via SQL because the FK on prayer_logs 
+  // currently points to auth.users, not profiles, which prevents PostgREST from joining.
+  const { data: logs, error } = await supabase
+    .from('prayer_logs')
+    .select(`
+      id,
+      player_id,
+      church_id,
+      evidence_urls,
+      sanity_gained,
+      created_at,
+      map_churches (
+        id,
+        map_id,
+        religion_id,
+        maps (
+          id,
+          name
+        ),
+        religions (
+          id,
+          name_th,
+          name_en,
+          logo_url
+        )
+      )
+    `)
+    .order('created_at', { ascending: false })
+    .limit(100)
+
+  if (error) {
+    console.error('getAllPrayerLogs error:', error)
+    return { error: error.message, logs: [] }
+  }
+
+  if (!logs || logs.length === 0) return { logs: [] }
+
+  // 2. Manual Join for Profiles
+  const playerIds = Array.from(new Set(logs.map(l => l.player_id)))
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, display_name, avatar_url')
+    .in('id', playerIds)
+
+  const profileMap = new Map(profiles?.map(p => [p.id, p]) ?? [])
+
+  // 3. Merge data
+  const mergedLogs = logs.map(log => ({
+    ...log,
+    profiles: profileMap.get(log.player_id) || null
+  }))
+
+  return { logs: mergedLogs }
 }

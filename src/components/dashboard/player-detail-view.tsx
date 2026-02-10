@@ -2,7 +2,7 @@
 
 import { BioRenderer } from '@/components/bio-editor'
 import { CornerOrnament } from '@/components/ui/ornaments'
-import { ArrowLeft, Crown, Shield, Swords, Brain, Flame, Heart, Users } from 'lucide-react'
+import { ArrowLeft, Crown, Shield, Swords, Brain, Flame, Heart, Users, Church } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 interface Profile {
@@ -19,6 +19,12 @@ interface Profile {
   max_spirituality: number
   travel_points: number
   max_travel_points: number
+  religion_id: string | null
+  religions?: {
+    id: string
+    name_th: string
+    logo_url: string | null
+  } | null
   created_at: string
   updated_at: string
 }
@@ -146,6 +152,16 @@ export default function PlayerDetailView({ profile, playerPathways, pathways, se
                  </h2>
                  <div className="flex flex-wrap items-center gap-3 mt-3">
                    <RoleBadge role={profile.role} />
+                   {profile.religions && (
+                    <div className="inline-flex items-center gap-2 px-3 py-1 text-sm font-display tracking-wider border rounded-md text-gold-200 bg-gold-500/10 border-gold-500/20">
+                        {profile.religions.logo_url ? (
+                            <img src={profile.religions.logo_url} className="w-4 h-4 rounded-full object-cover" />
+                        ) : (
+                            <Church className="w-4 h-4" />
+                        )}
+                        {profile.religions.name_th}
+                    </div>
+                   )}
                    <span className="text-victorian-400 text-sm font-mono">
                      ID: {profile.id.slice(0, 8)}
                    </span>

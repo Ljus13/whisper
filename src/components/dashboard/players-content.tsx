@@ -1,7 +1,7 @@
 'use client'
 
 import AdminEditModal from '@/components/admin/admin-edit-modal'
-import { ArrowLeft, Crown, Shield, Swords, Pencil, Users, Church, Plus, Trash2, X, Save, Eye } from 'lucide-react'
+import { ArrowLeft, Crown, Shield, Swords, Pencil, Users, Church, Plus, Trash2, X, Save, Eye, ScrollText } from 'lucide-react'
 import { useState, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
@@ -26,6 +26,12 @@ interface Profile {
   max_spirituality: number
   travel_points: number
   max_travel_points: number
+  religion_id: string | null
+  religions?: {
+    id: string
+    name_th: string
+    logo_url: string | null
+  } | null
   created_at: string
   updated_at: string
 }
@@ -98,8 +104,8 @@ export default function PlayersContent({ userId }: { userId: string }) {
 
     const fetchPlayers = () => {
       Promise.all([
-        supabase.from('profiles').select('*').eq('id', userId).single(),
-        supabase.from('profiles').select('*').order('display_name'),
+        supabase.from('profiles').select('*, religions(id, name_th, logo_url)').eq('id', userId).single(),
+        supabase.from('profiles').select('*, religions(id, name_th, logo_url)').order('display_name'),
         supabase.from('player_pathways').select('*'),
         supabase.from('skill_pathways').select('*'),
         supabase.from('skill_sequences').select('*'),
@@ -325,6 +331,16 @@ export default function PlayersContent({ userId }: { userId: string }) {
                           {player.role === 'admin' ? 'ผู้ดูแลระบบ' : player.role === 'dm' ? 'DM' : 'ผู้เล่น'}
                         </span>
                       </div>
+                      {player.religions && (
+                        <div className="flex items-center gap-1.5 mt-1.5 text-xs text-victorian-300">
+                          {player.religions.logo_url ? (
+                            <img src={player.religions.logo_url} className="w-3.5 h-3.5 rounded-full object-cover border border-gold-400/20" />
+                          ) : (
+                            <Church className="w-3.5 h-3.5 text-gold-400" />
+                          )}
+                          <span className="text-gold-400/80">{player.religions.name_th}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -374,7 +390,13 @@ export default function PlayersContent({ userId }: { userId: string }) {
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-10">
         {/* Add button (DM only) */}
         {isAdmin && (
-          <div className="mb-6 flex justify-end">
+          <div className="mb-6 flex justify-between items-center">
+            <button
+              onClick={() => router.push('/dashboard/religions/prayer-logs')}
+              className="btn-victorian !py-2 !px-5 !text-sm flex items-center gap-2"
+            >
+              <ScrollText className="w-4 h-4" /> ดูบันทึกการภาวนา
+            </button>
             <button onClick={() => openReligionForm()}
               className="btn-gold !py-2 !px-5 !text-sm flex items-center gap-2">
               <Plus className="w-4 h-4" /> เพิ่มศาสนา

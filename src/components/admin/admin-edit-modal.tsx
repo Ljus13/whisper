@@ -2,8 +2,9 @@
 
 import { adminUpdatePlayer } from '@/app/actions/players'
 import { assignPlayerPathway, removePlayerPathway } from '@/app/actions/skills'
-import { X, Save, Crown, Shield, Swords, Plus, Minus, GitBranch, Trash2 } from 'lucide-react'
-import { useState, useTransition } from 'react'
+import { getReligions } from '@/app/actions/religions'
+import { X, Save, Crown, Shield, Swords, Plus, Minus, GitBranch, Trash2, Church } from 'lucide-react'
+import { useState, useTransition, useEffect } from 'react'
 
 interface PlayerProfile {
   id: string
@@ -17,6 +18,14 @@ interface PlayerProfile {
   max_spirituality: number
   travel_points: number
   max_travel_points: number
+  religion_id?: string | null
+}
+
+interface ReligionOption {
+  id: string
+  name_th: string
+  name_en: string
+  logo_url: string | null
 }
 
 interface PathwayInfo {
@@ -58,6 +67,20 @@ export default function AdminEditModal({
   const [showAddPathway, setShowAddPathway] = useState(false)
   const [newPathwayId, setNewPathwayId] = useState('')
   const [newSequenceId, setNewSequenceId] = useState('')
+  const [religionOptions, setReligionOptions] = useState<ReligionOption[]>([])
+  const [selectedReligionId, setSelectedReligionId] = useState(player.religion_id || '')
+
+  // Fetch religions for dropdown
+  useEffect(() => {
+    getReligions().then(r => {
+      if (r.religions) setReligionOptions(r.religions.map((rel: Record<string, unknown>) => ({
+        id: rel.id as string,
+        name_th: rel.name_th as string,
+        name_en: rel.name_en as string,
+        logo_url: rel.logo_url as string | null,
+      })))
+    })
+  }, [])
 
   // Get current player pathways
   const currentPPs = playerPathways.filter(pp => pp.player_id === player.id)
@@ -158,10 +181,26 @@ export default function AdminEditModal({
             </select>
           </div>
 
+          {/* Religion */}
+          <div>
+            <label className="block text-sm text-amber-400 mb-1.5 font-display tracking-wider uppercase flex items-center gap-2">
+              <Church className="w-4 h-4" /> ศาสนา
+            </label>
+            <input type="hidden" name="religion_id" value={selectedReligionId} />
+            <select
+              value={selectedReligionId}
+              onChange={(e) => setSelectedReligionId(e.target.value)}
+              className="input-victorian !py-2.5 !px-4 !text-base cursor-pointer w-full"
+            >
+              <option value="">— ไม่มีศาสนา —</option>
+              {religionOptions.map(rel => (
+                <option key={rel.id} value={rel.id}>{rel.name_th} ({rel.name_en})</option>
+              ))}
+            </select>
+          </div>
+
           {/* Ornament Divider */}
           <div className="ornament-divider !my-4" />
-
-          {/* ตัวตายตัวแทน — ปรับ +/- จากค่าปัจจุบัน */}
           <div>
             <label className="block text-xs text-red-400 mb-1.5 font-display tracking-wider uppercase">
               ตัวตายตัวแทน
