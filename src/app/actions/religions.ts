@@ -44,6 +44,7 @@ export async function createReligion(form: {
   deity_th?: string
   deity_en?: string
   overview?: string
+  teachings?: string
   bg_url?: string
   logo_url?: string
 }) {
@@ -59,6 +60,7 @@ export async function createReligion(form: {
     deity_th: form.deity_th?.trim() || null,
     deity_en: form.deity_en?.trim() || null,
     overview: form.overview?.trim() || null,
+    teachings: form.teachings?.trim() || null,
     bg_url: form.bg_url?.trim() || null,
     logo_url: form.logo_url?.trim() || null,
     created_by: user.id,
@@ -78,6 +80,7 @@ export async function updateReligion(id: string, form: {
   deity_th?: string
   deity_en?: string
   overview?: string
+  teachings?: string
   bg_url?: string
   logo_url?: string
 }) {
@@ -93,6 +96,7 @@ export async function updateReligion(id: string, form: {
     deity_th: form.deity_th?.trim() || null,
     deity_en: form.deity_en?.trim() || null,
     overview: form.overview?.trim() || null,
+    teachings: form.teachings?.trim() || null,
     bg_url: form.bg_url?.trim() || null,
     logo_url: form.logo_url?.trim() || null,
   }).eq('id', id)

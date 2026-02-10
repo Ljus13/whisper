@@ -209,6 +209,7 @@ export interface Religion {
   deity_th: string | null
   deity_en: string | null
   overview: string | null
+  teachings: string | null
   bg_url: string | null
   logo_url: string | null
   created_by: string | null

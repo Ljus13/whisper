@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS religions (
   name_en    text NOT NULL,          -- ชื่ออังกฤษ
   deity_th   text,                   -- ชื่อเทพ (ไทย)
   deity_en   text,                   -- ชื่อเทพ (อังกฤษ)
-  overview   text,                   -- ข้อมูลภาพรวม
+  overview   text,                   -- เกริ่นนำ
+  teachings  text,                   -- หลักคำสอน
   bg_url     text,                   -- แบ็คกราวด์
   logo_url   text,                   -- โลโก้ศาสนา
   created_by uuid REFERENCES auth.users(id),

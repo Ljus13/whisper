@@ -56,6 +56,7 @@ interface Religion {
   deity_th: string | null
   deity_en: string | null
   overview: string | null
+  teachings: string | null
   bg_url: string | null
   logo_url: string | null
   created_by: string | null
@@ -89,7 +90,7 @@ export default function PlayersContent({ userId }: { userId: string }) {
   const [showReligionForm, setShowReligionForm] = useState(false)
   const [editingReligion, setEditingReligion] = useState<Religion | null>(null)
   const [viewingReligion, setViewingReligion] = useState<Religion | null>(null)
-  const [relForm, setRelForm] = useState({ name_th: '', name_en: '', deity_th: '', deity_en: '', overview: '', bg_url: '', logo_url: '' })
+  const [relForm, setRelForm] = useState({ name_th: '', name_en: '', deity_th: '', deity_en: '', overview: '', teachings: '', bg_url: '', logo_url: '' })
   const [relError, setRelError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -137,11 +138,11 @@ export default function PlayersContent({ userId }: { userId: string }) {
       setRelForm({
         name_th: rel.name_th, name_en: rel.name_en,
         deity_th: rel.deity_th || '', deity_en: rel.deity_en || '',
-        overview: rel.overview || '', bg_url: rel.bg_url || '', logo_url: rel.logo_url || '',
+        overview: rel.overview || '', teachings: rel.teachings || '', bg_url: rel.bg_url || '', logo_url: rel.logo_url || '',
       })
     } else {
       setEditingReligion(null)
-      setRelForm({ name_th: '', name_en: '', deity_th: '', deity_en: '', overview: '', bg_url: '', logo_url: '' })
+      setRelForm({ name_th: '', name_en: '', deity_th: '', deity_en: '', overview: '', teachings: '', bg_url: '', logo_url: '' })
     }
     setRelError(null)
     setShowReligionForm(true)
@@ -442,7 +443,10 @@ export default function PlayersContent({ userId }: { userId: string }) {
 
                 {/* Overview (truncated) */}
                 {rel.overview && (
-                  <p className="text-victorian-400 text-sm line-clamp-3 mb-3">{rel.overview}</p>
+                  <p className="text-victorian-400 text-sm line-clamp-2 mb-2">{rel.overview}</p>
+                )}
+                {rel.teachings && (
+                  <p className="text-victorian-500 text-xs line-clamp-1 mb-3 italic">📜 มีหลักคำสอน</p>
                 )}
 
                 <button onClick={() => setViewingReligion(rel)}
@@ -501,9 +505,15 @@ export default function PlayersContent({ userId }: { userId: string }) {
                 {viewingReligion.deity_th && <div className="border-b border-gold-400/10 pb-3"><span className="text-gold-400 font-semibold">เทพเจ้า (ไทย):</span> <span className="text-nouveau-cream font-semibold">{viewingReligion.deity_th}</span></div>}
                 {viewingReligion.deity_en && <div className="border-b border-gold-400/10 pb-3"><span className="text-gold-400 font-semibold">เทพเจ้า (อังกฤษ):</span> <span className="text-nouveau-cream">{viewingReligion.deity_en}</span></div>}
                 {viewingReligion.overview && (
-                  <div>
-                    <span className="text-gold-400 font-semibold block mb-2">ข้อมูลภาพรวม:</span>
+                  <div className="border-b border-gold-400/10 pb-4">
+                    <span className="text-gold-400 font-semibold block mb-2">เกริ่นนำ:</span>
                     <p className="text-victorian-300 whitespace-pre-wrap leading-relaxed">{viewingReligion.overview}</p>
+                  </div>
+                )}
+                {viewingReligion.teachings && (
+                  <div>
+                    <span className="text-gold-400 font-semibold block mb-2">หลักคำสอน:</span>
+                    <p className="text-victorian-300 whitespace-pre-wrap leading-relaxed">{viewingReligion.teachings}</p>
                   </div>
                 )}
               </div>
@@ -541,8 +551,12 @@ export default function PlayersContent({ userId }: { userId: string }) {
                 </div>
               </div>
               <div>
-                <label className="block text-xs text-gold-400 mb-1 font-display">ข้อมูลภาพรวม</label>
-                <textarea value={relForm.overview} onChange={e => setRelForm(f => ({ ...f, overview: e.target.value }))} rows={4} className="input-victorian !py-2 !px-3 w-full" />
+                <label className="block text-xs text-gold-400 mb-1 font-display">เกริ่นนำ</label>
+                <textarea value={relForm.overview} onChange={e => setRelForm(f => ({ ...f, overview: e.target.value }))} rows={3} className="input-victorian !py-2 !px-3 w-full" placeholder="ประวัติความเป็นมา, คำอธิบายทั่วไป..." />
+              </div>
+              <div>
+                <label className="block text-xs text-gold-400 mb-1 font-display">หลักคำสอน</label>
+                <textarea value={relForm.teachings} onChange={e => setRelForm(f => ({ ...f, teachings: e.target.value }))} rows={4} className="input-victorian !py-2 !px-3 w-full" placeholder="แนวทางปฏิบัติ, ข้อบัญญัติ, คำสอนหลัก..." />
               </div>
               <div>
                 <label className="block text-xs text-gold-400 mb-1 font-display">URL แบ็คกราวด์</label>
