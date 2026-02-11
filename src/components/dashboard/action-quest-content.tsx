@@ -3,8 +3,9 @@
 import { useState, useEffect, useTransition, useCallback } from 'react'
 import {
   ArrowLeft, Moon, ScrollText, Swords, Target, Shield, Plus, Copy,
-  Check, X, ExternalLink, ChevronLeft, ChevronRight, Clock, CheckCircle,
-  XCircle, Send, AlertTriangle, Trash2, Eye, Church
+  X, ExternalLink, ChevronLeft, ChevronRight, Clock, CheckCircle,
+  XCircle, Send, AlertTriangle, Trash2, Church, Skull, Users, CalendarClock,
+  Repeat, HandHeart, Pencil
 } from 'lucide-react'
 import {
   submitSleepRequest, getTodaySleepStatus,
@@ -17,8 +18,20 @@ import {
   getSleepLogs,
   getMapsForQuestDropdown,
   getNpcsForQuestDropdown,
+  getPlayersForDropdown,
+  getAllActionAndQuestCodes,
+  createPunishment,
+  getPunishments,
+  requestMercy,
+  applyPenalty,
+  getPunishmentLogs,
+  checkPlayerTaskCompletion,
+  updateActionCode,
+  updateQuestCode,
+  updatePunishment,
+  autoApplyExpiredPunishments,
 } from '@/app/actions/action-quest'
-import type { ActionRewards } from '@/app/actions/action-quest'
+import type { ActionRewards, CodeExpiration } from '@/app/actions/action-quest'
 import { submitPrayer, getPrayerLogs, getAllPrayerLogs } from '@/app/actions/religions'
 import { OrnamentedCard } from '@/components/ui/ornaments'
 import { MapPin, Gift, Ghost } from 'lucide-react'
@@ -34,6 +47,7 @@ interface CodeEntry {
   npc_token_id?: string | null; npc_name?: string | null
   reward_hp?: number; reward_sanity?: number; reward_travel?: number; reward_spirituality?: number
   reward_max_sanity?: number; reward_max_travel?: number; reward_max_spirituality?: number
+  expires_at?: string | null; max_repeats?: number | null
 }
 interface Submission {
   id: string; player_id: string; player_name: string; player_avatar: string | null
@@ -50,7 +64,22 @@ interface SleepLog {
   reviewed_by_name: string | null; reviewed_at: string | null; created_at: string
 }
 
-type TabKey = 'actions' | 'quests' | 'sleep' | 'prayer'
+interface PlayerOption { id: string; display_name: string; avatar_url: string | null }
+interface TaskOption { id: string; name: string; code: string; type: 'action' | 'quest' }
+interface PunishmentEntry {
+  id: string; name: string; description: string | null
+  penalty_sanity: number; penalty_hp: number; penalty_travel: number; penalty_spirituality: number
+  penalty_max_sanity: number; penalty_max_travel: number; penalty_max_spirituality: number
+  deadline: string | null; is_active: boolean; created_by_name: string; created_at: string
+  required_tasks: { id: string; action_code_id: string | null; quest_code_id: string | null; action_name: string | null; action_code_str: string | null; quest_name: string | null; quest_code_str: string | null }[]
+  assigned_players: { id: string; player_id: string; player_name: string; player_avatar: string | null; is_completed: boolean; penalty_applied: boolean; mercy_requested: boolean; mercy_requested_at: string | null; completed_at: string | null }[]
+}
+interface PunishmentLogEntry {
+  id: string; punishment_id: string; punishment_name: string; player_id: string; player_name: string; player_avatar: string | null
+  action: string; details: Record<string, unknown>; created_by_name: string | null; created_at: string
+}
+
+type TabKey = 'actions' | 'quests' | 'sleep' | 'prayer' | 'punishments'
 
 /* ═══════════════════ Shared UI ═══════════════════ */
 
@@ -146,6 +175,45 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
   )
 }
 
+/* ═══════════════════ Date/Time Split Input ═══════════════════ */
+
+/** Splits an ISO datetime string into { date: 'YYYY-MM-DD', time: 'HH:MM' } */
+function splitDateTime(isoOrLocal: string): { date: string; time: string } {
+  if (!isoOrLocal) return { date: '', time: '' }
+  try {
+    const d = new Date(isoOrLocal)
+    if (isNaN(d.getTime())) return { date: '', time: '' }
+    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    return { date, time }
+  } catch { return { date: '', time: '' } }
+}
+
+/** Combines date ('YYYY-MM-DD') and time ('HH:MM') into a local datetime string */
+function combineDateTime(date: string, time: string): string {
+  if (!date) return ''
+  return `${date}T${time || '00:00'}`
+}
+
+function DateTimeInput({ dateVal, timeVal, onDateChange, onTimeChange }: {
+  dateVal: string; timeVal: string; onDateChange: (v: string) => void; onTimeChange: (v: string) => void
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <div>
+        <label className="block text-[10px] text-victorian-500 mb-0.5">วันที่</label>
+        <input type="date" value={dateVal} onChange={e => onDateChange(e.target.value)}
+          className="input-victorian w-full !py-1.5 !text-xs" />
+      </div>
+      <div>
+        <label className="block text-[10px] text-victorian-500 mb-0.5">เวลา</label>
+        <input type="time" value={timeVal} onChange={e => onTimeChange(e.target.value)}
+          className="input-victorian w-full !py-1.5 !text-xs" />
+      </div>
+    </div>
+  )
+}
+
 /* ═══════════════════ Main Component ═══════════════════ */
 
 export default function ActionQuestContent({ userId: _userId, isAdmin }: { userId: string; isAdmin: boolean }) {
@@ -173,6 +241,18 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   const [npcOptions, setNpcOptions] = useState<NpcOption[]>([])
   // ─── Action rewards state ───
   const [genRewards, setGenRewards] = useState<ActionRewards>({})
+  // ─── Expiration state ───
+  const [genExpiresDate, setGenExpiresDate] = useState<string>('')
+  const [genExpiresTime, setGenExpiresTime] = useState<string>('')
+  const [genMaxRepeats, setGenMaxRepeats] = useState<string>('')
+  const [genNoExpiry, setGenNoExpiry] = useState(true)
+  const [genUnlimitedRepeats, setGenUnlimitedRepeats] = useState(true)
+  // ─── Quest expiration state ───
+  const [genQuestExpiresDate, setGenQuestExpiresDate] = useState<string>('')
+  const [genQuestExpiresTime, setGenQuestExpiresTime] = useState<string>('')
+  const [genQuestMaxRepeats, setGenQuestMaxRepeats] = useState<string>('')
+  const [genQuestNoExpiry, setGenQuestNoExpiry] = useState(true)
+  const [genQuestUnlimitedRepeats, setGenQuestUnlimitedRepeats] = useState(true)
 
   // ─── Submit action/quest modals ───
   const [showSubmitAction, setShowSubmitAction] = useState(false)
@@ -230,6 +310,74 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   // ─── Prayer logs ───
   const [prayerLogs, setPrayerLogs] = useState<any[]>([])
   const [plLoading, setPlLoading] = useState(true)
+
+  // ─── Punishment state ───
+  const [showCreatePunishment, setShowCreatePunishment] = useState(false)
+  const [punName, setPunName] = useState('')
+  const [punDesc, setPunDesc] = useState('')
+  const [punDeadlineDate, setPunDeadlineDate] = useState('')
+  const [punDeadlineTime, setPunDeadlineTime] = useState('')
+  const [punNoDeadline, setPunNoDeadline] = useState(true)
+  const [punPenalties, setPunPenalties] = useState({
+    penalty_sanity: 0, penalty_hp: 0, penalty_travel: 0, penalty_spirituality: 0,
+    penalty_max_sanity: 0, penalty_max_travel: 0, penalty_max_spirituality: 0,
+  })
+  const [punSelectedTasks, setPunSelectedTasks] = useState<{ action_code_id?: string; quest_code_id?: string }[]>([])
+  const [punSelectedPlayers, setPunSelectedPlayers] = useState<string[]>([])
+  const [punError, setPunError] = useState<string | null>(null)
+  const [punSuccess, setPunSuccess] = useState(false)
+  const [playerOptions, setPlayerOptions] = useState<PlayerOption[]>([])
+  const [taskOptions, setTaskOptions] = useState<TaskOption[]>([])
+
+  // ─── Punishment list ───
+  const [punishments, setPunishments] = useState<PunishmentEntry[]>([])
+  const [punPage, setPunPage] = useState(1)
+  const [punTotalPages, setPunTotalPages] = useState(1)
+  const [punTotal, setPunTotal] = useState(0)
+  const [punLoading, setPunLoading] = useState(true)
+
+  // ─── Punishment logs ───
+  const [punLogs, setPunLogs] = useState<PunishmentLogEntry[]>([])
+  const [punLogPage, setPunLogPage] = useState(1)
+  const [punLogTotalPages, setPunLogTotalPages] = useState(1)
+  const [punLogTotal, setPunLogTotal] = useState(0)
+  const [punLogLoading, setPunLogLoading] = useState(true)
+
+  // ─── Edit modals ───
+  const [editAction, setEditAction] = useState<CodeEntry | null>(null)
+  const [editActionName, setEditActionName] = useState('')
+  const [editActionRewards, setEditActionRewards] = useState<ActionRewards>({})
+  const [editActionNoExpiry, setEditActionNoExpiry] = useState(true)
+  const [editActionUnlimitedRepeats, setEditActionUnlimitedRepeats] = useState(true)
+  const [editActionExpiresDate, setEditActionExpiresDate] = useState('')
+  const [editActionExpiresTime, setEditActionExpiresTime] = useState('')
+  const [editActionMaxRepeats, setEditActionMaxRepeats] = useState('')
+  const [editActionError, setEditActionError] = useState<string | null>(null)
+
+  const [editQuest, setEditQuest] = useState<CodeEntry | null>(null)
+  const [editQuestName, setEditQuestName] = useState('')
+  const [editQuestMapId, setEditQuestMapId] = useState('')
+  const [editQuestNpcId, setEditQuestNpcId] = useState('')
+  const [editQuestNoExpiry, setEditQuestNoExpiry] = useState(true)
+  const [editQuestUnlimitedRepeats, setEditQuestUnlimitedRepeats] = useState(true)
+  const [editQuestExpiresDate, setEditQuestExpiresDate] = useState('')
+  const [editQuestExpiresTime, setEditQuestExpiresTime] = useState('')
+  const [editQuestMaxRepeats, setEditQuestMaxRepeats] = useState('')
+  const [editQuestError, setEditQuestError] = useState<string | null>(null)
+
+  const [editPunishment, setEditPunishment] = useState<PunishmentEntry | null>(null)
+  const [editPunName, setEditPunName] = useState('')
+  const [editPunDesc, setEditPunDesc] = useState('')
+  const [editPunDeadlineDate, setEditPunDeadlineDate] = useState('')
+  const [editPunDeadlineTime, setEditPunDeadlineTime] = useState('')
+  const [editPunNoDeadline, setEditPunNoDeadline] = useState(true)
+  const [editPunPenalties, setEditPunPenalties] = useState({
+    penalty_sanity: 0, penalty_hp: 0, penalty_travel: 0, penalty_spirituality: 0,
+    penalty_max_sanity: 0, penalty_max_travel: 0, penalty_max_spirituality: 0,
+  })
+  const [editPunSelectedTasks, setEditPunSelectedTasks] = useState<{ action_code_id?: string; quest_code_id?: string }[]>([])
+  const [editPunSelectedPlayers, setEditPunSelectedPlayers] = useState<string[]>([])
+  const [editPunError, setEditPunError] = useState<string | null>(null)
 
   // ─── Toast helper ───
   function toast(type: 'success' | 'error', text: string) {
@@ -297,13 +445,36 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
     setPlLoading(false)
   }, [isAdmin])
 
+  const fetchPunishments = useCallback(async (p: number) => {
+    setPunLoading(true)
+    const r = await getPunishments(p)
+    setPunishments((r.punishments || []) as PunishmentEntry[])
+    setPunPage(r.page || 1)
+    setPunTotalPages(r.totalPages || 1)
+    setPunTotal(r.total || 0)
+    setPunLoading(false)
+  }, [])
+
+  const fetchPunishmentLogs = useCallback(async (p: number) => {
+    setPunLogLoading(true)
+    const r = await getPunishmentLogs(p)
+    setPunLogs((r.logs || []) as PunishmentLogEntry[])
+    setPunLogPage(r.page || 1)
+    setPunLogTotalPages(r.totalPages || 1)
+    setPunLogTotal(r.total || 0)
+    setPunLogLoading(false)
+  }, [])
+
   // ─── Init ───
   useEffect(() => {
     getTodaySleepStatus().then(r => { setSleepSubmitted(r.submitted); setSleepStatus(r.status || null) })
     if (isAdmin) {
       autoApproveExpiredRequests()
+      autoApplyExpiredPunishments()
       getMapsForQuestDropdown().then(m => setMapOptions(m))
       getNpcsForQuestDropdown().then(n => setNpcOptions(n))
+      getPlayersForDropdown().then(p => setPlayerOptions(p))
+      getAllActionAndQuestCodes().then(r => setTaskOptions([...r.actions, ...r.quests]))
     }
     fetchActionCodes(1)
     fetchQuestCodes(1)
@@ -311,7 +482,9 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
     fetchQuestSubs(1)
     fetchSleepLogs(1)
     fetchPrayerLogs()
-  }, [isAdmin, fetchActionCodes, fetchQuestCodes, fetchActionSubs, fetchQuestSubs, fetchSleepLogs, fetchPrayerLogs])
+    fetchPunishments(1)
+    fetchPunishmentLogs(1)
+  }, [isAdmin, fetchActionCodes, fetchQuestCodes, fetchActionSubs, fetchQuestSubs, fetchSleepLogs, fetchPrayerLogs, fetchPunishments, fetchPunishmentLogs])
 
   // ─── Handlers ───
   function handleSleepSubmit() {
@@ -330,9 +503,18 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
     setGenError(null); setGenResult(null)
     if (!genName.trim()) { setGenError('กรุณากรอกชื่อ'); return }
     startTransition(async () => {
+      const expiration: CodeExpiration = {}
+      if (type === 'action') {
+        if (!genNoExpiry && genExpiresDate) expiration.expires_at = new Date(combineDateTime(genExpiresDate, genExpiresTime)).toISOString()
+        if (!genUnlimitedRepeats && genMaxRepeats) expiration.max_repeats = parseInt(genMaxRepeats) || null
+      } else {
+        if (!genQuestNoExpiry && genQuestExpiresDate) expiration.expires_at = new Date(combineDateTime(genQuestExpiresDate, genQuestExpiresTime)).toISOString()
+        if (!genQuestUnlimitedRepeats && genQuestMaxRepeats) expiration.max_repeats = parseInt(genQuestMaxRepeats) || null
+      }
+
       const r = type === 'action'
-        ? await generateActionCode(genName, genRewards)
-        : await generateQuestCode(genName, genMapId || null, genNpcId || null)
+        ? await generateActionCode(genName, genRewards, expiration)
+        : await generateQuestCode(genName, genMapId || null, genNpcId || null, expiration)
       if (r.error) { setGenError(r.error) }
       else if (r.code && r.name) {
         setGenResult({ code: r.code, name: r.name })
@@ -413,12 +595,212 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
     })
   }
 
+  function handleCreatePunishment() {
+    setPunError(null)
+    if (!punName.trim()) { setPunError('กรุณากรอกชื่อบทลงโทษ'); return }
+    if (punSelectedTasks.length === 0) { setPunError('กรุณาเลือกแอคชั่น/ภารกิจที่ต้องทำอย่างน้อย 1 รายการ'); return }
+    if (punSelectedPlayers.length === 0) { setPunError('กรุณาเลือกผู้เล่นอย่างน้อย 1 คน'); return }
+    const hasPenalty = Object.values(punPenalties).some(v => v > 0)
+    if (!hasPenalty) { setPunError('กรุณากำหนดบทลงโทษอย่างน้อย 1 รายการ'); return }
+
+    startTransition(async () => {
+      const r = await createPunishment({
+        name: punName,
+        description: punDesc || undefined,
+        ...punPenalties,
+        deadline: !punNoDeadline && punDeadlineDate ? new Date(combineDateTime(punDeadlineDate, punDeadlineTime)).toISOString() : null,
+        required_task_ids: punSelectedTasks,
+        player_ids: punSelectedPlayers,
+      })
+      if (r.error) { setPunError(r.error) }
+      else {
+        setPunSuccess(true)
+        fetchPunishments(1)
+        fetchPunishmentLogs(1)
+      }
+    })
+  }
+
+  function handleRequestMercy(punishmentId: string) {
+    startTransition(async () => {
+      const r = await requestMercy(punishmentId)
+      if (r.error) toast('error', r.error)
+      else {
+        toast('success', 'ขอเทพเมตตาสำเร็จ! คุณรอดพ้นบทลงโทษ')
+        fetchPunishments(punPage)
+        fetchPunishmentLogs(punLogPage)
+      }
+    })
+  }
+
+  function handleApplyPenalty(punishmentId: string, playerId: string) {
+    startTransition(async () => {
+      const r = await applyPenalty(punishmentId, playerId)
+      if (r.error) toast('error', r.error)
+      else {
+        toast('success', 'ลงโทษสำเร็จ')
+        fetchPunishments(punPage)
+        fetchPunishmentLogs(punLogPage)
+      }
+    })
+  }
+
+  function openEditAction(c: CodeEntry) {
+    setEditAction(c)
+    setEditActionName(c.name)
+    setEditActionRewards({
+      reward_hp: c.reward_hp || 0,
+      reward_sanity: c.reward_sanity || 0,
+      reward_travel: c.reward_travel || 0,
+      reward_spirituality: c.reward_spirituality || 0,
+      reward_max_sanity: c.reward_max_sanity || 0,
+      reward_max_travel: c.reward_max_travel || 0,
+      reward_max_spirituality: c.reward_max_spirituality || 0,
+    })
+    const hasExpiry = !!c.expires_at
+    setEditActionNoExpiry(!hasExpiry)
+    if (hasExpiry) {
+      const { date, time } = splitDateTime(c.expires_at!)
+      setEditActionExpiresDate(date)
+      setEditActionExpiresTime(time)
+    } else {
+      setEditActionExpiresDate('')
+      setEditActionExpiresTime('')
+    }
+    const hasRepeatLimit = c.max_repeats !== null && c.max_repeats !== undefined
+    setEditActionUnlimitedRepeats(!hasRepeatLimit)
+    setEditActionMaxRepeats(hasRepeatLimit ? String(c.max_repeats) : '')
+    setEditActionError(null)
+  }
+
+  function handleUpdateAction() {
+    if (!editAction) return
+    setEditActionError(null)
+    if (!editActionName.trim()) { setEditActionError('กรุณากรอกชื่อ'); return }
+    startTransition(async () => {
+      const expiration: CodeExpiration = {}
+      if (!editActionNoExpiry && editActionExpiresDate) expiration.expires_at = new Date(combineDateTime(editActionExpiresDate, editActionExpiresTime)).toISOString()
+      else expiration.expires_at = null
+      if (!editActionUnlimitedRepeats && editActionMaxRepeats) expiration.max_repeats = parseInt(editActionMaxRepeats) || null
+      else expiration.max_repeats = null
+
+      const r = await updateActionCode(editAction!.id, editActionName, editActionRewards, expiration)
+      if (r.error) { setEditActionError(r.error) }
+      else {
+        toast('success', 'แก้ไขโค้ดแอคชั่นสำเร็จ')
+        setEditAction(null)
+        fetchActionCodes(acPage)
+      }
+    })
+  }
+
+  function openEditQuest(c: CodeEntry) {
+    setEditQuest(c)
+    setEditQuestName(c.name)
+    setEditQuestMapId(c.map_id || '')
+    setEditQuestNpcId(c.npc_token_id || '')
+    const hasExpiry = !!c.expires_at
+    setEditQuestNoExpiry(!hasExpiry)
+    if (hasExpiry) {
+      const { date, time } = splitDateTime(c.expires_at!)
+      setEditQuestExpiresDate(date)
+      setEditQuestExpiresTime(time)
+    } else {
+      setEditQuestExpiresDate('')
+      setEditQuestExpiresTime('')
+    }
+    const hasRepeatLimit = c.max_repeats !== null && c.max_repeats !== undefined
+    setEditQuestUnlimitedRepeats(!hasRepeatLimit)
+    setEditQuestMaxRepeats(hasRepeatLimit ? String(c.max_repeats) : '')
+    setEditQuestError(null)
+  }
+
+  function handleUpdateQuest() {
+    if (!editQuest) return
+    setEditQuestError(null)
+    if (!editQuestName.trim()) { setEditQuestError('กรุณากรอกชื่อ'); return }
+    startTransition(async () => {
+      const expiration: CodeExpiration = {}
+      if (!editQuestNoExpiry && editQuestExpiresDate) expiration.expires_at = new Date(combineDateTime(editQuestExpiresDate, editQuestExpiresTime)).toISOString()
+      else expiration.expires_at = null
+      if (!editQuestUnlimitedRepeats && editQuestMaxRepeats) expiration.max_repeats = parseInt(editQuestMaxRepeats) || null
+      else expiration.max_repeats = null
+
+      const r = await updateQuestCode(editQuest!.id, editQuestName, editQuestMapId || null, editQuestNpcId || null, expiration)
+      if (r.error) { setEditQuestError(r.error) }
+      else {
+        toast('success', 'แก้ไขโค้ดภารกิจสำเร็จ')
+        setEditQuest(null)
+        fetchQuestCodes(qcPage)
+      }
+    })
+  }
+
+  function openEditPunishment(p: PunishmentEntry) {
+    setEditPunishment(p)
+    setEditPunName(p.name)
+    setEditPunDesc(p.description || '')
+    const hasDeadline = !!p.deadline
+    setEditPunNoDeadline(!hasDeadline)
+    if (hasDeadline) {
+      const { date, time } = splitDateTime(p.deadline!)
+      setEditPunDeadlineDate(date)
+      setEditPunDeadlineTime(time)
+    } else {
+      setEditPunDeadlineDate('')
+      setEditPunDeadlineTime('')
+    }
+    setEditPunPenalties({
+      penalty_sanity: p.penalty_sanity,
+      penalty_hp: p.penalty_hp,
+      penalty_travel: p.penalty_travel,
+      penalty_spirituality: p.penalty_spirituality,
+      penalty_max_sanity: p.penalty_max_sanity,
+      penalty_max_travel: p.penalty_max_travel,
+      penalty_max_spirituality: p.penalty_max_spirituality,
+    })
+    setEditPunSelectedTasks(p.required_tasks.map(t =>
+      t.action_code_id ? { action_code_id: t.action_code_id } : { quest_code_id: t.quest_code_id! }
+    ))
+    setEditPunSelectedPlayers(p.assigned_players.map(ap => ap.player_id))
+    setEditPunError(null)
+  }
+
+  function handleUpdatePunishment() {
+    if (!editPunishment) return
+    setEditPunError(null)
+    if (!editPunName.trim()) { setEditPunError('กรุณากรอกชื่อ'); return }
+    if (editPunSelectedTasks.length === 0) { setEditPunError('กรุณาเลือกแอคชั่น/ภารกิจอย่างน้อย 1 รายการ'); return }
+    if (editPunSelectedPlayers.length === 0) { setEditPunError('กรุณาเลือกผู้เล่นอย่างน้อย 1 คน'); return }
+    const hasPenalty = Object.values(editPunPenalties).some(v => v > 0)
+    if (!hasPenalty) { setEditPunError('กรุณากำหนดบทลงโทษอย่างน้อย 1 รายการ'); return }
+
+    startTransition(async () => {
+      const r = await updatePunishment(editPunishment!.id, {
+        name: editPunName,
+        description: editPunDesc || undefined,
+        ...editPunPenalties,
+        deadline: !editPunNoDeadline && editPunDeadlineDate ? new Date(combineDateTime(editPunDeadlineDate, editPunDeadlineTime)).toISOString() : null,
+        required_task_ids: editPunSelectedTasks,
+        player_ids: editPunSelectedPlayers,
+      })
+      if (r.error) { setEditPunError(r.error) }
+      else {
+        toast('success', 'แก้ไขบทลงโทษสำเร็จ')
+        setEditPunishment(null)
+        fetchPunishments(punPage)
+        fetchPunishmentLogs(punLogPage)
+      }
+    })
+  }
+
   /* ═══════════════════ RENDER ═══════════════════ */
   const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     { key: 'actions', label: 'แอคชั่น', icon: <Swords className="w-4 h-4" /> },
     { key: 'quests', label: 'ภารกิจ', icon: <Target className="w-4 h-4" /> },
     { key: 'prayer', label: 'ภาวนา', icon: <Church className="w-4 h-4" /> },
     { key: 'sleep', label: 'นอนหลับ', icon: <Moon className="w-4 h-4" /> },
+    { key: 'punishments', label: 'บทลงโทษ', icon: <Skull className="w-4 h-4" /> },
   ]
 
   return (
@@ -449,16 +831,25 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
             <h2 className="heading-victorian text-xl md:text-2xl flex items-center gap-3 mb-5">
               <Shield className="w-5 h-5 text-gold-400" /> เครื่องมือ DM / Admin
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <button type="button"
-                onClick={() => { setShowGenAction(true); setGenName(''); setGenResult(null); setGenError(null); setGenRewards({}) }}
+                onClick={() => { setShowGenAction(true); setGenName(''); setGenResult(null); setGenError(null); setGenRewards({}); setGenExpiresDate(''); setGenExpiresTime(''); setGenMaxRepeats(''); setGenNoExpiry(true); setGenUnlimitedRepeats(true) }}
                 className="btn-gold !px-5 !py-4 !text-sm flex items-center justify-center gap-2 cursor-pointer">
                 <Swords className="w-5 h-5" /> สร้างโค้ดแอคชั่น
               </button>
               <button type="button"
-                onClick={() => { setShowGenQuest(true); setGenName(''); setGenMapId(''); setGenNpcId(''); setGenResult(null); setGenError(null) }}
+                onClick={() => { setShowGenQuest(true); setGenName(''); setGenMapId(''); setGenNpcId(''); setGenResult(null); setGenError(null); setGenQuestExpiresDate(''); setGenQuestExpiresTime(''); setGenQuestMaxRepeats(''); setGenQuestNoExpiry(true); setGenQuestUnlimitedRepeats(true) }}
                 className="btn-gold !px-5 !py-4 !text-sm flex items-center justify-center gap-2 cursor-pointer">
                 <Target className="w-5 h-5" /> สร้างโค้ดภารกิจ
+              </button>
+              <button type="button"
+                onClick={() => {
+                  setShowCreatePunishment(true); setPunName(''); setPunDesc(''); setPunDeadlineDate(''); setPunDeadlineTime(''); setPunNoDeadline(true)
+                  setPunPenalties({ penalty_sanity: 0, penalty_hp: 0, penalty_travel: 0, penalty_spirituality: 0, penalty_max_sanity: 0, penalty_max_travel: 0, penalty_max_spirituality: 0 })
+                  setPunSelectedTasks([]); setPunSelectedPlayers([]); setPunError(null); setPunSuccess(false)
+                }}
+                className="px-5 py-4 rounded-lg border-2 border-red-500/30 bg-red-500/5 text-red-300 hover:border-red-400/50 hover:bg-red-500/10 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all">
+                <Skull className="w-5 h-5" /> สร้างบทลงโทษ
               </button>
             </div>
           </Card>
@@ -555,8 +946,11 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                         <th className="pb-2 pr-3">ชื่อ</th>
                         <th className="pb-2 pr-3">โค้ด</th>
                         <th className="pb-2 pr-3">รางวัล</th>
+                        <th className="pb-2 pr-3">หมดอายุ</th>
+                        <th className="pb-2 pr-3">ทำซ้ำ</th>
                         <th className="pb-2 pr-3">สร้างโดย</th>
-                        <th className="pb-2">วันที่</th>
+                        <th className="pb-2 pr-3">วันที่</th>
+                        <th className="pb-2">จัดการ</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -572,9 +966,10 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                           c.reward_max_travel ? `🗺️↑${c.reward_max_travel}` : '',
                           c.reward_max_spirituality ? `✨↑${c.reward_max_spirituality}` : '',
                         ].filter(Boolean)
+                        const isExpired = c.expires_at && new Date(c.expires_at) < new Date()
                         return (
-                        <tr key={c.id} className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
-                          <td className="py-2 pr-3 text-victorian-200">{c.name}</td>
+                        <tr key={c.id} className={`border-b border-victorian-800/50 hover:bg-victorian-800/20 ${isExpired ? 'opacity-50' : ''}`}>
+                          <td className="py-2 pr-3 text-victorian-200">{c.name}{isExpired && <span className="text-red-400 text-[10px] ml-1">(หมดอายุ)</span>}</td>
                           <td className="py-2 pr-3">
                             <button type="button" onClick={() => copyCode(c.code)}
                               className="inline-flex items-center gap-1 text-gold-400 font-mono text-xs hover:text-gold-300 cursor-pointer">
@@ -591,8 +986,30 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                               </div>
                             )}
                           </td>
+                          <td className="py-2 pr-3">
+                            {c.expires_at ? (
+                              <span className={`text-xs ${isExpired ? 'text-red-400' : 'text-cyan-400'}`}>
+                                {fmtDate(c.expires_at)}
+                              </span>
+                            ) : (
+                              <span className="text-victorian-600 text-xs">ตลอดไป</span>
+                            )}
+                          </td>
+                          <td className="py-2 pr-3">
+                            {c.max_repeats !== null && c.max_repeats !== undefined ? (
+                              <span className="text-xs text-orange-400">{c.max_repeats} ครั้ง</span>
+                            ) : (
+                              <span className="text-victorian-600 text-xs">ไม่จำกัด</span>
+                            )}
+                          </td>
                           <td className="py-2 pr-3 text-victorian-400">{c.created_by_name}</td>
-                          <td className="py-2 text-victorian-500 text-xs">{fmtDate(c.created_at)}</td>
+                          <td className="py-2 pr-3 text-victorian-500 text-xs">{fmtDate(c.created_at)}</td>
+                          <td className="py-2">
+                            <button type="button" onClick={() => openEditAction(c)} disabled={isPending}
+                              className="p-1.5 rounded bg-gold-400/10 border border-gold-400/20 text-gold-400 hover:bg-gold-400/20 cursor-pointer disabled:opacity-50 transition-colors">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
                         </tr>
                         )
                       })}
@@ -645,14 +1062,19 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                         <th className="pb-2 pr-3">โค้ด</th>
                         <th className="pb-2 pr-3">สถานที่</th>
                         <th className="pb-2 pr-3">NPC</th>
+                        <th className="pb-2 pr-3">หมดอายุ</th>
+                        <th className="pb-2 pr-3">ทำซ้ำ</th>
                         <th className="pb-2 pr-3">สร้างโดย</th>
-                        <th className="pb-2">วันที่</th>
+                        <th className="pb-2 pr-3">วันที่</th>
+                        <th className="pb-2">จัดการ</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {questCodes.map(c => (
-                        <tr key={c.id} className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
-                          <td className="py-2 pr-3 text-victorian-200">{c.name}</td>
+                      {questCodes.map(c => {
+                        const isExpired = c.expires_at && new Date(c.expires_at) < new Date()
+                        return (
+                        <tr key={c.id} className={`border-b border-victorian-800/50 hover:bg-victorian-800/20 ${isExpired ? 'opacity-50' : ''}`}>
+                          <td className="py-2 pr-3 text-victorian-200">{c.name}{isExpired && <span className="text-red-400 text-[10px] ml-1">(หมดอายุ)</span>}</td>
                           <td className="py-2 pr-3">
                             <button type="button" onClick={() => copyCode(c.code)}
                               className="inline-flex items-center gap-1 text-gold-400 font-mono text-xs hover:text-gold-300 cursor-pointer">
@@ -677,10 +1099,33 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                               <span className="text-victorian-600 text-xs">—</span>
                             )}
                           </td>
+                          <td className="py-2 pr-3">
+                            {c.expires_at ? (
+                              <span className={`text-xs ${isExpired ? 'text-red-400' : 'text-cyan-400'}`}>
+                                {fmtDate(c.expires_at)}
+                              </span>
+                            ) : (
+                              <span className="text-victorian-600 text-xs">ตลอดไป</span>
+                            )}
+                          </td>
+                          <td className="py-2 pr-3">
+                            {c.max_repeats !== null && c.max_repeats !== undefined ? (
+                              <span className="text-xs text-orange-400">{c.max_repeats} ครั้ง</span>
+                            ) : (
+                              <span className="text-victorian-600 text-xs">ไม่จำกัด</span>
+                            )}
+                          </td>
                           <td className="py-2 pr-3 text-victorian-400">{c.created_by_name}</td>
-                          <td className="py-2 text-victorian-500 text-xs">{fmtDate(c.created_at)}</td>
+                          <td className="py-2 pr-3 text-victorian-500 text-xs">{fmtDate(c.created_at)}</td>
+                          <td className="py-2">
+                            <button type="button" onClick={() => openEditQuest(c)} disabled={isPending}
+                              className="p-1.5 rounded bg-gold-400/10 border border-gold-400/20 text-gold-400 hover:bg-gold-400/20 cursor-pointer disabled:opacity-50 transition-colors">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
                         </tr>
-                      ))}
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -878,6 +1323,192 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
           </div>
         )}
 
+        {/* ═══════════════════════════════════════ */}
+        {/*  TAB: PUNISHMENTS                       */}
+        {/* ═══════════════════════════════════════ */}
+        {activeTab === 'punishments' && (
+          <div className="space-y-6">
+            {/* Punishment list */}
+            <div className="space-y-3">
+              <h3 className="heading-victorian text-lg flex items-center gap-2">
+                <Skull className="w-4 h-4 text-red-400" /> บทลงโทษ
+                <span className="text-victorian-500 text-xs font-normal ml-1">({punTotal})</span>
+              </h3>
+
+              {punLoading ? <SkeletonTable /> : punishments.length === 0 ? (
+                <div className="p-8 text-center border border-gold-400/10 rounded-sm" style={{ backgroundColor: 'rgba(26,22,18,0.6)' }}>
+                  <p className="text-victorian-400 heading-victorian">ยังไม่มีบทลงโทษ</p>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-4">
+                    {punishments.map(p => {
+                      const penalties = [
+                        p.penalty_hp > 0 ? `❤️ -${p.penalty_hp} HP` : '',
+                        p.penalty_sanity > 0 ? `🧠 -${p.penalty_sanity} Sanity` : '',
+                        p.penalty_travel > 0 ? `🗺️ -${p.penalty_travel} Travel` : '',
+                        p.penalty_spirituality > 0 ? `✨ -${p.penalty_spirituality} Spirit` : '',
+                        p.penalty_max_sanity > 0 ? `🧠 -${p.penalty_max_sanity} Max Sanity` : '',
+                        p.penalty_max_travel > 0 ? `🗺️ -${p.penalty_max_travel} Max Travel` : '',
+                        p.penalty_max_spirituality > 0 ? `✨ -${p.penalty_max_spirituality} Max Spirit` : '',
+                      ].filter(Boolean)
+
+                      // Current player's entry
+                      const myEntry = p.assigned_players.find(ap => ap.player_id === _userId)
+                      const isExpired = p.deadline && new Date(p.deadline) < new Date()
+
+                      return (
+                        <Card key={p.id} className="p-4 md:p-6 space-y-3 border-red-500/20">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <h4 className="text-victorian-100 font-bold text-base flex items-center gap-2">
+                                <Skull className="w-4 h-4 text-red-400" />
+                                {p.name}
+                                {isExpired && <span className="text-red-400 text-[10px]">(หมดเวลา)</span>}
+                              </h4>
+                              {p.description && <p className="text-victorian-400 text-xs mt-1">{p.description}</p>}
+                            </div>
+                            <div className="text-right text-[10px] text-victorian-500 shrink-0">
+                              <div>สร้างโดย: {p.created_by_name}</div>
+                              <div>{fmtDate(p.created_at)}</div>
+                              {p.deadline && <div className="text-cyan-400 mt-0.5">กำหนด: {fmtDate(p.deadline)}</div>}
+                              {isAdmin && !isExpired && (
+                                <button type="button" onClick={() => openEditPunishment(p)} disabled={isPending}
+                                  className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gold-400/10 border border-gold-400/20 text-gold-400 hover:bg-gold-400/20 cursor-pointer disabled:opacity-50 text-[10px] transition-colors">
+                                  <Pencil className="w-3 h-3" /> แก้ไข
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Penalties */}
+                          <div className="flex flex-wrap gap-1.5">
+                            {penalties.map((pen, i) => (
+                              <span key={i} className="text-xs bg-red-900/40 text-red-300 px-2 py-0.5 rounded border border-red-500/20">
+                                {pen}
+                              </span>
+                            ))}
+                          </div>
+
+                          {/* Required tasks */}
+                          <div>
+                            <p className="text-victorian-400 text-xs font-semibold mb-1">ต้องทำ:</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {p.required_tasks.map(t => (
+                                <span key={t.id} className={`text-xs px-2 py-0.5 rounded border ${
+                                  t.action_code_id ? 'bg-amber-900/30 text-amber-300 border-amber-500/20' : 'bg-emerald-900/30 text-emerald-300 border-emerald-500/20'
+                                }`}>
+                                  {t.action_code_id ? `⚔️ ${t.action_name}` : `🎯 ${t.quest_name}`}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Assigned players */}
+                          <div>
+                            <p className="text-victorian-400 text-xs font-semibold mb-1 flex items-center gap-1">
+                              <Users className="w-3 h-3" /> ผู้เล่นที่ต้องรับโทษ:
+                            </p>
+                            <div className="space-y-1.5">
+                              {p.assigned_players.map(ap => (
+                                <div key={ap.id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-victorian-900/40 border border-victorian-800/50">
+                                  <div className="flex items-center gap-2">
+                                    <Avatar name={ap.player_name} url={ap.player_avatar} />
+                                    <span className="text-victorian-200 text-xs">{ap.player_name}</span>
+                                    {ap.is_completed && ap.mercy_requested && (
+                                      <span className="text-green-400 text-[10px] bg-green-500/10 px-1.5 py-0.5 rounded">✅ ขอเทพเมตตาแล้ว</span>
+                                    )}
+                                    {ap.penalty_applied && (
+                                      <span className="text-red-400 text-[10px] bg-red-500/10 px-1.5 py-0.5 rounded">💀 ลงโทษแล้ว</span>
+                                    )}
+                                    {!ap.is_completed && !ap.penalty_applied && (
+                                      <span className="text-amber-400 text-[10px] bg-amber-500/10 px-1.5 py-0.5 rounded">⏳ รอดำเนินการ</span>
+                                    )}
+                                  </div>
+                                  {isAdmin && !ap.penalty_applied && !ap.mercy_requested && (
+                                    <button type="button" onClick={() => handleApplyPenalty(p.id, ap.player_id)} disabled={isPending}
+                                      className="px-2 py-1 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-[10px] font-bold hover:bg-red-500/20 cursor-pointer disabled:opacity-50">
+                                      ลงโทษ
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Player: Mercy button */}
+                          {myEntry && !myEntry.penalty_applied && !myEntry.mercy_requested && (
+                            <MercyButton punishmentId={p.id} onMercy={handleRequestMercy} isPending={isPending} />
+                          )}
+                        </Card>
+                      )
+                    })}
+                  </div>
+                  <Pagination page={punPage} totalPages={punTotalPages} onPage={fetchPunishments} />
+                </>
+              )}
+            </div>
+
+            {/* Punishment logs */}
+            <div className="space-y-3">
+              <h3 className="heading-victorian text-lg flex items-center gap-2">
+                <ScrollText className="w-4 h-4 text-red-400" /> บันทึกบทลงโทษ
+                <span className="text-victorian-500 text-xs font-normal ml-1">({punLogTotal})</span>
+              </h3>
+
+              {punLogLoading ? <SkeletonTable /> : punLogs.length === 0 ? (
+                <div className="p-8 text-center border border-gold-400/10 rounded-sm" style={{ backgroundColor: 'rgba(26,22,18,0.6)' }}>
+                  <p className="text-victorian-400 heading-victorian">ยังไม่มีบันทึก</p>
+                </div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-victorian-500 text-left border-b border-gold-400/10">
+                          {isAdmin && <th className="pb-2 pr-3">ผู้เล่น</th>}
+                          <th className="pb-2 pr-3">บทลงโทษ</th>
+                          <th className="pb-2 pr-3">เหตุการณ์</th>
+                          <th className="pb-2 pr-3">โดย</th>
+                          <th className="pb-2">วันที่</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {punLogs.map(log => {
+                          const actionLabel: Record<string, string> = {
+                            assigned: '📋 มอบหมายบทลงโทษ',
+                            penalty_applied: '💀 ลงโทษแล้ว',
+                            mercy_requested: '🙏 ขอเทพเมตตา',
+                            completed: '✅ สำเร็จ',
+                            expired: '⏰ หมดเวลา',
+                          }
+                          return (
+                            <tr key={log.id} className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
+                              {isAdmin && (
+                                <td className="py-2.5 pr-3">
+                                  <div className="flex items-center gap-2">
+                                    <Avatar name={log.player_name} url={log.player_avatar} />
+                                    <span className="text-victorian-200 text-xs">{log.player_name}</span>
+                                  </div>
+                                </td>
+                              )}
+                              <td className="py-2.5 pr-3 text-victorian-200 text-xs">{log.punishment_name}</td>
+                              <td className="py-2.5 pr-3 text-victorian-300 text-xs">{actionLabel[log.action] || log.action}</td>
+                              <td className="py-2.5 pr-3 text-victorian-500 text-xs">{log.created_by_name || '—'}</td>
+                              <td className="py-2.5 text-victorian-500 text-xs">{fmtDate(log.created_at)}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <Pagination page={punLogPage} totalPages={punLogTotalPages} onPage={fetchPunishmentLogs} />
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* ═══════════════════════════════════════════════════ */}
@@ -973,6 +1604,42 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                 </div>
               </div>
 
+              {/* ── Expiration ── */}
+              <div className="space-y-2">
+                <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+                  <CalendarClock className="w-3.5 h-3.5 text-cyan-400" /> วันหมดอายุ
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+                    <input type="checkbox" checked={genNoExpiry} onChange={e => setGenNoExpiry(e.target.checked)}
+                      className="rounded border-gold-400/30" />
+                    ตลอดไป (ไม่หมดอายุ)
+                  </label>
+                </div>
+                {!genNoExpiry && (
+                  <DateTimeInput dateVal={genExpiresDate} timeVal={genExpiresTime}
+                    onDateChange={setGenExpiresDate} onTimeChange={setGenExpiresTime} />
+                )}
+              </div>
+
+              {/* ── Repeat limit ── */}
+              <div className="space-y-2">
+                <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+                  <Repeat className="w-3.5 h-3.5 text-orange-400" /> จำกัดการทำซ้ำ
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+                    <input type="checkbox" checked={genUnlimitedRepeats} onChange={e => setGenUnlimitedRepeats(e.target.checked)}
+                      className="rounded border-gold-400/30" />
+                    ไม่จำกัด (ทำซ้ำได้เรื่อย ๆ)
+                  </label>
+                </div>
+                {!genUnlimitedRepeats && (
+                  <input type="number" min={1} placeholder="จำนวนครั้งสูงสุด" value={genMaxRepeats} onChange={e => setGenMaxRepeats(e.target.value)}
+                    className="input-victorian w-full !py-1.5 !text-xs" />
+                )}
+              </div>
+
               {genError && <div className="p-3 bg-red-900/40 border border-red-500/30 rounded-lg text-red-300 text-sm text-center">{genError}</div>}
               <div className="flex justify-end gap-3">
                 <button type="button" onClick={() => setShowGenAction(false)} className="btn-victorian px-4 py-2 text-sm cursor-pointer">ยกเลิก</button>
@@ -1059,6 +1726,43 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                   ))}
                 </select>
               </div>
+
+              {/* ── Expiration ── */}
+              <div className="space-y-2">
+                <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+                  <CalendarClock className="w-3.5 h-3.5 text-cyan-400" /> วันหมดอายุ
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+                    <input type="checkbox" checked={genQuestNoExpiry} onChange={e => setGenQuestNoExpiry(e.target.checked)}
+                      className="rounded border-gold-400/30" />
+                    ตลอดไป (ไม่หมดอายุ)
+                  </label>
+                </div>
+                {!genQuestNoExpiry && (
+                  <DateTimeInput dateVal={genQuestExpiresDate} timeVal={genQuestExpiresTime}
+                    onDateChange={setGenQuestExpiresDate} onTimeChange={setGenQuestExpiresTime} />
+                )}
+              </div>
+
+              {/* ── Repeat limit ── */}
+              <div className="space-y-2">
+                <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+                  <Repeat className="w-3.5 h-3.5 text-orange-400" /> จำกัดการทำซ้ำ
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+                    <input type="checkbox" checked={genQuestUnlimitedRepeats} onChange={e => setGenQuestUnlimitedRepeats(e.target.checked)}
+                      className="rounded border-gold-400/30" />
+                    ไม่จำกัด (ทำซ้ำได้เรื่อย ๆ)
+                  </label>
+                </div>
+                {!genQuestUnlimitedRepeats && (
+                  <input type="number" min={1} placeholder="จำนวนครั้งสูงสุด" value={genQuestMaxRepeats} onChange={e => setGenQuestMaxRepeats(e.target.value)}
+                    className="input-victorian w-full !py-1.5 !text-xs" />
+                )}
+              </div>
+
               {genError && <div className="p-3 bg-red-900/40 border border-red-500/30 rounded-lg text-red-300 text-sm text-center">{genError}</div>}
               <div className="flex justify-end gap-3">
                 <button type="button" onClick={() => setShowGenQuest(false)} className="btn-victorian px-4 py-2 text-sm cursor-pointer">ยกเลิก</button>
@@ -1226,6 +1930,424 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
           </div>
           <div className="flex justify-end">
             <button type="button" onClick={() => setViewRejection(null)} className="btn-victorian px-6 py-2 text-sm cursor-pointer">ปิด</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* --- Create punishment modal --- */}
+      {showCreatePunishment && (
+        <Modal onClose={() => setShowCreatePunishment(false)}>
+          <div className="flex items-center justify-between">
+            <h3 className="heading-victorian text-2xl flex items-center gap-3">
+              <Skull className="w-6 h-6 text-red-400" /> สร้างบทลงโทษ
+            </h3>
+            <button type="button" onClick={() => setShowCreatePunishment(false)} className="text-victorian-400 hover:text-gold-400 cursor-pointer"><X className="w-5 h-5" /></button>
+          </div>
+
+          {!punSuccess ? (
+            <>
+              {/* Name */}
+              <div>
+                <label className="block text-sm text-victorian-300 mb-1.5">ชื่อบทลงโทษ <span className="text-nouveau-ruby">*</span></label>
+                <input type="text" value={punName} onChange={e => setPunName(e.target.value)} placeholder="เช่น ไม่ทำภารกิจประจำวัน" className="input-victorian w-full !py-3 !text-sm" />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm text-victorian-300 mb-1.5">รายละเอียด</label>
+                <textarea value={punDesc} onChange={e => setPunDesc(e.target.value)} placeholder="อธิบายเหตุผลบทลงโทษ..." rows={2} className="input-victorian w-full !py-2 !text-sm resize-none" />
+              </div>
+
+              {/* Required tasks */}
+              <div className="space-y-2">
+                <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+                  <Target className="w-3.5 h-3.5 text-emerald-400" /> แอคชั่น/ภารกิจที่ต้องทำ <span className="text-nouveau-ruby">*</span>
+                </label>
+                <div className="max-h-40 overflow-y-auto space-y-1 p-2 rounded-lg border border-gold-400/10 bg-victorian-900/40">
+                  {taskOptions.length === 0 ? (
+                    <p className="text-victorian-500 text-xs">ยังไม่มีแอคชั่น/ภารกิจ</p>
+                  ) : taskOptions.map(t => {
+                    const isSelected = punSelectedTasks.some(st =>
+                      t.type === 'action' ? st.action_code_id === t.id : st.quest_code_id === t.id
+                    )
+                    return (
+                      <label key={`${t.type}-${t.id}`} className="flex items-center gap-2 text-xs text-victorian-300 cursor-pointer hover:bg-victorian-800/40 p-1 rounded">
+                        <input type="checkbox" checked={isSelected} onChange={() => {
+                          if (isSelected) {
+                            setPunSelectedTasks(prev => prev.filter(st =>
+                              t.type === 'action' ? st.action_code_id !== t.id : st.quest_code_id !== t.id
+                            ))
+                          } else {
+                            setPunSelectedTasks(prev => [
+                              ...prev,
+                              t.type === 'action' ? { action_code_id: t.id } : { quest_code_id: t.id }
+                            ])
+                          }
+                        }} className="rounded border-gold-400/30" />
+                        <span className={t.type === 'action' ? 'text-amber-400' : 'text-emerald-400'}>
+                          {t.type === 'action' ? '⚔️' : '🎯'}
+                        </span>
+                        {t.name} <span className="text-victorian-600 font-mono">({t.code})</span>
+                      </label>
+                    )
+                  })}
+                </div>
+                {punSelectedTasks.length > 0 && (
+                  <p className="text-victorian-500 text-xs">เลือกแล้ว {punSelectedTasks.length} รายการ</p>
+                )}
+              </div>
+
+              {/* Penalties */}
+              <div className="space-y-2">
+                <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+                  <Skull className="w-3.5 h-3.5 text-red-400" /> บทลงโทษ <span className="text-nouveau-ruby">*</span>
+                  <span className="text-victorian-600 text-xs font-normal">(ลบค่าจากผู้เล่น)</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    ['penalty_hp', 'HP', '❤️'],
+                    ['penalty_sanity', 'Sanity', '🧠'],
+                    ['penalty_travel', 'Travel Point', '🗺️'],
+                    ['penalty_spirituality', 'Spirituality', '✨'],
+                  ] as const).map(([key, lbl, ico]) => (
+                    <div key={key} className="flex items-center gap-1.5">
+                      <span className="text-sm">{ico}</span>
+                      <span className="text-red-400 text-sm">-</span>
+                      <input type="number" min={0} placeholder={lbl}
+                        value={punPenalties[key] || ''}
+                        onChange={e => setPunPenalties(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))}
+                        className="input-victorian w-full !py-1.5 !text-xs" />
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    ['penalty_max_sanity', 'Max Sanity', '🧠'],
+                    ['penalty_max_travel', 'Max Travel', '🗺️'],
+                    ['penalty_max_spirituality', 'Max Spirit', '✨'],
+                  ] as const).map(([key, lbl, ico]) => (
+                    <div key={key} className="flex items-center gap-1.5">
+                      <span className="text-sm">{ico}</span>
+                      <span className="text-red-400 text-sm">-</span>
+                      <input type="number" min={0} placeholder={lbl}
+                        value={punPenalties[key] || ''}
+                        onChange={e => setPunPenalties(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))}
+                        className="input-victorian w-full !py-1.5 !text-xs" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Assigned players */}
+              <div className="space-y-2">
+                <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-purple-400" /> ผู้เล่นที่รับโทษ <span className="text-nouveau-ruby">*</span>
+                </label>
+                <div className="max-h-40 overflow-y-auto space-y-1 p-2 rounded-lg border border-gold-400/10 bg-victorian-900/40">
+                  {playerOptions.length === 0 ? (
+                    <p className="text-victorian-500 text-xs">ยังไม่มีผู้เล่น</p>
+                  ) : playerOptions.map(pl => {
+                    const isSelected = punSelectedPlayers.includes(pl.id)
+                    return (
+                      <label key={pl.id} className="flex items-center gap-2 text-xs text-victorian-300 cursor-pointer hover:bg-victorian-800/40 p-1 rounded">
+                        <input type="checkbox" checked={isSelected} onChange={() => {
+                          if (isSelected) setPunSelectedPlayers(prev => prev.filter(id => id !== pl.id))
+                          else setPunSelectedPlayers(prev => [...prev, pl.id])
+                        }} className="rounded border-gold-400/30" />
+                        <Avatar name={pl.display_name} url={pl.avatar_url} />
+                        {pl.display_name}
+                      </label>
+                    )
+                  })}
+                </div>
+                {punSelectedPlayers.length > 0 && (
+                  <p className="text-victorian-500 text-xs">เลือกแล้ว {punSelectedPlayers.length} คน</p>
+                )}
+              </div>
+
+              {/* Deadline */}
+              <div className="space-y-2">
+                <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+                  <CalendarClock className="w-3.5 h-3.5 text-cyan-400" /> กำหนดเวลา
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+                    <input type="checkbox" checked={punNoDeadline} onChange={e => setPunNoDeadline(e.target.checked)}
+                      className="rounded border-gold-400/30" />
+                    ไม่มีกำหนด
+                  </label>
+                </div>
+                {!punNoDeadline && (
+                  <DateTimeInput dateVal={punDeadlineDate} timeVal={punDeadlineTime}
+                    onDateChange={setPunDeadlineDate} onTimeChange={setPunDeadlineTime} />
+                )}
+              </div>
+
+              {punError && <div className="p-3 bg-red-900/40 border border-red-500/30 rounded-lg text-red-300 text-sm text-center">{punError}</div>}
+
+              <div className="p-3 bg-victorian-800/40 border border-gold-400/10 rounded-lg text-victorian-500 text-xs space-y-1">
+                <p>• ผู้เล่นที่ถูกกำหนดจะเห็นบทลงโทษนี้ในแท็บ &quot;บทลงโทษ&quot;</p>
+                <p>• ผู้เล่นต้องทำแอคชั่น/ภารกิจที่กำหนดให้ครบ ถึงจะกดปุ่ม &quot;ขอเทพเมตตา&quot; ได้</p>
+                <p>• หากไม่ทำครบ ทีมงานสามารถลงโทษ (ลบค่า) ได้โดยตรง</p>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button type="button" onClick={() => setShowCreatePunishment(false)} className="btn-victorian px-4 py-2 text-sm cursor-pointer">ยกเลิก</button>
+                <button type="button" onClick={handleCreatePunishment} disabled={isPending || !punName.trim() || punSelectedTasks.length === 0 || punSelectedPlayers.length === 0}
+                  className="px-5 py-2 rounded-lg bg-red-600 text-white text-sm font-bold hover:bg-red-500 disabled:opacity-50 cursor-pointer transition-colors">
+                  {isPending ? 'กำลังสร้าง...' : '💀 สร้างบทลงโทษ'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="text-center space-y-4">
+              <CheckCircle className="w-12 h-12 text-green-400 mx-auto" />
+              <p className="text-green-300 text-lg font-bold">สร้างบทลงโทษสำเร็จ!</p>
+              <p className="text-victorian-400 text-sm">ผู้เล่นที่ถูกกำหนดจะเห็นบทลงโทษนี้ในแท็บ &quot;บทลงโทษ&quot;</p>
+              <button type="button" onClick={() => setShowCreatePunishment(false)} className="btn-victorian px-6 py-2 text-sm cursor-pointer">ปิด</button>
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {/* --- Edit action code modal --- */}
+      {editAction && (
+        <Modal onClose={() => setEditAction(null)}>
+          <div className="flex items-center justify-between">
+            <h3 className="heading-victorian text-2xl flex items-center gap-3"><Pencil className="w-5 h-5 text-gold-400" /> แก้ไขโค้ดแอคชั่น</h3>
+            <button type="button" onClick={() => setEditAction(null)} className="text-victorian-400 hover:text-gold-400 cursor-pointer"><X className="w-5 h-5" /></button>
+          </div>
+          <div className="p-2 bg-victorian-900/60 border border-gold-400/10 rounded-lg text-center">
+            <span className="font-mono text-gold-400 text-sm">{editAction.code}</span>
+            <span className="text-victorian-500 text-[10px] ml-2">(โค้ดไม่สามารถเปลี่ยนได้)</span>
+          </div>
+          <div>
+            <label className="block text-sm text-victorian-300 mb-1.5">ชื่อแอคชั่น <span className="text-nouveau-ruby">*</span></label>
+            <input type="text" value={editActionName} onChange={e => setEditActionName(e.target.value)} className="input-victorian w-full !py-3 !text-sm" />
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+              <Gift className="w-3.5 h-3.5 text-emerald-400" /> มอบรางวัล
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {([['reward_hp', 'HP', '❤️'], ['reward_sanity', 'Sanity', '🧠'], ['reward_travel', 'Travel', '🗺️'], ['reward_spirituality', 'Spirituality', '✨']] as const).map(([key, lbl, ico]) => (
+                <div key={key} className="flex items-center gap-1.5">
+                  <span className="text-sm">{ico}</span>
+                  <input type="number" min={0} placeholder={lbl} value={editActionRewards[key] || ''} onChange={e => setEditActionRewards(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))} className="input-victorian w-full !py-1.5 !text-xs" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+              <Gift className="w-3.5 h-3.5 text-amber-400" /> เพิ่มค่าสูงสุด
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {([['reward_max_sanity', 'Max Sanity', '🧠'], ['reward_max_travel', 'Max Travel', '🗺️'], ['reward_max_spirituality', 'Max Spirit', '✨']] as const).map(([key, lbl, ico]) => (
+                <div key={key} className="flex items-center gap-1.5">
+                  <span className="text-sm">{ico}</span>
+                  <input type="number" min={0} placeholder={lbl} value={editActionRewards[key] || ''} onChange={e => setEditActionRewards(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))} className="input-victorian w-full !py-1.5 !text-xs" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+              <CalendarClock className="w-3.5 h-3.5 text-cyan-400" /> วันหมดอายุ
+            </label>
+            <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+              <input type="checkbox" checked={editActionNoExpiry} onChange={e => setEditActionNoExpiry(e.target.checked)} className="rounded border-gold-400/30" />
+              ตลอดไป (ไม่หมดอายุ)
+            </label>
+            {!editActionNoExpiry && (
+              <DateTimeInput dateVal={editActionExpiresDate} timeVal={editActionExpiresTime}
+                onDateChange={setEditActionExpiresDate} onTimeChange={setEditActionExpiresTime} />
+            )}
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+              <Repeat className="w-3.5 h-3.5 text-orange-400" /> จำกัดการทำซ้ำ
+            </label>
+            <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+              <input type="checkbox" checked={editActionUnlimitedRepeats} onChange={e => setEditActionUnlimitedRepeats(e.target.checked)} className="rounded border-gold-400/30" />
+              ไม่จำกัด
+            </label>
+            {!editActionUnlimitedRepeats && (
+              <input type="number" min={1} placeholder="จำนวนครั้ง" value={editActionMaxRepeats} onChange={e => setEditActionMaxRepeats(e.target.value)} className="input-victorian w-full !py-1.5 !text-xs" />
+            )}
+          </div>
+          {editActionError && <div className="p-3 bg-red-900/40 border border-red-500/30 rounded-lg text-red-300 text-sm text-center">{editActionError}</div>}
+          <div className="flex justify-end gap-3">
+            <button type="button" onClick={() => setEditAction(null)} className="btn-victorian px-4 py-2 text-sm cursor-pointer">ยกเลิก</button>
+            <button type="button" onClick={handleUpdateAction} disabled={isPending || !editActionName.trim()}
+              className="btn-gold !px-6 !py-2 !text-sm disabled:opacity-50">{isPending ? 'กำลังบันทึก...' : 'บันทึก'}</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* --- Edit quest code modal --- */}
+      {editQuest && (
+        <Modal onClose={() => setEditQuest(null)}>
+          <div className="flex items-center justify-between">
+            <h3 className="heading-victorian text-2xl flex items-center gap-3"><Pencil className="w-5 h-5 text-gold-400" /> แก้ไขโค้ดภารกิจ</h3>
+            <button type="button" onClick={() => setEditQuest(null)} className="text-victorian-400 hover:text-gold-400 cursor-pointer"><X className="w-5 h-5" /></button>
+          </div>
+          <div className="p-2 bg-victorian-900/60 border border-gold-400/10 rounded-lg text-center">
+            <span className="font-mono text-gold-400 text-sm">{editQuest.code}</span>
+            <span className="text-victorian-500 text-[10px] ml-2">(โค้ดไม่สามารถเปลี่ยนได้)</span>
+          </div>
+          <div>
+            <label className="block text-sm text-victorian-300 mb-1.5">ชื่อภารกิจ <span className="text-nouveau-ruby">*</span></label>
+            <input type="text" value={editQuestName} onChange={e => setEditQuestName(e.target.value)} className="input-victorian w-full !py-3 !text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm text-victorian-300 mb-1.5">
+              <span className="inline-flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-emerald-400" /> สถานที่ภารกิจ</span>
+            </label>
+            <select value={editQuestNpcId ? '' : editQuestMapId} onChange={e => setEditQuestMapId(e.target.value)} disabled={!!editQuestNpcId} className="input-victorian w-full !py-3 !text-sm disabled:opacity-50">
+              <option value="">— ไม่จำกัดสถานที่ —</option>
+              {mapOptions.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-victorian-300 mb-1.5">
+              <span className="inline-flex items-center gap-1"><Ghost className="w-3.5 h-3.5 text-nouveau-ruby" /> NPC ภารกิจ</span>
+            </label>
+            <select value={editQuestNpcId} onChange={e => { const val = e.target.value; setEditQuestNpcId(val); if (val) { const npc = npcOptions.find(n => n.id === val); if (npc) setEditQuestMapId(npc.map_id) } }} className="input-victorian w-full !py-3 !text-sm">
+              <option value="">— ไม่กำหนด NPC —</option>
+              {npcOptions.map(n => <option key={n.id} value={n.id}>{n.npc_name}{n.map_name ? ` (${n.map_name})` : ''}</option>)}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+              <CalendarClock className="w-3.5 h-3.5 text-cyan-400" /> วันหมดอายุ
+            </label>
+            <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+              <input type="checkbox" checked={editQuestNoExpiry} onChange={e => setEditQuestNoExpiry(e.target.checked)} className="rounded border-gold-400/30" />
+              ตลอดไป (ไม่หมดอายุ)
+            </label>
+            {!editQuestNoExpiry && (
+              <DateTimeInput dateVal={editQuestExpiresDate} timeVal={editQuestExpiresTime}
+                onDateChange={setEditQuestExpiresDate} onTimeChange={setEditQuestExpiresTime} />
+            )}
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+              <Repeat className="w-3.5 h-3.5 text-orange-400" /> จำกัดการทำซ้ำ
+            </label>
+            <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+              <input type="checkbox" checked={editQuestUnlimitedRepeats} onChange={e => setEditQuestUnlimitedRepeats(e.target.checked)} className="rounded border-gold-400/30" />
+              ไม่จำกัด
+            </label>
+            {!editQuestUnlimitedRepeats && (
+              <input type="number" min={1} placeholder="จำนวนครั้ง" value={editQuestMaxRepeats} onChange={e => setEditQuestMaxRepeats(e.target.value)} className="input-victorian w-full !py-1.5 !text-xs" />
+            )}
+          </div>
+          {editQuestError && <div className="p-3 bg-red-900/40 border border-red-500/30 rounded-lg text-red-300 text-sm text-center">{editQuestError}</div>}
+          <div className="flex justify-end gap-3">
+            <button type="button" onClick={() => setEditQuest(null)} className="btn-victorian px-4 py-2 text-sm cursor-pointer">ยกเลิก</button>
+            <button type="button" onClick={handleUpdateQuest} disabled={isPending || !editQuestName.trim()}
+              className="btn-gold !px-6 !py-2 !text-sm disabled:opacity-50">{isPending ? 'กำลังบันทึก...' : 'บันทึก'}</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* --- Edit punishment modal --- */}
+      {editPunishment && (
+        <Modal onClose={() => setEditPunishment(null)}>
+          <div className="flex items-center justify-between">
+            <h3 className="heading-victorian text-2xl flex items-center gap-3"><Pencil className="w-5 h-5 text-red-400" /> แก้ไขบทลงโทษ</h3>
+            <button type="button" onClick={() => setEditPunishment(null)} className="text-victorian-400 hover:text-gold-400 cursor-pointer"><X className="w-5 h-5" /></button>
+          </div>
+          <div>
+            <label className="block text-sm text-victorian-300 mb-1.5">ชื่อบทลงโทษ <span className="text-nouveau-ruby">*</span></label>
+            <input type="text" value={editPunName} onChange={e => setEditPunName(e.target.value)} className="input-victorian w-full !py-3 !text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm text-victorian-300 mb-1.5">รายละเอียด</label>
+            <textarea value={editPunDesc} onChange={e => setEditPunDesc(e.target.value)} rows={2} className="input-victorian w-full !py-2 !text-sm resize-none" />
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+              <Target className="w-3.5 h-3.5 text-emerald-400" /> แอคชั่น/ภารกิจที่ต้องทำ <span className="text-nouveau-ruby">*</span>
+            </label>
+            <div className="max-h-40 overflow-y-auto space-y-1 p-2 rounded-lg border border-gold-400/10 bg-victorian-900/40">
+              {taskOptions.map(t => {
+                const isSelected = editPunSelectedTasks.some(st => t.type === 'action' ? st.action_code_id === t.id : st.quest_code_id === t.id)
+                return (
+                  <label key={`${t.type}-${t.id}`} className="flex items-center gap-2 text-xs text-victorian-300 cursor-pointer hover:bg-victorian-800/40 p-1 rounded">
+                    <input type="checkbox" checked={isSelected} onChange={() => {
+                      if (isSelected) setEditPunSelectedTasks(prev => prev.filter(st => t.type === 'action' ? st.action_code_id !== t.id : st.quest_code_id !== t.id))
+                      else setEditPunSelectedTasks(prev => [...prev, t.type === 'action' ? { action_code_id: t.id } : { quest_code_id: t.id }])
+                    }} className="rounded border-gold-400/30" />
+                    <span className={t.type === 'action' ? 'text-amber-400' : 'text-emerald-400'}>{t.type === 'action' ? '⚔️' : '🎯'}</span>
+                    {t.name} <span className="text-victorian-600 font-mono">({t.code})</span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+              <Skull className="w-3.5 h-3.5 text-red-400" /> บทลงโทษ <span className="text-nouveau-ruby">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {([['penalty_hp', 'HP', '❤️'], ['penalty_sanity', 'Sanity', '🧠'], ['penalty_travel', 'Travel', '🗺️'], ['penalty_spirituality', 'Spirit', '✨']] as const).map(([key, lbl, ico]) => (
+                <div key={key} className="flex items-center gap-1.5">
+                  <span className="text-sm">{ico}</span><span className="text-red-400 text-sm">-</span>
+                  <input type="number" min={0} placeholder={lbl} value={editPunPenalties[key] || ''} onChange={e => setEditPunPenalties(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))} className="input-victorian w-full !py-1.5 !text-xs" />
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {([['penalty_max_sanity', 'Max Sanity', '🧠'], ['penalty_max_travel', 'Max Travel', '🗺️'], ['penalty_max_spirituality', 'Max Spirit', '✨']] as const).map(([key, lbl, ico]) => (
+                <div key={key} className="flex items-center gap-1.5">
+                  <span className="text-sm">{ico}</span><span className="text-red-400 text-sm">-</span>
+                  <input type="number" min={0} placeholder={lbl} value={editPunPenalties[key] || ''} onChange={e => setEditPunPenalties(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))} className="input-victorian w-full !py-1.5 !text-xs" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-purple-400" /> ผู้เล่นที่รับโทษ <span className="text-nouveau-ruby">*</span>
+            </label>
+            <div className="max-h-40 overflow-y-auto space-y-1 p-2 rounded-lg border border-gold-400/10 bg-victorian-900/40">
+              {playerOptions.map(pl => {
+                const isSelected = editPunSelectedPlayers.includes(pl.id)
+                return (
+                  <label key={pl.id} className="flex items-center gap-2 text-xs text-victorian-300 cursor-pointer hover:bg-victorian-800/40 p-1 rounded">
+                    <input type="checkbox" checked={isSelected} onChange={() => {
+                      if (isSelected) setEditPunSelectedPlayers(prev => prev.filter(id => id !== pl.id))
+                      else setEditPunSelectedPlayers(prev => [...prev, pl.id])
+                    }} className="rounded border-gold-400/30" />
+                    <Avatar name={pl.display_name} url={pl.avatar_url} />
+                    {pl.display_name}
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+              <CalendarClock className="w-3.5 h-3.5 text-cyan-400" /> กำหนดเวลา
+            </label>
+            <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+              <input type="checkbox" checked={editPunNoDeadline} onChange={e => setEditPunNoDeadline(e.target.checked)} className="rounded border-gold-400/30" />
+              ไม่มีกำหนด
+            </label>
+            {!editPunNoDeadline && (
+              <DateTimeInput dateVal={editPunDeadlineDate} timeVal={editPunDeadlineTime}
+                onDateChange={setEditPunDeadlineDate} onTimeChange={setEditPunDeadlineTime} />
+            )}
+          </div>
+          {editPunError && <div className="p-3 bg-red-900/40 border border-red-500/30 rounded-lg text-red-300 text-sm text-center">{editPunError}</div>}
+          <div className="flex justify-end gap-3">
+            <button type="button" onClick={() => setEditPunishment(null)} className="btn-victorian px-4 py-2 text-sm cursor-pointer">ยกเลิก</button>
+            <button type="button" onClick={handleUpdatePunishment} disabled={isPending || !editPunName.trim() || editPunSelectedTasks.length === 0 || editPunSelectedPlayers.length === 0}
+              className="px-5 py-2 rounded-lg bg-red-600 text-white text-sm font-bold hover:bg-red-500 disabled:opacity-50 cursor-pointer transition-colors">
+              {isPending ? 'กำลังบันทึก...' : '💀 บันทึกบทลงโทษ'}
+            </button>
           </div>
         </Modal>
       )}
@@ -1428,5 +2550,39 @@ function SubmitFormModal({ type, onClose, code, setCode, urls, setUrls, error, s
         </>
       )}
     </Modal>
+  )
+}
+
+function MercyButton({ punishmentId, onMercy, isPending }: {
+  punishmentId: string; onMercy: (id: string) => void; isPending: boolean
+}) {
+  const [canMercy, setCanMercy] = useState(false)
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    checkPlayerTaskCompletion(punishmentId).then(r => {
+      setCanMercy(r.allCompleted)
+      setChecking(false)
+    })
+  }, [punishmentId])
+
+  return (
+    <div className="pt-2 border-t border-red-500/10">
+      {checking ? (
+        <p className="text-victorian-500 text-xs">กำลังตรวจสอบ...</p>
+      ) : canMercy ? (
+        <button type="button" onClick={() => onMercy(punishmentId)} disabled={isPending}
+          className="w-full px-4 py-3 rounded-lg bg-green-600/20 border-2 border-green-500/40 text-green-300 font-bold text-sm hover:bg-green-600/30 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 transition-all">
+          <HandHeart className="w-5 h-5" /> ขอเทพเมตตา
+        </button>
+      ) : (
+        <div className="p-3 bg-red-900/20 border border-red-500/20 rounded-lg text-center">
+          <p className="text-red-300 text-xs font-semibold flex items-center justify-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5" /> ยังทำภารกิจไม่ครบ ไม่สามารถขอเทพเมตตาได้
+          </p>
+          <p className="text-victorian-500 text-[10px] mt-1">ทำแอคชั่น/ภารกิจที่กำหนดให้ครบ แล้วรอการอนุมัติจากทีมงาน</p>
+        </div>
+      )}
+    </div>
   )
 }

@@ -233,7 +233,12 @@ export interface ActionRewards {
   reward_max_spirituality?: number
 }
 
-export async function generateActionCode(name: string, rewards?: ActionRewards) {
+export interface CodeExpiration {
+  expires_at?: string | null   // ISO datetime or null for never
+  max_repeats?: number | null  // null = unlimited
+}
+
+export async function generateActionCode(name: string, rewards?: ActionRewards, expiration?: CodeExpiration) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
@@ -263,6 +268,10 @@ export async function generateActionCode(name: string, rewards?: ActionRewards) 
     if (rewards.reward_max_sanity) insertData.reward_max_sanity = rewards.reward_max_sanity
     if (rewards.reward_max_travel) insertData.reward_max_travel = rewards.reward_max_travel
     if (rewards.reward_max_spirituality) insertData.reward_max_spirituality = rewards.reward_max_spirituality
+  }
+  if (expiration) {
+    if (expiration.expires_at) insertData.expires_at = expiration.expires_at
+    if (expiration.max_repeats !== undefined && expiration.max_repeats !== null) insertData.max_repeats = expiration.max_repeats
   }
 
   const { data, error } = await supabase
@@ -314,7 +323,7 @@ export async function getActionCodes(page: number = 1) {
    QUEST CODES — สร้างโค้ดภารกิจ
    ══════════════════════════════════════════════ */
 
-export async function generateQuestCode(name: string, mapId?: string | null, npcTokenId?: string | null) {
+export async function generateQuestCode(name: string, mapId?: string | null, npcTokenId?: string | null, expiration?: CodeExpiration) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
@@ -347,11 +356,15 @@ export async function generateQuestCode(name: string, mapId?: string | null, npc
     code = generateCode()
   }
 
-  const insertData: { name: string; code: string; created_by: string; map_id?: string; npc_token_id?: string } = {
+  const insertData: Record<string, unknown> = {
     name: name.trim(), code, created_by: user.id
   }
   if (resolvedMapId) insertData.map_id = resolvedMapId
   if (npcTokenId) insertData.npc_token_id = npcTokenId
+  if (expiration) {
+    if (expiration.expires_at) insertData.expires_at = expiration.expires_at
+    if (expiration.max_repeats !== undefined && expiration.max_repeats !== null) insertData.max_repeats = expiration.max_repeats
+  }
 
   const { data, error } = await supabase
     .from('quest_codes')
@@ -426,11 +439,28 @@ export async function submitAction(codeStr: string, evidenceUrls: string[]) {
 
   const { data: codeRow } = await supabase
     .from('action_codes')
-    .select('id, name')
+    .select('id, name, expires_at, max_repeats')
     .eq('code', codeStr.trim())
     .maybeSingle()
 
   if (!codeRow) return { error: 'ไม่พบรหัสแอคชั่นนี้ กรุณาตรวจสอบรหัสอีกครั้ง' }
+
+  // Check expiration
+  if (codeRow.expires_at && new Date(codeRow.expires_at) < new Date()) {
+    return { error: 'แอคชั่นนี้หมดอายุแล้ว' }
+  }
+
+  // Check repeat limit
+  if (codeRow.max_repeats !== null && codeRow.max_repeats !== undefined) {
+    const { count } = await supabase
+      .from('action_submissions')
+      .select('*', { count: 'exact', head: true })
+      .eq('player_id', user.id)
+      .eq('action_code_id', codeRow.id)
+    if ((count || 0) >= codeRow.max_repeats) {
+      return { error: `คุณส่งแอคชั่นนี้ครบ ${codeRow.max_repeats} ครั้งแล้ว ไม่สามารถส่งซ้ำได้อีก` }
+    }
+  }
 
   const cleanUrls = evidenceUrls.filter(u => u.trim()).map(u => u.trim())
 
@@ -640,11 +670,28 @@ export async function submitQuest(codeStr: string, evidenceUrls: string[]) {
 
   const { data: codeRow } = await supabase
     .from('quest_codes')
-    .select('id, name, map_id, npc_token_id')
+    .select('id, name, map_id, npc_token_id, expires_at, max_repeats')
     .eq('code', codeStr.trim())
     .maybeSingle()
 
   if (!codeRow) return { error: 'ไม่พบรหัสภารกิจนี้ กรุณาตรวจสอบรหัสอีกครั้ง' }
+
+  // Check expiration
+  if (codeRow.expires_at && new Date(codeRow.expires_at) < new Date()) {
+    return { error: 'ภารกิจนี้หมดอายุแล้ว' }
+  }
+
+  // Check repeat limit
+  if (codeRow.max_repeats !== null && codeRow.max_repeats !== undefined) {
+    const { count } = await supabase
+      .from('quest_submissions')
+      .select('*', { count: 'exact', head: true })
+      .eq('player_id', user.id)
+      .eq('quest_code_id', codeRow.id)
+    if ((count || 0) >= codeRow.max_repeats) {
+      return { error: `คุณส่งภารกิจนี้ครบ ${codeRow.max_repeats} ครั้งแล้ว ไม่สามารถส่งซ้ำได้อีก` }
+    }
+  }
 
   // ── ดึง token ผู้เล่น (ใช้ทั้ง map check และ NPC proximity check) ──
   const { data: playerToken } = await supabase
@@ -866,4 +913,836 @@ export async function getSleepLogs(page: number = 1) {
   })
 
   return { logs, total: count || 0, page, totalPages: Math.ceil((count || 0) / PAGE_SIZE), isAdmin }
+}
+
+
+/* ══════════════════════════════════════════════
+   PUNISHMENT SYSTEM — บทลงโทษ
+   ══════════════════════════════════════════════ */
+
+export async function getPlayersForDropdown() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+  if (!(await requireAdmin(supabase, user.id))) return []
+
+  const { data } = await supabase
+    .from('profiles')
+    .select('id, display_name, avatar_url, role')
+    .order('display_name', { ascending: true })
+
+  return (data ?? []).filter(p => p.role === 'player').map(p => ({
+    id: p.id,
+    display_name: p.display_name || 'Unnamed',
+    avatar_url: p.avatar_url,
+  }))
+}
+
+export async function getAllActionAndQuestCodes() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { actions: [], quests: [] }
+  if (!(await requireAdmin(supabase, user.id))) return { actions: [], quests: [] }
+
+  const { data: actions } = await supabase
+    .from('action_codes')
+    .select('id, name, code')
+    .order('created_at', { ascending: false })
+
+  const { data: quests } = await supabase
+    .from('quest_codes')
+    .select('id, name, code')
+    .order('created_at', { ascending: false })
+
+  return {
+    actions: (actions ?? []).map(a => ({ id: a.id, name: a.name, code: a.code, type: 'action' as const })),
+    quests: (quests ?? []).map(q => ({ id: q.id, name: q.name, code: q.code, type: 'quest' as const })),
+  }
+}
+
+export interface PunishmentInput {
+  name: string
+  description?: string
+  penalty_sanity?: number
+  penalty_hp?: number
+  penalty_travel?: number
+  penalty_spirituality?: number
+  penalty_max_sanity?: number
+  penalty_max_travel?: number
+  penalty_max_spirituality?: number
+  deadline?: string | null
+  required_task_ids: { action_code_id?: string; quest_code_id?: string }[]
+  player_ids: string[]
+}
+
+export async function createPunishment(input: PunishmentInput) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+  if (!(await requireAdmin(supabase, user.id))) return { error: 'Admin/DM required' }
+
+  if (!input.name?.trim()) return { error: 'กรุณากรอกชื่อบทลงโทษ' }
+  if (input.required_task_ids.length === 0) return { error: 'กรุณาเลือกแอคชั่น/ภารกิจที่ต้องทำอย่างน้อย 1 รายการ' }
+  if (input.player_ids.length === 0) return { error: 'กรุณาเลือกผู้เล่นอย่างน้อย 1 คน' }
+
+  // Create punishment
+  const { data: punishment, error: pErr } = await supabase
+    .from('punishments')
+    .insert({
+      name: input.name.trim(),
+      description: input.description?.trim() || null,
+      penalty_sanity: input.penalty_sanity || 0,
+      penalty_hp: input.penalty_hp || 0,
+      penalty_travel: input.penalty_travel || 0,
+      penalty_spirituality: input.penalty_spirituality || 0,
+      penalty_max_sanity: input.penalty_max_sanity || 0,
+      penalty_max_travel: input.penalty_max_travel || 0,
+      penalty_max_spirituality: input.penalty_max_spirituality || 0,
+      deadline: input.deadline || null,
+      created_by: user.id,
+    })
+    .select()
+    .single()
+
+  if (pErr || !punishment) return { error: pErr?.message || 'ไม่สามารถสร้างบทลงโทษได้' }
+
+  // Insert required tasks
+  const taskInserts = input.required_task_ids.map(t => ({
+    punishment_id: punishment.id,
+    action_code_id: t.action_code_id || null,
+    quest_code_id: t.quest_code_id || null,
+  }))
+  const { error: tErr } = await supabase.from('punishment_required_tasks').insert(taskInserts)
+  if (tErr) return { error: tErr.message }
+
+  // Insert assigned players
+  const playerInserts = input.player_ids.map(pid => ({
+    punishment_id: punishment.id,
+    player_id: pid,
+  }))
+  const { error: ppErr } = await supabase.from('punishment_players').insert(playerInserts)
+  if (ppErr) return { error: ppErr.message }
+
+  // Log creation
+  for (const pid of input.player_ids) {
+    await supabase.from('punishment_logs').insert({
+      punishment_id: punishment.id,
+      player_id: pid,
+      action: 'assigned',
+      details: { punishment_name: punishment.name },
+      created_by: user.id,
+    })
+  }
+
+  revalidatePath('/dashboard/action-quest')
+  return { success: true, punishmentId: punishment.id }
+}
+
+export async function getPunishments(page: number = 1) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { punishments: [], total: 0 }
+
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
+  const offset = (page - 1) * PAGE_SIZE
+
+  let countQ, dataQ
+
+  if (isAdmin) {
+    countQ = supabase.from('punishments').select('*', { count: 'exact', head: true })
+    dataQ = supabase.from('punishments').select('*')
+      .order('created_at', { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1)
+  } else {
+    // Player: only see punishments assigned to them
+    const { data: myPunishmentIds } = await supabase
+      .from('punishment_players')
+      .select('punishment_id')
+      .eq('player_id', user.id)
+
+    const pIds = (myPunishmentIds ?? []).map(p => p.punishment_id)
+    if (pIds.length === 0) return { punishments: [], total: 0, page: 1, totalPages: 1 }
+
+    countQ = supabase.from('punishments').select('*', { count: 'exact', head: true }).in('id', pIds)
+    dataQ = supabase.from('punishments').select('*')
+      .in('id', pIds)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1)
+  }
+
+  const { count } = await countQ
+  const { data, error } = await dataQ
+  if (error) return { punishments: [], total: 0 }
+
+  // Fetch related data
+  const punishmentIds = (data ?? []).map(p => p.id)
+
+  // Get required tasks
+  const { data: tasks } = punishmentIds.length > 0
+    ? await supabase.from('punishment_required_tasks')
+        .select('*, action_code:action_code_id(id, name, code), quest_code:quest_code_id(id, name, code)')
+        .in('punishment_id', punishmentIds)
+    : { data: [] }
+
+  // Get assigned players
+  const { data: players } = punishmentIds.length > 0
+    ? await supabase.from('punishment_players')
+        .select('*, player:player_id(id, display_name, avatar_url)')
+        .in('punishment_id', punishmentIds)
+    : { data: [] }
+
+  // Get creator names
+  const creatorIds = [...new Set((data ?? []).map(p => p.created_by))]
+  const { data: profiles } = creatorIds.length > 0
+    ? await supabase.from('profiles').select('id, display_name').in('id', creatorIds)
+    : { data: [] }
+  const pMap = new Map((profiles ?? []).map(p => [p.id, p.display_name]))
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const punishments = (data ?? []).map((p: any) => ({
+    ...p,
+    created_by_name: pMap.get(p.created_by) || 'ไม่ทราบ',
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    required_tasks: (tasks ?? []).filter((t: any) => t.punishment_id === p.id).map((t: any) => ({
+      id: t.id,
+      action_code_id: t.action_code_id,
+      quest_code_id: t.quest_code_id,
+      action_name: t.action_code?.name || null,
+      action_code_str: t.action_code?.code || null,
+      quest_name: t.quest_code?.name || null,
+      quest_code_str: t.quest_code?.code || null,
+    })),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    assigned_players: (players ?? []).filter((pp: any) => pp.punishment_id === p.id).map((pp: any) => ({
+      id: pp.id,
+      player_id: pp.player_id,
+      player_name: pp.player?.display_name || 'ไม่ทราบ',
+      player_avatar: pp.player?.avatar_url || null,
+      is_completed: pp.is_completed,
+      penalty_applied: pp.penalty_applied,
+      mercy_requested: pp.mercy_requested,
+      mercy_requested_at: pp.mercy_requested_at,
+      completed_at: pp.completed_at,
+    })),
+  }))
+
+  return { punishments, total: count || 0, page, totalPages: Math.ceil((count || 0) / PAGE_SIZE), isAdmin }
+}
+
+export async function requestMercy(punishmentId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  // Find the punishment player entry
+  const { data: pp } = await supabase
+    .from('punishment_players')
+    .select('id, is_completed, penalty_applied, mercy_requested, punishment_id')
+    .eq('punishment_id', punishmentId)
+    .eq('player_id', user.id)
+    .single()
+
+  if (!pp) return { error: 'คุณไม่ได้ถูกกำหนดให้รับบทลงโทษนี้' }
+  if (pp.penalty_applied) return { error: 'บทลงโทษถูกดำเนินการแล้ว' }
+  if (pp.mercy_requested) return { error: 'คุณขอเทพเมตตาไปแล้ว' }
+
+  // Check if all required tasks have approved submissions
+  const { data: requiredTasks } = await supabase
+    .from('punishment_required_tasks')
+    .select('action_code_id, quest_code_id')
+    .eq('punishment_id', punishmentId)
+
+  if (!requiredTasks || requiredTasks.length === 0) {
+    return { error: 'ไม่พบภารกิจที่กำหนดในบทลงโทษนี้' }
+  }
+
+  for (const task of requiredTasks) {
+    if (task.action_code_id) {
+      const { data: approvedSub } = await supabase
+        .from('action_submissions')
+        .select('id')
+        .eq('player_id', user.id)
+        .eq('action_code_id', task.action_code_id)
+        .eq('status', 'approved')
+        .limit(1)
+        .maybeSingle()
+      if (!approvedSub) {
+        return { error: 'คุณยังทำแอคชั่น/ภารกิจที่กำหนดไม่ครบ หรือยังไม่ได้รับอนุมัติ' }
+      }
+    }
+    if (task.quest_code_id) {
+      const { data: approvedSub } = await supabase
+        .from('quest_submissions')
+        .select('id')
+        .eq('player_id', user.id)
+        .eq('quest_code_id', task.quest_code_id)
+        .eq('status', 'approved')
+        .limit(1)
+        .maybeSingle()
+      if (!approvedSub) {
+        return { error: 'คุณยังทำแอคชั่น/ภารกิจที่กำหนดไม่ครบ หรือยังไม่ได้รับอนุมัติ' }
+      }
+    }
+  }
+
+  // All tasks approved — mark mercy requested
+  const { error } = await supabase
+    .from('punishment_players')
+    .update({
+      mercy_requested: true,
+      mercy_requested_at: new Date().toISOString(),
+      is_completed: true,
+      completed_at: new Date().toISOString(),
+    })
+    .eq('id', pp.id)
+
+  if (error) return { error: error.message }
+
+  // Log mercy request
+  await supabase.from('punishment_logs').insert({
+    punishment_id: punishmentId,
+    player_id: user.id,
+    action: 'mercy_requested',
+    details: { message: 'ผู้เล่นทำภารกิจครบและขอเทพเมตตา' },
+    created_by: user.id,
+  })
+
+  revalidatePath('/dashboard/action-quest')
+  return { success: true }
+}
+
+export async function applyPenalty(punishmentId: string, playerId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+  if (!(await requireAdmin(supabase, user.id))) return { error: 'Admin/DM required' }
+
+  const { data: punishment } = await supabase
+    .from('punishments')
+    .select('*')
+    .eq('id', punishmentId)
+    .single()
+
+  if (!punishment) return { error: 'ไม่พบบทลงโทษ' }
+
+  const { data: pp } = await supabase
+    .from('punishment_players')
+    .select('id, penalty_applied')
+    .eq('punishment_id', punishmentId)
+    .eq('player_id', playerId)
+    .single()
+
+  if (!pp) return { error: 'ไม่พบผู้เล่นในบทลงโทษนี้' }
+  if (pp.penalty_applied) return { error: 'บทลงโทษถูกดำเนินการไปแล้ว' }
+
+  // Get player's current stats
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('hp, sanity, max_sanity, travel_points, max_travel_points, spirituality, max_spirituality')
+    .eq('id', playerId)
+    .single()
+
+  if (!profile) return { error: 'ไม่พบโปรไฟล์ผู้เล่น' }
+
+  // Apply penalties
+  const updates: Record<string, number> = {}
+
+  // Reduce max values first
+  if (punishment.penalty_max_sanity > 0) {
+    updates.max_sanity = Math.max(0, (profile.max_sanity ?? 10) - punishment.penalty_max_sanity)
+  }
+  if (punishment.penalty_max_travel > 0) {
+    updates.max_travel_points = Math.max(0, (profile.max_travel_points ?? 10) - punishment.penalty_max_travel)
+  }
+  if (punishment.penalty_max_spirituality > 0) {
+    updates.max_spirituality = Math.max(0, (profile.max_spirituality ?? 10) - punishment.penalty_max_spirituality)
+  }
+
+  // Reduce current values (clamped to 0, and to new max if max was reduced)
+  const newMaxSanity = updates.max_sanity ?? profile.max_sanity ?? 10
+  const newMaxTravel = updates.max_travel_points ?? profile.max_travel_points ?? 10
+  const newMaxSpirit = updates.max_spirituality ?? profile.max_spirituality ?? 10
+
+  if (punishment.penalty_sanity > 0) {
+    updates.sanity = Math.max(0, Math.min(newMaxSanity, (profile.sanity ?? 0) - punishment.penalty_sanity))
+  }
+  if (punishment.penalty_hp > 0) {
+    updates.hp = Math.max(0, (profile.hp ?? 0) - punishment.penalty_hp)
+  }
+  if (punishment.penalty_travel > 0) {
+    updates.travel_points = Math.max(0, Math.min(newMaxTravel, (profile.travel_points ?? 0) - punishment.penalty_travel))
+  }
+  if (punishment.penalty_spirituality > 0) {
+    updates.spirituality = Math.max(0, Math.min(newMaxSpirit, (profile.spirituality ?? 0) - punishment.penalty_spirituality))
+  }
+
+  // Clamp current values to new max
+  if (updates.max_sanity !== undefined && !updates.sanity) {
+    updates.sanity = Math.min(newMaxSanity, profile.sanity ?? 0)
+  }
+  if (updates.max_travel_points !== undefined && !updates.travel_points) {
+    updates.travel_points = Math.min(newMaxTravel, profile.travel_points ?? 0)
+  }
+  if (updates.max_spirituality !== undefined && !updates.spirituality) {
+    updates.spirituality = Math.min(newMaxSpirit, profile.spirituality ?? 0)
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await supabase.from('profiles').update(updates).eq('id', playerId)
+  }
+
+  // Mark penalty applied
+  await supabase.from('punishment_players')
+    .update({ penalty_applied: true })
+    .eq('id', pp.id)
+
+  // Log
+  await supabase.from('punishment_logs').insert({
+    punishment_id: punishmentId,
+    player_id: playerId,
+    action: 'penalty_applied',
+    details: {
+      penalty_sanity: punishment.penalty_sanity,
+      penalty_hp: punishment.penalty_hp,
+      penalty_travel: punishment.penalty_travel,
+      penalty_spirituality: punishment.penalty_spirituality,
+      penalty_max_sanity: punishment.penalty_max_sanity,
+      penalty_max_travel: punishment.penalty_max_travel,
+      penalty_max_spirituality: punishment.penalty_max_spirituality,
+    },
+    created_by: user.id,
+  })
+
+  revalidatePath('/dashboard/action-quest')
+  return { success: true }
+}
+
+export async function getPunishmentLogs(page: number = 1) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { logs: [], total: 0 }
+
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
+  const offset = (page - 1) * PAGE_SIZE
+
+  const selectFields = `
+    *,
+    player:player_id(id, display_name, avatar_url),
+    punishment:punishment_id(id, name),
+    actor:created_by(id, display_name)
+  `
+
+  let countQ = supabase.from('punishment_logs').select('*', { count: 'exact', head: true })
+  if (!isAdmin) countQ = countQ.eq('player_id', user.id)
+  const { count } = await countQ
+
+  let dataQ = supabase.from('punishment_logs').select(selectFields)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + PAGE_SIZE - 1)
+  if (!isAdmin) dataQ = dataQ.eq('player_id', user.id)
+  const { data, error } = await dataQ
+
+  if (error) return { logs: [], total: 0 }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const logs = (data ?? []).map((r: any) => ({
+    id: r.id,
+    punishment_id: r.punishment_id,
+    punishment_name: r.punishment?.name || '—',
+    player_id: r.player_id,
+    player_name: r.player?.display_name || 'ไม่ทราบ',
+    player_avatar: r.player?.avatar_url || null,
+    action: r.action,
+    details: r.details || {},
+    created_by_name: r.actor?.display_name || null,
+    created_at: r.created_at,
+  }))
+
+  return { logs, total: count || 0, page, totalPages: Math.ceil((count || 0) / PAGE_SIZE) }
+}
+
+export async function checkPlayerTaskCompletion(punishmentId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { allCompleted: false }
+
+  const { data: requiredTasks } = await supabase
+    .from('punishment_required_tasks')
+    .select('action_code_id, quest_code_id')
+    .eq('punishment_id', punishmentId)
+
+  if (!requiredTasks || requiredTasks.length === 0) return { allCompleted: false }
+
+  for (const task of requiredTasks) {
+    if (task.action_code_id) {
+      const { data: approvedSub } = await supabase
+        .from('action_submissions')
+        .select('id')
+        .eq('player_id', user.id)
+        .eq('action_code_id', task.action_code_id)
+        .eq('status', 'approved')
+        .limit(1)
+        .maybeSingle()
+      if (!approvedSub) return { allCompleted: false }
+    }
+    if (task.quest_code_id) {
+      const { data: approvedSub } = await supabase
+        .from('quest_submissions')
+        .select('id')
+        .eq('player_id', user.id)
+        .eq('quest_code_id', task.quest_code_id)
+        .eq('status', 'approved')
+        .limit(1)
+        .maybeSingle()
+      if (!approvedSub) return { allCompleted: false }
+    }
+  }
+
+  return { allCompleted: true }
+}
+
+
+/* ══════════════════════════════════════════════
+   EDIT ACTION CODE — แก้ไขโค้ดแอคชั่น
+   ══════════════════════════════════════════════ */
+
+export async function updateActionCode(
+  id: string,
+  name: string,
+  rewards?: ActionRewards,
+  expiration?: CodeExpiration
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+  if (!(await requireAdmin(supabase, user.id))) return { error: 'Admin/DM required' }
+  if (!name?.trim()) return { error: 'กรุณากรอกชื่อแอคชั่น' }
+
+  const updateData: Record<string, unknown> = {
+    name: name.trim(),
+    reward_hp: rewards?.reward_hp || 0,
+    reward_sanity: rewards?.reward_sanity || 0,
+    reward_travel: rewards?.reward_travel || 0,
+    reward_spirituality: rewards?.reward_spirituality || 0,
+    reward_max_sanity: rewards?.reward_max_sanity || 0,
+    reward_max_travel: rewards?.reward_max_travel || 0,
+    reward_max_spirituality: rewards?.reward_max_spirituality || 0,
+    expires_at: expiration?.expires_at || null,
+    max_repeats: expiration?.max_repeats ?? null,
+  }
+
+  const { error } = await supabase
+    .from('action_codes')
+    .update(updateData)
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/action-quest')
+  return { success: true }
+}
+
+
+/* ══════════════════════════════════════════════
+   EDIT QUEST CODE — แก้ไขโค้ดภารกิจ
+   ══════════════════════════════════════════════ */
+
+export async function updateQuestCode(
+  id: string,
+  name: string,
+  mapId?: string | null,
+  npcTokenId?: string | null,
+  expiration?: CodeExpiration
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+  if (!(await requireAdmin(supabase, user.id))) return { error: 'Admin/DM required' }
+  if (!name?.trim()) return { error: 'กรุณากรอกชื่อภารกิจ' }
+
+  // If NPC selected, auto-fill map and validate radius
+  let resolvedMapId = mapId || null
+  if (npcTokenId) {
+    const { data: npcToken } = await supabase
+      .from('map_tokens')
+      .select('map_id, interaction_radius')
+      .eq('id', npcTokenId)
+      .eq('token_type', 'npc')
+      .single()
+    if (!npcToken) return { error: 'ไม่พบ NPC นี้ในระบบ' }
+    if (npcToken.interaction_radius <= 0) return { error: 'NPC นี้ยังไม่ได้กำหนดเขตทำการ กรุณาตั้งค่ารัศมีในแมพก่อน' }
+    resolvedMapId = npcToken.map_id
+  }
+
+  const updateData: Record<string, unknown> = {
+    name: name.trim(),
+    map_id: resolvedMapId,
+    npc_token_id: npcTokenId || null,
+    expires_at: expiration?.expires_at || null,
+    max_repeats: expiration?.max_repeats ?? null,
+  }
+
+  const { error } = await supabase
+    .from('quest_codes')
+    .update(updateData)
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/action-quest')
+  return { success: true }
+}
+
+
+/* ══════════════════════════════════════════════
+   EDIT PUNISHMENT — แก้ไขบทลงโทษ
+   ══════════════════════════════════════════════ */
+
+export interface PunishmentUpdateInput {
+  name: string
+  description?: string
+  penalty_sanity?: number
+  penalty_hp?: number
+  penalty_travel?: number
+  penalty_spirituality?: number
+  penalty_max_sanity?: number
+  penalty_max_travel?: number
+  penalty_max_spirituality?: number
+  deadline?: string | null
+  required_task_ids: { action_code_id?: string; quest_code_id?: string }[]
+  player_ids: string[]
+}
+
+export async function updatePunishment(id: string, input: PunishmentUpdateInput) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+  if (!(await requireAdmin(supabase, user.id))) return { error: 'Admin/DM required' }
+
+  // Check if punishment exists and deadline hasn't passed
+  const { data: existing } = await supabase
+    .from('punishments')
+    .select('id, deadline')
+    .eq('id', id)
+    .single()
+
+  if (!existing) return { error: 'ไม่พบบทลงโทษ' }
+
+  // Use server time to check deadline
+  const { data: serverTimeResult } = await supabase.rpc('now')
+  const serverNow = serverTimeResult ? new Date(serverTimeResult) : new Date()
+
+  if (existing.deadline && new Date(existing.deadline) < serverNow) {
+    return { error: 'บทลงโทษหมดเวลาแล้ว ไม่สามารถแก้ไขได้' }
+  }
+
+  if (!input.name?.trim()) return { error: 'กรุณากรอกชื่อบทลงโทษ' }
+  if (input.required_task_ids.length === 0) return { error: 'กรุณาเลือกแอคชั่น/ภารกิจอย่างน้อย 1 รายการ' }
+  if (input.player_ids.length === 0) return { error: 'กรุณาเลือกผู้เล่นอย่างน้อย 1 คน' }
+
+  // Update main punishment
+  const { error: pErr } = await supabase
+    .from('punishments')
+    .update({
+      name: input.name.trim(),
+      description: input.description?.trim() || null,
+      penalty_sanity: input.penalty_sanity || 0,
+      penalty_hp: input.penalty_hp || 0,
+      penalty_travel: input.penalty_travel || 0,
+      penalty_spirituality: input.penalty_spirituality || 0,
+      penalty_max_sanity: input.penalty_max_sanity || 0,
+      penalty_max_travel: input.penalty_max_travel || 0,
+      penalty_max_spirituality: input.penalty_max_spirituality || 0,
+      deadline: input.deadline || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+
+  if (pErr) return { error: pErr.message }
+
+  // Replace required tasks: delete old, insert new
+  await supabase.from('punishment_required_tasks').delete().eq('punishment_id', id)
+  const taskInserts = input.required_task_ids.map(t => ({
+    punishment_id: id,
+    action_code_id: t.action_code_id || null,
+    quest_code_id: t.quest_code_id || null,
+  }))
+  const { error: tErr } = await supabase.from('punishment_required_tasks').insert(taskInserts)
+  if (tErr) return { error: tErr.message }
+
+  // Replace assigned players: delete those not in new list, add new ones (keep existing completion states)
+  const { data: existingPlayers } = await supabase
+    .from('punishment_players')
+    .select('id, player_id')
+    .eq('punishment_id', id)
+
+  const existingPlayerIds = (existingPlayers ?? []).map(p => p.player_id)
+  const toRemove = existingPlayerIds.filter(pid => !input.player_ids.includes(pid))
+  const toAdd = input.player_ids.filter(pid => !existingPlayerIds.includes(pid))
+
+  if (toRemove.length > 0) {
+    await supabase.from('punishment_players').delete()
+      .eq('punishment_id', id)
+      .in('player_id', toRemove)
+  }
+  if (toAdd.length > 0) {
+    const playerInserts = toAdd.map(pid => ({ punishment_id: id, player_id: pid }))
+    await supabase.from('punishment_players').insert(playerInserts)
+    // Log new assignments
+    for (const pid of toAdd) {
+      await supabase.from('punishment_logs').insert({
+        punishment_id: id,
+        player_id: pid,
+        action: 'assigned',
+        details: { punishment_name: input.name },
+        created_by: user.id,
+      })
+    }
+  }
+
+  revalidatePath('/dashboard/action-quest')
+  return { success: true }
+}
+
+
+/* ══════════════════════════════════════════════
+   AUTO-APPLY EXPIRED PUNISHMENTS — ลงโทษอัตโนมัติ
+   ══════════════════════════════════════════════ */
+
+/**
+ * Client-side fallback for auto-applying expired punishment penalties.
+ * The PRIMARY mechanism is the pg_cron job `auto_apply_expired_punishments()`
+ * running every 15 minutes on Supabase (see supabase/add_punishment_cron.sql).
+ * This function serves as an additional safety net when an admin visits the page.
+ */
+export async function autoApplyExpiredPunishments() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  if (!(await requireAdmin(supabase, user.id))) return
+
+  // Use server time
+  const { data: serverTimeResult } = await supabase.rpc('now')
+  const serverNow = serverTimeResult ? new Date(serverTimeResult).toISOString() : new Date().toISOString()
+
+  // Find active punishments past deadline
+  const { data: expiredPunishments } = await supabase
+    .from('punishments')
+    .select('*')
+    .eq('is_active', true)
+    .not('deadline', 'is', null)
+    .lt('deadline', serverNow)
+
+  if (!expiredPunishments || expiredPunishments.length === 0) return
+
+  for (const punishment of expiredPunishments) {
+    // Find players who haven't been penalized and haven't requested mercy
+    const { data: pendingPlayers } = await supabase
+      .from('punishment_players')
+      .select('id, player_id')
+      .eq('punishment_id', punishment.id)
+      .eq('penalty_applied', false)
+      .eq('mercy_requested', false)
+
+    if (!pendingPlayers || pendingPlayers.length === 0) {
+      // All players handled — deactivate punishment
+      await supabase.from('punishments').update({ is_active: false }).eq('id', punishment.id)
+      continue
+    }
+
+    for (const pp of pendingPlayers) {
+      // Get player's current stats
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('hp, sanity, max_sanity, travel_points, max_travel_points, spirituality, max_spirituality')
+        .eq('id', pp.player_id)
+        .single()
+
+      if (!profile) continue
+
+      // Apply penalties (same logic as applyPenalty)
+      const updates: Record<string, number> = {}
+
+      if (punishment.penalty_max_sanity > 0) {
+        updates.max_sanity = Math.max(0, (profile.max_sanity ?? 10) - punishment.penalty_max_sanity)
+      }
+      if (punishment.penalty_max_travel > 0) {
+        updates.max_travel_points = Math.max(0, (profile.max_travel_points ?? 10) - punishment.penalty_max_travel)
+      }
+      if (punishment.penalty_max_spirituality > 0) {
+        updates.max_spirituality = Math.max(0, (profile.max_spirituality ?? 10) - punishment.penalty_max_spirituality)
+      }
+
+      const newMaxSanity = updates.max_sanity ?? profile.max_sanity ?? 10
+      const newMaxTravel = updates.max_travel_points ?? profile.max_travel_points ?? 10
+      const newMaxSpirit = updates.max_spirituality ?? profile.max_spirituality ?? 10
+
+      if (punishment.penalty_sanity > 0) {
+        updates.sanity = Math.max(0, Math.min(newMaxSanity, (profile.sanity ?? 0) - punishment.penalty_sanity))
+      }
+      if (punishment.penalty_hp > 0) {
+        updates.hp = Math.max(0, (profile.hp ?? 0) - punishment.penalty_hp)
+      }
+      if (punishment.penalty_travel > 0) {
+        updates.travel_points = Math.max(0, Math.min(newMaxTravel, (profile.travel_points ?? 0) - punishment.penalty_travel))
+      }
+      if (punishment.penalty_spirituality > 0) {
+        updates.spirituality = Math.max(0, Math.min(newMaxSpirit, (profile.spirituality ?? 0) - punishment.penalty_spirituality))
+      }
+
+      if (updates.max_sanity !== undefined && !updates.sanity) {
+        updates.sanity = Math.min(newMaxSanity, profile.sanity ?? 0)
+      }
+      if (updates.max_travel_points !== undefined && !updates.travel_points) {
+        updates.travel_points = Math.min(newMaxTravel, profile.travel_points ?? 0)
+      }
+      if (updates.max_spirituality !== undefined && !updates.spirituality) {
+        updates.spirituality = Math.min(newMaxSpirit, profile.spirituality ?? 0)
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await supabase.from('profiles').update(updates).eq('id', pp.player_id)
+      }
+
+      // Mark penalty applied
+      await supabase.from('punishment_players')
+        .update({ penalty_applied: true })
+        .eq('id', pp.id)
+
+      // Log auto-penalty
+      await supabase.from('punishment_logs').insert({
+        punishment_id: punishment.id,
+        player_id: pp.player_id,
+        action: 'penalty_applied',
+        details: {
+          auto: true,
+          reason: 'หมดเวลาบทลงโทษ — ลงโทษอัตโนมัติ',
+          penalty_sanity: punishment.penalty_sanity,
+          penalty_hp: punishment.penalty_hp,
+          penalty_travel: punishment.penalty_travel,
+          penalty_spirituality: punishment.penalty_spirituality,
+          penalty_max_sanity: punishment.penalty_max_sanity,
+          penalty_max_travel: punishment.penalty_max_travel,
+          penalty_max_spirituality: punishment.penalty_max_spirituality,
+        },
+        created_by: user.id,
+      })
+    }
+
+    // Deactivate punishment after processing
+    await supabase.from('punishments').update({ is_active: false }).eq('id', punishment.id)
+  }
+
+  revalidatePath('/dashboard/action-quest')
+}
+
+
+/* ══════════════════════════════════════════════
+   GET SERVER TIME — ดึงเวลาจากเซิร์ฟเวอร์
+   ══════════════════════════════════════════════ */
+
+export async function getServerTime() {
+  const supabase = await createClient()
+  const { data } = await supabase.rpc('now')
+  return data ? new Date(data).toISOString() : new Date().toISOString()
 }

@@ -112,6 +112,8 @@ export interface ActionCode {
   reward_max_sanity: number
   reward_max_travel: number
   reward_max_spirituality: number
+  expires_at: string | null
+  max_repeats: number | null
   created_by: string
   created_at: string
 }
@@ -122,7 +124,59 @@ export interface QuestCode {
   code: string
   map_id: string | null
   npc_token_id: string | null
+  expires_at: string | null
+  max_repeats: number | null
   created_by: string
+  created_at: string
+}
+
+/* ═══════════ Punishment System ═══════════ */
+
+export interface Punishment {
+  id: string
+  name: string
+  description: string | null
+  penalty_sanity: number
+  penalty_hp: number
+  penalty_travel: number
+  penalty_spirituality: number
+  penalty_max_sanity: number
+  penalty_max_travel: number
+  penalty_max_spirituality: number
+  deadline: string | null
+  is_active: boolean
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface PunishmentRequiredTask {
+  id: string
+  punishment_id: string
+  action_code_id: string | null
+  quest_code_id: string | null
+  created_at: string
+}
+
+export interface PunishmentPlayer {
+  id: string
+  punishment_id: string
+  player_id: string
+  is_completed: boolean
+  penalty_applied: boolean
+  mercy_requested: boolean
+  mercy_requested_at: string | null
+  completed_at: string | null
+  created_at: string
+}
+
+export interface PunishmentLog {
+  id: string
+  punishment_id: string
+  player_id: string
+  action: string
+  details: Record<string, unknown>
+  created_by: string | null
   created_at: string
 }
 
