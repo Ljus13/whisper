@@ -1073,8 +1073,10 @@ export async function getPunishments(page: number = 1) {
     if (pIds.length === 0) return { punishments: [], total: 0, page: 1, totalPages: 1 }
 
     countQ = supabase.from('punishments').select('*', { count: 'exact', head: true }).in('id', pIds)
+      .or('archived.is.null,archived.eq.false')
     dataQ = supabase.from('punishments').select('*')
       .in('id', pIds)
+      .or('archived.is.null,archived.eq.false')
       .order('created_at', { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1)
   }
