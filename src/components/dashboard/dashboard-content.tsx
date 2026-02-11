@@ -8,7 +8,7 @@ import SanityLockOverlay from '@/components/sanity-lock-overlay'
 import { CornerOrnament, OrnamentedCard } from '@/components/ui/ornaments'
 import dynamic from 'next/dynamic'
 import type { User } from '@supabase/supabase-js'
-import { LogOut, Shield, Swords, Crown, Settings, X, Camera, Map, Zap, Users, Footprints, Flame, Brain, Heart, Pencil, Lock, Image as ImageIcon, BookOpen, FileText } from 'lucide-react'
+import { LogOut, Shield, Swords, Crown, Settings, X, Camera, Map, Zap, Users, Footprints, Flame, Brain, Heart, Pencil, Lock, Image as ImageIcon, BookOpen, FileText, Church } from 'lucide-react'
 import { useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -30,6 +30,12 @@ interface Profile {
   max_spirituality: number
   travel_points: number
   max_travel_points: number
+  religion_id?: string | null
+  religions?: {
+    id: string
+    name_th: string
+    logo_url: string | null
+  } | null
   created_at: string
   updated_at: string
 }
@@ -201,7 +207,8 @@ export default function DashboardContent({
           </div>
 
           {/* Right: Stats Grid — fills remaining space */}
-          <div className="flex-1 w-full grid grid-cols-2 gap-3 md:gap-6 xl:gap-8">
+          <div className="flex-1 w-full flex flex-col gap-3 md:gap-6 xl:gap-8">
+            <div className="w-full grid grid-cols-2 gap-3 md:gap-6 xl:gap-8">
             {/* ตัวตายตัวแทน (HP) */}
             <div className="p-3 md:p-6 bg-victorian-900/60 border border-red-500/20 rounded-md flex flex-col md:flex-row items-center md:justify-between gap-2 md:gap-4">
               <div className="flex items-center gap-2 md:gap-4">
@@ -291,6 +298,27 @@ export default function DashboardContent({
                     boxShadow: '0 0 12px rgba(16, 185, 129, 0.5)'
                   }}
                 />
+              </div>
+            </div>
+            </div>
+            <div className="p-3 md:p-5 bg-victorian-900/60 border border-gold-400/20 rounded-md flex items-center gap-3 md:gap-4">
+              <div className="p-2 md:p-3 bg-gold-500/10 rounded-full">
+                {profile?.religions?.logo_url ? (
+                  <img
+                    src={profile.religions.logo_url}
+                    alt=""
+                    className="w-6 h-6 md:w-9 md:h-9 rounded-full object-cover"
+                    decoding="async"
+                  />
+                ) : (
+                  <Church className="w-6 h-6 md:w-9 md:h-9 text-gold-400" />
+                )}
+              </div>
+              <div className="flex flex-col">
+                <span className="text-gold-400/80 font-display text-[10px] md:text-xs uppercase tracking-wider">ศาสนาที่สังกัด</span>
+                <span className="text-nouveau-cream text-sm md:text-lg font-display">
+                  {profile?.religions?.name_th || 'ยังไม่เลือกศาสนา'}
+                </span>
               </div>
             </div>
           </div>

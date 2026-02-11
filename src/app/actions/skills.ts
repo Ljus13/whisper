@@ -26,9 +26,9 @@ async function requireAdmin() {
    SKILL USAGE LOGS (ประวัติการใช้สกิล)
    ══════════════════════════════════════════════ */
 
-const LOGS_PER_PAGE = 20
+const LOGS_PER_PAGE = 15
 
-export async function getSkillUsageLogs(page: number = 1) {
+export async function getSkillUsageLogs(page: number = 1, search?: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated', logs: [], total: 0 }
@@ -44,6 +44,17 @@ export async function getSkillUsageLogs(page: number = 1) {
 
   const isAdmin = profile.role === 'admin' || profile.role === 'dm'
   const offset = (page - 1) * LOGS_PER_PAGE
+  const query = search?.trim() || ''
+  const hasQuery = query.length > 0
+
+  let matchingPlayerIds: string[] = []
+  if (hasQuery) {
+    const { data: playersRes } = await supabase
+      .from('profiles')
+      .select('id')
+      .ilike('display_name', `%${query}%`)
+    matchingPlayerIds = (playersRes || []).map(p => p.id)
+  }
 
   // Build query — admin sees all, player sees only own logs
   let countQuery = supabase
@@ -52,6 +63,13 @@ export async function getSkillUsageLogs(page: number = 1) {
 
   if (!isAdmin) {
     countQuery = countQuery.eq('player_id', user.id)
+  }
+  if (hasQuery) {
+    if (matchingPlayerIds.length > 0) {
+      countQuery = countQuery.or(`reference_code.ilike.%${query}%,player_id.in.(${matchingPlayerIds.join(',')})`)
+    } else {
+      countQuery = countQuery.ilike('reference_code', `%${query}%`)
+    }
   }
 
   const countResult = await countQuery
@@ -66,6 +84,13 @@ export async function getSkillUsageLogs(page: number = 1) {
 
   if (!isAdmin) {
     dataQuery = dataQuery.eq('player_id', user.id)
+  }
+  if (hasQuery) {
+    if (matchingPlayerIds.length > 0) {
+      dataQuery = dataQuery.or(`reference_code.ilike.%${query}%,player_id.in.(${matchingPlayerIds.join(',')})`)
+    } else {
+      dataQuery = dataQuery.ilike('reference_code', `%${query}%`)
+    }
   }
 
   const dataResult = await dataQuery

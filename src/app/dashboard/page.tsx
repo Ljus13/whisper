@@ -16,7 +16,14 @@ export default async function DashboardPage() {
   const [{ data: profile }, { data: playerPathways }] = await Promise.all([
     supabase
       .from('profiles')
-      .select('*')
+      .select(`
+        *,
+        religions (
+          id,
+          name_th,
+          logo_url
+        )
+      `)
       .eq('id', user.id)
       .single(),
     supabase
