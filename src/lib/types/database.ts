@@ -114,6 +114,7 @@ export interface ActionCode {
   reward_max_spirituality: number
   expires_at: string | null
   max_repeats: number | null
+  archived: boolean
   created_by: string
   created_at: string
 }
@@ -126,6 +127,7 @@ export interface QuestCode {
   npc_token_id: string | null
   expires_at: string | null
   max_repeats: number | null
+  archived: boolean
   created_by: string
   created_at: string
 }
@@ -145,6 +147,7 @@ export interface Punishment {
   penalty_max_spirituality: number
   deadline: string | null
   is_active: boolean
+  archived: boolean
   created_by: string
   created_at: string
   updated_at: string

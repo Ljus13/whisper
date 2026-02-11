@@ -295,10 +295,12 @@ export async function getActionCodes(page: number = 1) {
   const { count } = await supabase
     .from('action_codes')
     .select('*', { count: 'exact', head: true })
+    .or('archived.is.null,archived.eq.false')
 
   const { data, error } = await supabase
     .from('action_codes')
     .select('*')
+    .or('archived.is.null,archived.eq.false')
     .order('created_at', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1)
 
@@ -387,10 +389,12 @@ export async function getQuestCodes(page: number = 1) {
   const { count } = await supabase
     .from('quest_codes')
     .select('*', { count: 'exact', head: true })
+    .or('archived.is.null,archived.eq.false')
 
   const { data, error } = await supabase
     .from('quest_codes')
     .select('*')
+    .or('archived.is.null,archived.eq.false')
     .order('created_at', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1)
 
@@ -1051,7 +1055,9 @@ export async function getPunishments(page: number = 1) {
 
   if (isAdmin) {
     countQ = supabase.from('punishments').select('*', { count: 'exact', head: true })
+      .or('archived.is.null,archived.eq.false')
     dataQ = supabase.from('punishments').select('*')
+      .or('archived.is.null,archived.eq.false')
       .order('created_at', { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1)
   } else {
@@ -1745,4 +1751,126 @@ export async function getServerTime() {
   const supabase = await createClient()
   const { data } = await supabase.rpc('now')
   return data ? new Date(data).toISOString() : new Date().toISOString()
+}
+
+
+/* ══════════════════════════════════════════════
+   ARCHIVE (Soft Delete) — เก็บเข้าคลัง
+   ══════════════════════════════════════════════ */
+
+export async function archiveActionCode(id: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+  if (!(await requireAdmin(supabase, user.id))) return { error: 'Admin/DM required' }
+
+  const { error } = await supabase
+    .from('action_codes')
+    .update({ archived: true })
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/action-quest')
+  return { success: true }
+}
+
+export async function archiveQuestCode(id: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+  if (!(await requireAdmin(supabase, user.id))) return { error: 'Admin/DM required' }
+
+  const { error } = await supabase
+    .from('quest_codes')
+    .update({ archived: true })
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/action-quest')
+  return { success: true }
+}
+
+export async function archivePunishment(id: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+  if (!(await requireAdmin(supabase, user.id))) return { error: 'Admin/DM required' }
+
+  const { error } = await supabase
+    .from('punishments')
+    .update({ archived: true, is_active: false })
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/action-quest')
+  return { success: true }
+}
+
+
+/* ══════════════════════════════════════════════
+   PLAYER ACTIVE PUNISHMENTS — บทลงโทษที่กำลังรับ
+   ══════════════════════════════════════════════ */
+
+/**
+ * Returns active punishments for the current player (for the alert banner).
+ * Includes required tasks and codes so the player knows what to do.
+ */
+export async function getPlayerActivePunishments() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  // Get punishment_players entries for this user where penalty not yet applied and no mercy
+  const { data: myEntries } = await supabase
+    .from('punishment_players')
+    .select('punishment_id, is_completed, penalty_applied, mercy_requested')
+    .eq('player_id', user.id)
+    .eq('penalty_applied', false)
+    .eq('mercy_requested', false)
+
+  if (!myEntries || myEntries.length === 0) return []
+
+  const punishmentIds = myEntries.map(e => e.punishment_id)
+
+  // Fetch active punishments
+  const { data: punishments } = await supabase
+    .from('punishments')
+    .select('*')
+    .in('id', punishmentIds)
+    .eq('is_active', true)
+    .or('archived.is.null,archived.eq.false')
+
+  if (!punishments || punishments.length === 0) return []
+
+  // Fetch required tasks with codes
+  const pIds = punishments.map(p => p.id)
+  const { data: tasks } = await supabase
+    .from('punishment_required_tasks')
+    .select('*, action_code:action_code_id(id, name, code), quest_code:quest_code_id(id, name, code)')
+    .in('punishment_id', pIds)
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return punishments.map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    deadline: p.deadline,
+    penalty_sanity: p.penalty_sanity,
+    penalty_hp: p.penalty_hp,
+    penalty_travel: p.penalty_travel,
+    penalty_spirituality: p.penalty_spirituality,
+    penalty_max_sanity: p.penalty_max_sanity,
+    penalty_max_travel: p.penalty_max_travel,
+    penalty_max_spirituality: p.penalty_max_spirituality,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    required_tasks: (tasks ?? []).filter((t: any) => t.punishment_id === p.id).map((t: any) => ({
+      id: t.id,
+      action_code_id: t.action_code_id,
+      quest_code_id: t.quest_code_id,
+      action_name: t.action_code?.name || null,
+      action_code_str: t.action_code?.code || null,
+      quest_name: t.quest_code?.name || null,
+      quest_code_str: t.quest_code?.code || null,
+    })),
+  }))
 }

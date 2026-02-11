@@ -284,13 +284,22 @@ export async function submitPrayer(evidenceUrls: string[]) {
   return { success: true, gained: gain, newSanity: Math.min(profile.max_sanity, profile.sanity + gain) }
 }
 
+const PRAYER_PAGE_SIZE = 20
+
 /* ══════════════════════════════════════════════
-   GET: Prayer logs for current user
+   GET: Prayer logs for current user (with pagination)
    ══════════════════════════════════════════════ */
-export async function getPrayerLogs() {
+export async function getPrayerLogs(page: number = 1) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return []
+  if (!user) return { logs: [], total: 0, page: 1, totalPages: 1 }
+
+  const offset = (page - 1) * PRAYER_PAGE_SIZE
+
+  const { count } = await supabase
+    .from('prayer_logs')
+    .select('*', { count: 'exact', head: true })
+    .eq('player_id', user.id)
 
   const { data } = await supabase
     .from('prayer_logs')
@@ -304,16 +313,27 @@ export async function getPrayerLogs() {
     `)
     .eq('player_id', user.id)
     .order('created_at', { ascending: false })
-    .limit(20)
+    .range(offset, offset + PRAYER_PAGE_SIZE - 1)
 
-  return data ?? []
+  return {
+    logs: data ?? [],
+    total: count || 0,
+    page,
+    totalPages: Math.ceil((count || 0) / PRAYER_PAGE_SIZE),
+  }
 }
 
 /* ══════════════════════════════════════════════
    GET: All prayer logs (admin/dm only)
    ══════════════════════════════════════════════ */
-export async function getAllPrayerLogs() {
+export async function getAllPrayerLogs(page: number = 1) {
   const { supabase } = await requireAdmin()
+
+  const offset = (page - 1) * PRAYER_PAGE_SIZE
+
+  const { count } = await supabase
+    .from('prayer_logs')
+    .select('*', { count: 'exact', head: true })
 
   // 1. Fetch logs with church details using implicit join involved with public tables
   // We avoid joining 'profiles' directly via SQL because the FK on prayer_logs 
@@ -344,14 +364,14 @@ export async function getAllPrayerLogs() {
       )
     `)
     .order('created_at', { ascending: false })
-    .limit(100)
+    .range(offset, offset + PRAYER_PAGE_SIZE - 1)
 
   if (error) {
     console.error('getAllPrayerLogs error:', error)
-    return { error: error.message, logs: [] }
+    return { error: error.message, logs: [], total: 0, page: 1, totalPages: 1 }
   }
 
-  if (!logs || logs.length === 0) return { logs: [] }
+  if (!logs || logs.length === 0) return { logs: [], total: count || 0, page, totalPages: Math.ceil((count || 0) / PRAYER_PAGE_SIZE) }
 
   // 2. Manual Join for Profiles
   const playerIds = Array.from(new Set(logs.map(l => l.player_id)))
@@ -368,5 +388,5 @@ export async function getAllPrayerLogs() {
     profiles: profileMap.get(log.player_id) || null
   }))
 
-  return { logs: mergedLogs }
+  return { logs: mergedLogs, total: count || 0, page, totalPages: Math.ceil((count || 0) / PRAYER_PAGE_SIZE) }
 }

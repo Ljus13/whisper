@@ -5,7 +5,7 @@ import {
   ArrowLeft, Moon, ScrollText, Swords, Target, Shield, Plus, Copy,
   X, ExternalLink, ChevronLeft, ChevronRight, Clock, CheckCircle,
   XCircle, Send, AlertTriangle, Trash2, Church, Skull, Users, CalendarClock,
-  Repeat, HandHeart, Pencil
+  Repeat, HandHeart, Pencil, Archive, Eye, Info
 } from 'lucide-react'
 import {
   submitSleepRequest, getTodaySleepStatus,
@@ -30,6 +30,10 @@ import {
   updateQuestCode,
   updatePunishment,
   autoApplyExpiredPunishments,
+  archiveActionCode,
+  archiveQuestCode,
+  archivePunishment,
+  getPlayerActivePunishments,
 } from '@/app/actions/action-quest'
 import type { ActionRewards, CodeExpiration } from '@/app/actions/action-quest'
 import { submitPrayer, getPrayerLogs, getAllPrayerLogs } from '@/app/actions/religions'
@@ -201,12 +205,12 @@ function DateTimeInput({ dateVal, timeVal, onDateChange, onTimeChange }: {
   return (
     <div className="grid grid-cols-2 gap-2">
       <div>
-        <label className="block text-[10px] text-victorian-500 mb-0.5">วันที่</label>
+        <label className="block text-[10px] text-victorian-500 mb-0.5">วันที่ <span className="text-victorian-600">(วว/ดด/ปปปป)</span></label>
         <input type="date" value={dateVal} onChange={e => onDateChange(e.target.value)}
           className="input-victorian w-full !py-1.5 !text-xs" />
       </div>
       <div>
-        <label className="block text-[10px] text-victorian-500 mb-0.5">เวลา</label>
+        <label className="block text-[10px] text-victorian-500 mb-0.5">เวลา <span className="text-victorian-600">(ชช:นน, 24 ชม.)</span></label>
         <input type="time" value={timeVal} onChange={e => onTimeChange(e.target.value)}
           className="input-victorian w-full !py-1.5 !text-xs" />
       </div>
@@ -310,6 +314,16 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   // ─── Prayer logs ───
   const [prayerLogs, setPrayerLogs] = useState<any[]>([])
   const [plLoading, setPlLoading] = useState(true)
+  const [plPage, setPlPage] = useState(1)
+  const [plTotalPages, setPlTotalPages] = useState(1)
+  const [plTotal, setPlTotal] = useState(0)
+
+  // ─── Player active punishments (banner) ───
+  const [activePunishmentsForPlayer, setActivePunishmentsForPlayer] = useState<any[]>([])
+  const [showPunishmentDetail, setShowPunishmentDetail] = useState<any | null>(null)
+
+  // ─── Archive confirm modal ───
+  const [archiveConfirm, setArchiveConfirm] = useState<{ type: 'action' | 'quest' | 'punishment'; id: string; name: string } | null>(null)
 
   // ─── Punishment state ───
   const [showCreatePunishment, setShowCreatePunishment] = useState(false)
@@ -430,18 +444,32 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
     setSlLoading(false)
   }, [])
 
-  const fetchPrayerLogs = useCallback(async () => {
+  const fetchPrayerLogs = useCallback(async (p: number = 1) => {
     setPlLoading(true)
     let logs: any[] = []
+    let total = 0
+    let totalPages = 1
     if (isAdmin) {
-      const res = await getAllPrayerLogs()
+      const res = await getAllPrayerLogs(p)
       if ('logs' in res && Array.isArray(res.logs)) {
         logs = res.logs
       }
+      total = (res as any).total || 0
+      totalPages = (res as any).totalPages || 1
     } else {
-      logs = await getPrayerLogs()
+      const res = await getPrayerLogs(p)
+      if ('logs' in res && Array.isArray(res.logs)) {
+        logs = res.logs
+      } else if (Array.isArray(res)) {
+        logs = res
+      }
+      total = (res as any).total || logs.length
+      totalPages = (res as any).totalPages || 1
     }
     setPrayerLogs(logs)
+    setPlTotal(total)
+    setPlPage(p)
+    setPlTotalPages(totalPages)
     setPlLoading(false)
   }, [isAdmin])
 
@@ -481,9 +509,13 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
     fetchActionSubs(1)
     fetchQuestSubs(1)
     fetchSleepLogs(1)
-    fetchPrayerLogs()
+    fetchPrayerLogs(1)
     fetchPunishments(1)
     fetchPunishmentLogs(1)
+    // Fetch player's active punishments for banner
+    if (!isAdmin) {
+      getPlayerActivePunishments().then(r => setActivePunishmentsForPlayer(r))
+    }
   }, [isAdmin, fetchActionCodes, fetchQuestCodes, fetchActionSubs, fetchQuestSubs, fetchSleepLogs, fetchPrayerLogs, fetchPunishments, fetchPunishmentLogs])
 
   // ─── Handlers ───
@@ -641,6 +673,27 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
         toast('success', 'ลงโทษสำเร็จ')
         fetchPunishments(punPage)
         fetchPunishmentLogs(punLogPage)
+      }
+    })
+  }
+
+  function confirmArchive() {
+    if (!archiveConfirm) return
+    const { type, id } = archiveConfirm
+    setArchiveConfirm(null)
+    startTransition(async () => {
+      if (type === 'action') {
+        const r = await archiveActionCode(id)
+        if (r.error) toast('error', r.error)
+        else { toast('success', 'เก็บเข้าคลังแล้ว'); fetchActionCodes(acPage) }
+      } else if (type === 'quest') {
+        const r = await archiveQuestCode(id)
+        if (r.error) toast('error', r.error)
+        else { toast('success', 'เก็บเข้าคลังแล้ว'); fetchQuestCodes(qcPage) }
+      } else {
+        const r = await archivePunishment(id)
+        if (r.error) toast('error', r.error)
+        else { toast('success', 'เก็บเข้าคลังแล้ว'); fetchPunishments(punPage) }
       }
     })
   }
@@ -825,6 +878,39 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
 
         <div className="ornament-divider" />
 
+        {/* ══════ PLAYER PUNISHMENT ALERT BANNER ══════ */}
+        {!isAdmin && activePunishmentsForPlayer.length > 0 && (
+          <div className="rounded-xl border-2 border-red-500/50 bg-gradient-to-r from-red-950/80 via-red-900/60 to-red-950/80 p-4 md:p-5 space-y-3 animate-pulse-slow shadow-lg shadow-red-500/10">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-500/20 border border-red-500/40 flex items-center justify-center shrink-0">
+                <Skull className="w-5 h-5 text-red-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-red-300 font-bold text-base md:text-lg">⚠️ คุณกำลังอยู่ในบทลงโทษ!</h3>
+                <p className="text-red-400/80 text-xs mt-0.5">
+                  มี {activePunishmentsForPlayer.length} บทลงโทษที่ต้องดำเนินการ — ทำภารกิจให้ครบเพื่อขอเทพเมตตา
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {activePunishmentsForPlayer.map((pun: any) => (
+                <div key={pun.id} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-red-950/60 border border-red-500/30">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-red-200 text-sm font-semibold truncate">{pun.name}</p>
+                    {pun.deadline && (
+                      <p className="text-red-400/70 text-[10px] mt-0.5">⏰ กำหนด: {fmtDate(pun.deadline)}</p>
+                    )}
+                  </div>
+                  <button type="button" onClick={() => setShowPunishmentDetail(pun)}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 text-xs font-bold cursor-pointer transition-colors">
+                    <Eye className="w-3.5 h-3.5" /> ดูรายละเอียด
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ══════ ADMIN TOOLS ══════ */}
         {isAdmin && (
           <Card className="p-5 md:p-8">
@@ -1005,10 +1091,18 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                           <td className="py-2 pr-3 text-victorian-400">{c.created_by_name}</td>
                           <td className="py-2 pr-3 text-victorian-500 text-xs">{fmtDate(c.created_at)}</td>
                           <td className="py-2">
-                            <button type="button" onClick={() => openEditAction(c)} disabled={isPending}
-                              className="p-1.5 rounded bg-gold-400/10 border border-gold-400/20 text-gold-400 hover:bg-gold-400/20 cursor-pointer disabled:opacity-50 transition-colors">
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button type="button" onClick={() => openEditAction(c)} disabled={isPending}
+                                className="p-1.5 rounded bg-gold-400/10 border border-gold-400/20 text-gold-400 hover:bg-gold-400/20 cursor-pointer disabled:opacity-50 transition-colors"
+                                title="แก้ไข">
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button type="button" onClick={() => setArchiveConfirm({ type: 'action', id: c.id, name: c.name })} disabled={isPending}
+                                className="p-1.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 cursor-pointer disabled:opacity-50 transition-colors"
+                                title="เก็บเข้าคลัง">
+                                <Archive className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                         )
@@ -1118,10 +1212,18 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                           <td className="py-2 pr-3 text-victorian-400">{c.created_by_name}</td>
                           <td className="py-2 pr-3 text-victorian-500 text-xs">{fmtDate(c.created_at)}</td>
                           <td className="py-2">
-                            <button type="button" onClick={() => openEditQuest(c)} disabled={isPending}
-                              className="p-1.5 rounded bg-gold-400/10 border border-gold-400/20 text-gold-400 hover:bg-gold-400/20 cursor-pointer disabled:opacity-50 transition-colors">
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button type="button" onClick={() => openEditQuest(c)} disabled={isPending}
+                                className="p-1.5 rounded bg-gold-400/10 border border-gold-400/20 text-gold-400 hover:bg-gold-400/20 cursor-pointer disabled:opacity-50 transition-colors"
+                                title="แก้ไข">
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button type="button" onClick={() => setArchiveConfirm({ type: 'quest', id: c.id, name: c.name })} disabled={isPending}
+                                className="p-1.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 cursor-pointer disabled:opacity-50 transition-colors"
+                                title="เก็บเข้าคลัง">
+                                <Archive className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                         )
@@ -1163,7 +1265,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
           <div className="space-y-3">
             <h3 className="heading-victorian text-lg flex items-center gap-2">
               <Church className="w-4 h-4 text-purple-400" /> ประวัติการภาวนา
-              <span className="text-victorian-500 text-xs font-normal ml-1">({prayerLogs.length})</span>
+              <span className="text-victorian-500 text-xs font-normal ml-1">({plTotal})</span>
             </h3>
 
             {plLoading ? <SkeletonTable /> : prayerLogs.length === 0 ? (
@@ -1171,6 +1273,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                 <p className="text-victorian-400 heading-victorian">ยังไม่มีประวัติการภาวนา</p>
               </div>
             ) : (
+              <>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -1233,6 +1336,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                   </tbody>
                 </table>
               </div>
+              <Pagination page={plPage} totalPages={plTotalPages} onPage={fetchPrayerLogs} />
+              </>
             )}
           </div>
         )}
@@ -1328,7 +1433,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
         {/* ═══════════════════════════════════════ */}
         {activeTab === 'punishments' && (
           <div className="space-y-6">
-            {/* Punishment list */}
+            {/* Punishment list — Grid layout */}
             <div className="space-y-3">
               <h3 className="heading-victorian text-lg flex items-center gap-2">
                 <Skull className="w-4 h-4 text-red-400" /> บทลงโทษ
@@ -1341,61 +1446,51 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                 </div>
               ) : (
                 <>
-                  <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {punishments.map(p => {
                       const penalties = [
                         p.penalty_hp > 0 ? `❤️ -${p.penalty_hp} HP` : '',
                         p.penalty_sanity > 0 ? `🧠 -${p.penalty_sanity} Sanity` : '',
                         p.penalty_travel > 0 ? `🗺️ -${p.penalty_travel} Travel` : '',
                         p.penalty_spirituality > 0 ? `✨ -${p.penalty_spirituality} Spirit` : '',
-                        p.penalty_max_sanity > 0 ? `🧠 -${p.penalty_max_sanity} Max Sanity` : '',
-                        p.penalty_max_travel > 0 ? `🗺️ -${p.penalty_max_travel} Max Travel` : '',
-                        p.penalty_max_spirituality > 0 ? `✨ -${p.penalty_max_spirituality} Max Spirit` : '',
+                        p.penalty_max_sanity > 0 ? `🧠 -${p.penalty_max_sanity} Max San` : '',
+                        p.penalty_max_travel > 0 ? `🗺️ -${p.penalty_max_travel} Max Trv` : '',
+                        p.penalty_max_spirituality > 0 ? `✨ -${p.penalty_max_spirituality} Max Spr` : '',
                       ].filter(Boolean)
 
-                      // Current player's entry
                       const myEntry = p.assigned_players.find(ap => ap.player_id === _userId)
                       const isExpired = p.deadline && new Date(p.deadline) < new Date()
+                      const allDone = p.assigned_players.every(ap => ap.penalty_applied || ap.mercy_requested)
 
                       return (
-                        <Card key={p.id} className="p-4 md:p-6 space-y-3 border-red-500/20">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <h4 className="text-victorian-100 font-bold text-base flex items-center gap-2">
-                                <Skull className="w-4 h-4 text-red-400" />
-                                {p.name}
-                                {isExpired && <span className="text-red-400 text-[10px]">(หมดเวลา)</span>}
-                              </h4>
-                              {p.description && <p className="text-victorian-400 text-xs mt-1">{p.description}</p>}
-                            </div>
-                            <div className="text-right text-[10px] text-victorian-500 shrink-0">
-                              <div>สร้างโดย: {p.created_by_name}</div>
-                              <div>{fmtDate(p.created_at)}</div>
-                              {p.deadline && <div className="text-cyan-400 mt-0.5">กำหนด: {fmtDate(p.deadline)}</div>}
-                              {isAdmin && !isExpired && (
-                                <button type="button" onClick={() => openEditPunishment(p)} disabled={isPending}
-                                  className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gold-400/10 border border-gold-400/20 text-gold-400 hover:bg-gold-400/20 cursor-pointer disabled:opacity-50 text-[10px] transition-colors">
-                                  <Pencil className="w-3 h-3" /> แก้ไข
-                                </button>
-                              )}
-                            </div>
+                        <Card key={p.id} className={`p-4 space-y-3 flex flex-col ${!p.is_active ? 'opacity-60' : ''} border-red-500/20`}>
+                          {/* Header */}
+                          <div className="flex items-start justify-between gap-2">
+                            <h4 className="text-victorian-100 font-bold text-sm flex items-center gap-1.5 leading-tight">
+                              <Skull className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                              <span className="line-clamp-2">{p.name}</span>
+                            </h4>
+                            {isExpired && <span className="text-red-400 text-[9px] bg-red-500/10 px-1.5 py-0.5 rounded shrink-0">หมดเวลา</span>}
+                            {allDone && !isExpired && <span className="text-green-400 text-[9px] bg-green-500/10 px-1.5 py-0.5 rounded shrink-0">เสร็จสิ้น</span>}
                           </div>
 
-                          {/* Penalties */}
-                          <div className="flex flex-wrap gap-1.5">
+                          {p.description && <p className="text-victorian-400 text-[11px] line-clamp-2">{p.description}</p>}
+
+                          {/* Penalties badges */}
+                          <div className="flex flex-wrap gap-1">
                             {penalties.map((pen, i) => (
-                              <span key={i} className="text-xs bg-red-900/40 text-red-300 px-2 py-0.5 rounded border border-red-500/20">
+                              <span key={i} className="text-[10px] bg-red-900/40 text-red-300 px-1.5 py-0.5 rounded border border-red-500/20">
                                 {pen}
                               </span>
                             ))}
                           </div>
 
-                          {/* Required tasks */}
+                          {/* Required tasks (compact) */}
                           <div>
-                            <p className="text-victorian-400 text-xs font-semibold mb-1">ต้องทำ:</p>
-                            <div className="flex flex-wrap gap-1.5">
+                            <p className="text-victorian-500 text-[10px] font-semibold mb-0.5">ต้องทำ:</p>
+                            <div className="flex flex-wrap gap-1">
                               {p.required_tasks.map(t => (
-                                <span key={t.id} className={`text-xs px-2 py-0.5 rounded border ${
+                                <span key={t.id} className={`text-[10px] px-1.5 py-0.5 rounded border ${
                                   t.action_code_id ? 'bg-amber-900/30 text-amber-300 border-amber-500/20' : 'bg-emerald-900/30 text-emerald-300 border-emerald-500/20'
                                 }`}>
                                   {t.action_code_id ? `⚔️ ${t.action_name}` : `🎯 ${t.quest_name}`}
@@ -1404,30 +1499,24 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                             </div>
                           </div>
 
-                          {/* Assigned players */}
-                          <div>
-                            <p className="text-victorian-400 text-xs font-semibold mb-1 flex items-center gap-1">
-                              <Users className="w-3 h-3" /> ผู้เล่นที่ต้องรับโทษ:
+                          {/* Assigned players (compact) */}
+                          <div className="flex-1">
+                            <p className="text-victorian-500 text-[10px] font-semibold mb-0.5 flex items-center gap-1">
+                              <Users className="w-2.5 h-2.5" /> ผู้เล่น ({p.assigned_players.length}):
                             </p>
-                            <div className="space-y-1.5">
+                            <div className="space-y-1">
                               {p.assigned_players.map(ap => (
-                                <div key={ap.id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-victorian-900/40 border border-victorian-800/50">
-                                  <div className="flex items-center gap-2">
+                                <div key={ap.id} className="flex items-center justify-between gap-1.5 p-1.5 rounded bg-victorian-900/40 border border-victorian-800/50">
+                                  <div className="flex items-center gap-1.5 min-w-0">
                                     <Avatar name={ap.player_name} url={ap.player_avatar} />
-                                    <span className="text-victorian-200 text-xs">{ap.player_name}</span>
-                                    {ap.is_completed && ap.mercy_requested && (
-                                      <span className="text-green-400 text-[10px] bg-green-500/10 px-1.5 py-0.5 rounded">✅ ขอเทพเมตตาแล้ว</span>
-                                    )}
-                                    {ap.penalty_applied && (
-                                      <span className="text-red-400 text-[10px] bg-red-500/10 px-1.5 py-0.5 rounded">💀 ลงโทษแล้ว</span>
-                                    )}
-                                    {!ap.is_completed && !ap.penalty_applied && (
-                                      <span className="text-amber-400 text-[10px] bg-amber-500/10 px-1.5 py-0.5 rounded">⏳ รอดำเนินการ</span>
-                                    )}
+                                    <span className="text-victorian-200 text-[10px] truncate">{ap.player_name}</span>
+                                    {ap.mercy_requested && <span className="text-green-400 text-[9px] shrink-0">✅</span>}
+                                    {ap.penalty_applied && <span className="text-red-400 text-[9px] shrink-0">💀</span>}
+                                    {!ap.is_completed && !ap.penalty_applied && !ap.mercy_requested && <span className="text-amber-400 text-[9px] shrink-0">⏳</span>}
                                   </div>
                                   {isAdmin && !ap.penalty_applied && !ap.mercy_requested && (
                                     <button type="button" onClick={() => handleApplyPenalty(p.id, ap.player_id)} disabled={isPending}
-                                      className="px-2 py-1 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-[10px] font-bold hover:bg-red-500/20 cursor-pointer disabled:opacity-50">
+                                      className="px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-[9px] font-bold hover:bg-red-500/20 cursor-pointer disabled:opacity-50 shrink-0">
                                       ลงโทษ
                                     </button>
                                   )}
@@ -1436,10 +1525,34 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                             </div>
                           </div>
 
-                          {/* Player: Mercy button */}
+                          {/* Player: Mercy */}
                           {myEntry && !myEntry.penalty_applied && !myEntry.mercy_requested && (
                             <MercyButton punishmentId={p.id} onMercy={handleRequestMercy} isPending={isPending} />
                           )}
+
+                          {/* Footer: meta + admin actions */}
+                          <div className="flex items-center justify-between gap-2 pt-2 border-t border-victorian-800/50">
+                            <div className="text-[9px] text-victorian-600">
+                              <div>{p.created_by_name} · {fmtDate(p.created_at)}</div>
+                              {p.deadline && <div className="text-cyan-400/70">กำหนด: {fmtDate(p.deadline)}</div>}
+                            </div>
+                            {isAdmin && (
+                              <div className="flex items-center gap-1">
+                                {!isExpired && (
+                                  <button type="button" onClick={() => openEditPunishment(p)} disabled={isPending}
+                                    className="p-1 rounded bg-gold-400/10 border border-gold-400/20 text-gold-400 hover:bg-gold-400/20 cursor-pointer disabled:opacity-50 transition-colors"
+                                    title="แก้ไข">
+                                    <Pencil className="w-3 h-3" />
+                                  </button>
+                                )}
+                                <button type="button" onClick={() => setArchiveConfirm({ type: 'punishment', id: p.id, name: p.name })} disabled={isPending}
+                                  className="p-1 rounded bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 cursor-pointer disabled:opacity-50 transition-colors"
+                                  title="เก็บเข้าคลัง">
+                                  <Archive className="w-3 h-3" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </Card>
                       )
                     })}
@@ -1514,6 +1627,35 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
       {/* ═══════════════════════════════════════════════════ */}
       {/*  MODALS                                            */}
       {/* ═══════════════════════════════════════════════════ */}
+
+      {/* --- Archive confirm modal --- */}
+      {archiveConfirm && (
+        <Modal onClose={() => setArchiveConfirm(null)}>
+          <div className="flex items-center justify-between">
+            <h3 className="heading-victorian text-xl flex items-center gap-3 text-red-400">
+              <Archive className="w-5 h-5" /> ยืนยันเก็บเข้าคลัง
+            </h3>
+            <button type="button" onClick={() => setArchiveConfirm(null)} className="text-victorian-400 hover:text-gold-400 cursor-pointer"><X className="w-5 h-5" /></button>
+          </div>
+          <div className="p-5 bg-red-950/60 border-2 border-red-500/30 rounded-xl space-y-3">
+            <p className="text-victorian-200 text-sm">
+              ต้องการเก็บ
+              <strong className="text-red-300 mx-1">&quot;{archiveConfirm.name}&quot;</strong>
+              เข้าคลังหรือไม่?
+            </p>
+            <p className="text-victorian-500 text-xs">
+              {archiveConfirm.type === 'action' ? 'แอคชั่น' : archiveConfirm.type === 'quest' ? 'ภารกิจ' : 'บทลงโทษ'}นี้จะไม่แสดงในรายการอีกต่อไป แต่ข้อมูลยังคงอยู่ในระบบ
+            </p>
+          </div>
+          <div className="flex justify-end gap-3">
+            <button type="button" onClick={() => setArchiveConfirm(null)} className="btn-victorian px-5 py-2 text-sm cursor-pointer">ยกเลิก</button>
+            <button type="button" onClick={confirmArchive} disabled={isPending}
+              className="px-5 py-2 rounded-lg bg-red-600 text-white text-sm font-bold hover:bg-red-500 disabled:opacity-50 cursor-pointer transition-colors flex items-center gap-2">
+              <Archive className="w-4 h-4" /> {isPending ? 'กำลังดำเนินการ...' : 'ยืนยันเก็บเข้าคลัง'}
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* --- Sleep form --- */}
       {showSleepForm && (
@@ -1930,6 +2072,113 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
           </div>
           <div className="flex justify-end">
             <button type="button" onClick={() => setViewRejection(null)} className="btn-victorian px-6 py-2 text-sm cursor-pointer">ปิด</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* --- Punishment detail modal (player banner) --- */}
+      {showPunishmentDetail && (
+        <Modal onClose={() => setShowPunishmentDetail(null)}>
+          <div className="flex items-center justify-between">
+            <h3 className="heading-victorian text-xl flex items-center gap-3 text-red-400">
+              <Skull className="w-5 h-5" /> รายละเอียดบทลงโทษ
+            </h3>
+            <button type="button" onClick={() => setShowPunishmentDetail(null)} className="text-victorian-400 hover:text-gold-400 cursor-pointer"><X className="w-5 h-5" /></button>
+          </div>
+
+          <div className="p-5 bg-red-950/60 border-2 border-red-500/40 rounded-xl space-y-4">
+            <div>
+              <h4 className="text-red-200 font-bold text-lg">{showPunishmentDetail.name}</h4>
+              {showPunishmentDetail.description && (
+                <p className="text-red-300/80 text-sm mt-1 whitespace-pre-wrap">{showPunishmentDetail.description}</p>
+              )}
+            </div>
+
+            {showPunishmentDetail.deadline && (
+              <div className="flex items-center gap-2 text-red-400 text-sm">
+                <Clock className="w-4 h-4" />
+                <span>กำหนดเสร็จ: <strong>{fmtDate(showPunishmentDetail.deadline)}</strong></span>
+              </div>
+            )}
+
+            {/* Penalties */}
+            <div className="border-t border-red-500/20 pt-3">
+              <p className="text-red-400 text-xs font-bold mb-2">⚡ บทลงโทษหากไม่ทำสำเร็จ:</p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {showPunishmentDetail.penalty_sanity !== 0 && (
+                  <div className="bg-red-900/40 rounded px-2 py-1.5 border border-red-500/20">
+                    <span className="text-red-400">🧠 Sanity</span>
+                    <span className="text-red-200 font-bold ml-1">{showPunishmentDetail.penalty_sanity}</span>
+                  </div>
+                )}
+                {showPunishmentDetail.penalty_hp !== 0 && (
+                  <div className="bg-red-900/40 rounded px-2 py-1.5 border border-red-500/20">
+                    <span className="text-red-400">❤️ HP</span>
+                    <span className="text-red-200 font-bold ml-1">{showPunishmentDetail.penalty_hp}</span>
+                  </div>
+                )}
+                {showPunishmentDetail.penalty_travel !== 0 && (
+                  <div className="bg-red-900/40 rounded px-2 py-1.5 border border-red-500/20">
+                    <span className="text-red-400">🚶 Travel</span>
+                    <span className="text-red-200 font-bold ml-1">{showPunishmentDetail.penalty_travel}</span>
+                  </div>
+                )}
+                {showPunishmentDetail.penalty_spirituality !== 0 && (
+                  <div className="bg-red-900/40 rounded px-2 py-1.5 border border-red-500/20">
+                    <span className="text-red-400">✨ Spirituality</span>
+                    <span className="text-red-200 font-bold ml-1">{showPunishmentDetail.penalty_spirituality}</span>
+                  </div>
+                )}
+                {showPunishmentDetail.penalty_max_sanity !== 0 && (
+                  <div className="bg-red-900/40 rounded px-2 py-1.5 border border-red-500/20">
+                    <span className="text-red-400">🧠 Max Sanity</span>
+                    <span className="text-red-200 font-bold ml-1">{showPunishmentDetail.penalty_max_sanity}</span>
+                  </div>
+                )}
+                {showPunishmentDetail.penalty_max_travel !== 0 && (
+                  <div className="bg-red-900/40 rounded px-2 py-1.5 border border-red-500/20">
+                    <span className="text-red-400">🚶 Max Travel</span>
+                    <span className="text-red-200 font-bold ml-1">{showPunishmentDetail.penalty_max_travel}</span>
+                  </div>
+                )}
+                {showPunishmentDetail.penalty_max_spirituality !== 0 && (
+                  <div className="bg-red-900/40 rounded px-2 py-1.5 border border-red-500/20">
+                    <span className="text-red-400">✨ Max Spirituality</span>
+                    <span className="text-red-200 font-bold ml-1">{showPunishmentDetail.penalty_max_spirituality}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Required tasks */}
+            {showPunishmentDetail.required_tasks && showPunishmentDetail.required_tasks.length > 0 && (
+              <div className="border-t border-red-500/20 pt-3">
+                <p className="text-red-400 text-xs font-bold mb-2">📋 ภารกิจที่ต้องทำ:</p>
+                <div className="space-y-1.5">
+                  {showPunishmentDetail.required_tasks.map((task: any) => (
+                    <div key={task.id} className="flex items-center gap-2 bg-red-900/30 rounded px-3 py-2 border border-red-500/15">
+                      {task.action_name ? (
+                        <>
+                          <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded border border-blue-500/30 font-bold">ACTION</span>
+                          <span className="text-red-200 text-xs">{task.action_name}</span>
+                          <span className="text-victorian-500 text-[10px] font-mono">({task.action_code_str})</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/30 font-bold">QUEST</span>
+                          <span className="text-red-200 text-xs">{task.quest_name}</span>
+                          <span className="text-victorian-500 text-[10px] font-mono">({task.quest_code_str})</span>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end">
+            <button type="button" onClick={() => setShowPunishmentDetail(null)} className="btn-victorian px-6 py-2 text-sm cursor-pointer">ปิด</button>
           </div>
         </Modal>
       )}
