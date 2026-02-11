@@ -36,6 +36,7 @@ import {
 } from '@/app/actions/action-quest'
 import type { ActionRewards, CodeExpiration } from '@/app/actions/action-quest'
 import { submitPrayer, getPrayerLogs, getAllPrayerLogs } from '@/app/actions/religions'
+import { getPlayerSleepPendingStatus } from '@/app/actions/rest-points'
 import { OrnamentedCard } from '@/components/ui/ornaments'
 import { MapPin, Gift, Ghost } from 'lucide-react'
 
@@ -231,6 +232,10 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   const [sleepSubmitted, setSleepSubmitted] = useState(false)
   const [sleepStatus, setSleepStatus] = useState<string | null>(null)
   const [sleepError, setSleepError] = useState<string | null>(null)
+
+  // ─── Sleep pending state ───
+  const [isSleepPending, setIsSleepPending] = useState(false)
+  const [sleepAutoApproveTime, setSleepAutoApproveTime] = useState<string | null>(null)
 
   // ─── Code generation modals ───
   const [showGenAction, setShowGenAction] = useState(false)
@@ -491,6 +496,12 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   // ─── Init ───
   useEffect(() => {
     getTodaySleepStatus().then(r => { setSleepSubmitted(r.submitted); setSleepStatus(r.status || null) })
+    if (!isAdmin) {
+      getPlayerSleepPendingStatus().then(r => {
+        setIsSleepPending(r.isSleeping)
+        setSleepAutoApproveTime(r.autoApproveTime ?? null)
+      })
+    }
     if (isAdmin) {
       autoApproveExpiredRequests()
       autoApplyExpiredPunishments()
@@ -518,6 +529,12 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
       if (r.error) { setSleepError(r.error) } else {
         setSleepSubmitted(true); setSleepStatus('pending'); setShowSleepForm(false)
         setMealUrl(''); setSleepUrl(''); fetchSleepLogs(1)
+        // Also update sleep pending state
+        setIsSleepPending(true)
+        const midnight = new Date()
+        midnight.setDate(midnight.getDate() + 1)
+        midnight.setHours(0, 0, 0, 0)
+        setSleepAutoApproveTime(midnight.toISOString())
       }
     })
   }
@@ -899,6 +916,29 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
           </Card>
         )}
 
+        {/* ══════ SLEEP PENDING ALERT ══════ */}
+        {isSleepPending && !isAdmin && (
+          <div className="relative overflow-hidden rounded-xl border-2 border-indigo-400/60 bg-indigo-950/60 p-5 md:p-6">
+            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-blue-500/5 to-indigo-500/10 animate-pulse" />
+            <div className="relative flex items-start gap-4">
+              <div className="shrink-0 w-12 h-12 rounded-full bg-indigo-500/20 border-2 border-indigo-400/40 flex items-center justify-center">
+                <Moon className="w-6 h-6 text-indigo-400 animate-pulse" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-indigo-300 font-display text-lg font-bold mb-1">💤 กำลังนอนหลับ — รออนุมัติ</h3>
+                <p className="text-indigo-300/80 text-sm mb-2">
+                  ขณะที่คำขอนอนหลับยังรออนุมัติ คุณจะไม่สามารถ <strong>ส่งแอคชั่น / ภารกิจ / บทลงโทษ / ภาวนา</strong> และ <strong>ย้ายตัวละครบนแผนที่</strong> ได้
+                </p>
+                {sleepAutoApproveTime && (
+                  <p className="text-indigo-400 text-xs font-display">
+                    ⏰ อนุมัติอัตโนมัติเวลา: {new Date(sleepAutoApproveTime).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ══════ PLAYER ACTION BUTTONS ══════ */}
         <Card className="p-5 md:p-8">
           <h2 className="heading-victorian text-xl md:text-2xl flex items-center gap-3 mb-5">
@@ -924,29 +964,41 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
 
             {/* ภาวนา (Prayer) */}
             <button type="button"
-              onClick={() => { setShowPrayerForm(true); setPrayerUrls(['', '']); setPrayerError(null); setPrayerSuccess(null) }}
-              className="px-5 py-4 rounded-lg border-2 border-purple-500/30 bg-purple-500/5 text-purple-300
-                         hover:border-purple-400/50 hover:bg-purple-500/10 text-base font-bold flex flex-col items-center gap-2 cursor-pointer transition-all">
-              <Church className="w-8 h-8 text-purple-400" />
+              onClick={() => { if (!isSleepPending) { setShowPrayerForm(true); setPrayerUrls(['', '']); setPrayerError(null); setPrayerSuccess(null) } }}
+              disabled={isSleepPending}
+              className={`px-5 py-4 rounded-lg border-2 text-base font-bold flex flex-col items-center gap-2 transition-all
+                ${isSleepPending
+                  ? 'border-victorian-700/30 bg-victorian-900/40 text-victorian-500 cursor-not-allowed'
+                  : 'border-purple-500/30 bg-purple-500/5 text-purple-300 hover:border-purple-400/50 hover:bg-purple-500/10 cursor-pointer'}`}>
+              <Church className={`w-8 h-8 ${isSleepPending ? 'text-victorian-600' : 'text-purple-400'}`} />
               <span>ภาวนา</span>
+              {isSleepPending && <span className="text-[10px] text-indigo-400">💤 กำลังหลับ</span>}
             </button>
 
             {/* ส่งภารกิจ */}
             <button type="button"
-              onClick={() => { setShowSubmitQuest(true); setSubCode(''); setSubUrls(['']); setSubError(null); setSubSuccess(null) }}
-              className="px-5 py-4 rounded-lg border-2 border-emerald-500/30 bg-emerald-500/5 text-emerald-300
-                         hover:border-emerald-400/50 hover:bg-emerald-500/10 text-base font-bold flex flex-col items-center gap-2 cursor-pointer transition-all">
-              <Target className="w-8 h-8 text-emerald-400" />
+              onClick={() => { if (!isSleepPending) { setShowSubmitQuest(true); setSubCode(''); setSubUrls(['']); setSubError(null); setSubSuccess(null) } }}
+              disabled={isSleepPending}
+              className={`px-5 py-4 rounded-lg border-2 text-base font-bold flex flex-col items-center gap-2 transition-all
+                ${isSleepPending
+                  ? 'border-victorian-700/30 bg-victorian-900/40 text-victorian-500 cursor-not-allowed'
+                  : 'border-emerald-500/30 bg-emerald-500/5 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-500/10 cursor-pointer'}`}>
+              <Target className={`w-8 h-8 ${isSleepPending ? 'text-victorian-600' : 'text-emerald-400'}`} />
               <span>ส่งภารกิจ</span>
+              {isSleepPending && <span className="text-[10px] text-indigo-400">💤 กำลังหลับ</span>}
             </button>
 
             {/* ส่งแอคชั่น */}
             <button type="button"
-              onClick={() => { setShowSubmitAction(true); setSubCode(''); setSubUrls(['']); setSubError(null); setSubSuccess(null) }}
-              className="px-5 py-4 rounded-lg border-2 border-amber-500/30 bg-amber-500/5 text-amber-300
-                         hover:border-amber-400/50 hover:bg-amber-500/10 text-base font-bold flex flex-col items-center gap-2 cursor-pointer transition-all">
-              <Send className="w-8 h-8 text-amber-400" />
+              onClick={() => { if (!isSleepPending) { setShowSubmitAction(true); setSubCode(''); setSubUrls(['']); setSubError(null); setSubSuccess(null) } }}
+              disabled={isSleepPending}
+              className={`px-5 py-4 rounded-lg border-2 text-base font-bold flex flex-col items-center gap-2 transition-all
+                ${isSleepPending
+                  ? 'border-victorian-700/30 bg-victorian-900/40 text-victorian-500 cursor-not-allowed'
+                  : 'border-amber-500/30 bg-amber-500/5 text-amber-300 hover:border-amber-400/50 hover:bg-amber-500/10 cursor-pointer'}`}>
+              <Send className={`w-8 h-8 ${isSleepPending ? 'text-victorian-600' : 'text-amber-400'}`} />
               <span>ส่งแอคชั่น</span>
+              {isSleepPending && <span className="text-[10px] text-indigo-400">💤 กำลังหลับ</span>}
             </button>
           </div>
         </Card>
@@ -1623,6 +1675,35 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
             <button type="button" onClick={() => setShowSleepForm(false)} className="text-victorian-400 hover:text-gold-400 cursor-pointer"><X className="w-5 h-5" /></button>
           </div>
           <p className="text-victorian-400 text-sm">กรุณาแนบลิงก์โรลเพลย์ 2 ลิงก์ เพื่อขอพักผ่อนและฟื้นฟูพลังวิญญาณ</p>
+          
+          {/* ⚠️ Sleep Restrictions Alert */}
+          <div className="relative overflow-hidden rounded-xl border-2 border-indigo-400/70 bg-gradient-to-br from-indigo-950/80 via-blue-950/60 to-indigo-950/80 p-4 shadow-lg shadow-indigo-900/30">
+            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-blue-500/10 to-indigo-500/10 animate-pulse" />
+            <div className="relative space-y-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-400 animate-pulse" />
+                <h4 className="text-indigo-300 font-display font-bold text-base">⚠️ ข้อจำกัดขณะนอนหลับ</h4>
+              </div>
+              <div className="space-y-1.5 text-indigo-200/90 text-sm pl-7">
+                <p className="flex items-start gap-2">
+                  <span className="text-red-400 font-bold">🚫</span>
+                  <span><strong>ไม่สามารถส่ง:</strong> แอคชั่น / ภารกิจ / บทลงโทษ / ภาวนา</span>
+                </p>
+                <p className="flex items-start gap-2">
+                  <span className="text-red-400 font-bold">🚫</span>
+                  <span><strong>ไม่สามารถย้าย:</strong> ตัวละครบนแผนที่</span>
+                </p>
+                <p className="flex items-start gap-2">
+                  <span className="text-green-400 font-bold">✅</span>
+                  <span><strong>อนุมัติอัตโนมัติ:</strong> เวลาเที่ยงคืน (00:00 น.) ของวันถัดไป</span>
+                </p>
+              </div>
+              <div className="mt-3 pt-3 border-t border-indigo-400/30 text-xs text-indigo-300/70">
+                💤 ข้อจำกัดเหล่านี้จะยกเลิกทันทีเมื่อแอดมินอนุมัติ หรือเวลาเที่ยงคืนถัดไป
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-4">
             <div>
               <label className="block text-sm text-victorian-300 mb-1.5">🍖 ลิงก์ที่ 1 — โรลเพลย์ทานอาหาร 1 มื้อ <span className="text-nouveau-ruby">*</span></label>

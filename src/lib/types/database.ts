@@ -291,6 +291,19 @@ export interface MapChurchWithReligion extends MapChurch {
   religion_logo_url: string | null
 }
 
+export interface MapRestPoint {
+  id: string
+  map_id: string
+  name: string
+  image_url: string | null
+  radius: number
+  position_x: number
+  position_y: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface PrayerLog {
   id: string
   player_id: string

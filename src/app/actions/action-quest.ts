@@ -80,6 +80,13 @@ export async function submitSleepRequest(mealUrl: string, sleepUrl: string) {
     return { error: 'กรุณากรอก URL ทั้ง 2 ลิงก์' }
   }
 
+  // Check if player is in a rest zone
+  const { isPlayerInRestZone } = await import('@/app/actions/rest-points')
+  const inRestZone = await isPlayerInRestZone()
+  if (!inRestZone) {
+    return { error: 'ต้องอยู่ในเขตจุดพักเท่านั้นจึงจะนอนหลับได้' }
+  }
+
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
 

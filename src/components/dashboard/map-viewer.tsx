@@ -1,6 +1,6 @@
 'use client'
 
-import type { GameMap, MapTokenWithProfile, MapLockedZone, Profile, MapChurchWithReligion, Religion } from '@/lib/types/database'
+import type { GameMap, MapTokenWithProfile, MapLockedZone, Profile, MapChurchWithReligion, Religion, MapRestPoint } from '@/lib/types/database'
 import {
   addPlayerToMap, addNpcToMap, moveToken, removeTokenFromMap,
   createLockedZone, updateLockedZone, deleteLockedZone, toggleMapEmbed,
@@ -10,9 +10,13 @@ import {
   getReligions, addChurchToMap, moveChurch, updateChurchRadius, deleteChurch,
 } from '@/app/actions/religions'
 import {
+  addRestPoint, moveRestPoint as moveRestPointAction, updateRestPointRadius, deleteRestPoint,
+  getPlayerSleepPendingStatus,
+} from '@/app/actions/rest-points'
+import {
   ArrowLeft, ZoomIn, ZoomOut, Maximize, Move, Trash2, Lock,
   Users, X, Save, Code, MapPin, UserPlus, Ghost, Shield, Crown, Footprints,
-  Info, Church,
+  Info, Church, Tent, Moon,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useState, useRef, useCallback, useEffect, useTransition } from 'react'
@@ -109,6 +113,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const [tokens, setTokens] = useState<MapTokenWithProfile[]>(getCached(`mv:${mapId}:tokens`) ?? [])
   const [zones, setZones] = useState<MapLockedZone[]>(getCached(`mv:${mapId}:zones`) ?? [])
   const [churches, setChurches] = useState<MapChurchWithReligion[]>(getCached(`mv:${mapId}:churches`) ?? [])
+  const [restPoints, setRestPoints] = useState<MapRestPoint[]>(getCached(`mv:${mapId}:restpoints`) ?? [])
   const [religions, setReligions] = useState<Religion[]>([])
 
   useEffect(() => {
@@ -121,7 +126,8 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         supabase.from('map_tokens').select('*').eq('map_id', mapId),
         supabase.from('map_locked_zones').select('*').eq('map_id', mapId),
         supabase.from('map_churches').select('*, religions(name_th, logo_url)').eq('map_id', mapId),
-      ]).then(async ([mapRes, profileRes, rawTokensRes, zonesRes, churchesRes]) => {
+        supabase.from('map_rest_points').select('*').eq('map_id', mapId),
+      ]).then(async ([mapRes, profileRes, rawTokensRes, zonesRes, churchesRes, restPointsRes]) => {
         if (mapRes.error || !mapRes.data || !profileRes.data) {
           if (mapRes.error) console.error('Map fetch error:', mapRes.error)
           return
@@ -187,10 +193,14 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         })
         setChurches(builtChurches)
 
+        // Set rest points
+        const rpData = (restPointsRes.data ?? []) as MapRestPoint[]
+        setRestPoints(rpData)
+
         setCache(`mv:${mapId}:map`, mapData); setCache(`mv:${mapId}:me`, profile)
         setCache(`mv:${mapId}:admin`, admin); setCache(`mv:${mapId}:players`, ap)
         setCache(`mv:${mapId}:tokens`, builtTokens); setCache(`mv:${mapId}:zones`, zoneData)
-        setCache(`mv:${mapId}:churches`, builtChurches)
+        setCache(`mv:${mapId}:churches`, builtChurches); setCache(`mv:${mapId}:restpoints`, rpData)
         setLoaded(true)
       })
     }
@@ -203,11 +213,20 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'map_tokens', filter: `map_id=eq.${mapId}` }, fetchMapData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'map_locked_zones', filter: `map_id=eq.${mapId}` }, fetchMapData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'map_churches', filter: `map_id=eq.${mapId}` }, fetchMapData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_rest_points', filter: `map_id=eq.${mapId}` }, fetchMapData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'maps', filter: `id=eq.${mapId}` }, fetchMapData)
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
   }, [userId, mapId])
+
+  // ── Fetch sleep pending status ──
+  useEffect(() => {
+    getPlayerSleepPendingStatus().then(r => {
+      setIsSleepPending(r.isSleeping)
+      setSleepAutoApproveTime(r.autoApproveTime ?? null)
+    })
+  }, [])
 
   // ── Token move state (button-based flow) ──
   const [movingTokenId, setMovingTokenId] = useState<string | null>(null)
@@ -230,6 +249,12 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const [movingChurchId, setMovingChurchId] = useState<string | null>(null)
   const [churchMovePreview, setChurchMovePreview] = useState<{ x: number; y: number } | null>(null)
 
+  /* ── Rest Point UI state ── */
+  const [showRestPointModal, setShowRestPointModal] = useState(false)
+  const [selectedRestPoint, setSelectedRestPoint] = useState<MapRestPoint | null>(null)
+  const [movingRestPointId, setMovingRestPointId] = useState<string | null>(null)
+  const [restPointMovePreview, setRestPointMovePreview] = useState<{ x: number; y: number } | null>(null)
+
   /* ── Move notification modal ── */
   const [moveNotif, setMoveNotif] = useState<{ name: string; status: 'moving' | 'success' | 'error'; msg?: string } | null>(null)
 
@@ -239,6 +264,13 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const [selectedPlayerId, setSelectedPlayerId] = useState('')
   const [churchReligionId, setChurchReligionId] = useState('')
   const [churchRadius, setChurchRadius] = useState(10)
+  const [restPointName, setRestPointName] = useState('')
+  const [restPointUrl, setRestPointUrl] = useState('')
+  const [restPointRadius, setRestPointRadius] = useState(10)
+
+  // ── Sleep pending state ──
+  const [isSleepPending, setIsSleepPending] = useState(false)
+  const [sleepAutoApproveTime, setSleepAutoApproveTime] = useState<string | null>(null)
 
   // ── My token ──
   const myToken = tokens.find(t => t.user_id === currentUserId)
@@ -297,11 +329,12 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       if (e.key === 'Escape') {
         if (movingTokenId) { setMovingTokenId(null); setMovePreview(null) }
         if (movingChurchId) { setMovingChurchId(null); setChurchMovePreview(null) }
+        if (movingRestPointId) { setMovingRestPointId(null); setRestPointMovePreview(null) }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [movingTokenId, movingChurchId])
+  }, [movingTokenId, movingChurchId, movingRestPointId])
 
   /* ── Loading guard (after all hooks) ── */
   if (!loaded) {
@@ -338,6 +371,12 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       e.preventDefault()
       const pos = screenToMapPercent(e.clientX, e.clientY)
       if (pos) finalizeChurchMove(pos.x, pos.y)
+      return
+    }
+    if (movingRestPointId) {
+      e.preventDefault()
+      const pos = screenToMapPercent(e.clientX, e.clientY)
+      if (pos) finalizeRestPointMove(pos.x, pos.y)
       return
     }
     if (e.button !== 0) return
@@ -411,11 +450,12 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
      POINTER events: move preview tracking
      ════════════════════════════════════════════ */
   function handlePointerMove(e: React.PointerEvent) {
-    if (movingTokenId || movingChurchId) {
+    if (movingTokenId || movingChurchId || movingRestPointId) {
       const pos = screenToMapPercent(e.clientX, e.clientY)
       if (pos) {
         if (movingTokenId) setMovePreview(pos)
         if (movingChurchId) setChurchMovePreview(pos)
+        if (movingRestPointId) setRestPointMovePreview(pos)
       }
     }
   }
@@ -450,8 +490,13 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   }
 
   function startMoveMode(token: MapTokenWithProfile) {
-    // Check travel points (non-admin, own token only)
+    // Check sleep pending (non-admin, own token only)
     const isOwnToken = token.user_id === currentUserId
+    if (!isAdmin && isOwnToken && isSleepPending) {
+      showToast('กำลังนอนหลับ — ไม่สามารถย้ายตัวละครได้', 'error')
+      return
+    }
+    // Check travel points (non-admin, own token only)
     if (!isAdmin && isOwnToken && currentUser.travel_points <= 0) {
       showToast('แต้มเดินทางหมดแล้ว!', 'error')
       return
@@ -611,6 +656,76 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       const r = await updateChurchRadius(churchId, radius)
       if (r?.error) showToast(r.error, 'error')
       else { setSelectedChurch(null); fetchMapDataRef.current?.() }
+    })
+  }
+
+  /* ════════════════════════════════════════════
+     REST POINT: move mode
+     ════════════════════════════════════════════ */
+  function startRestPointMoveMode(rp: MapRestPoint) {
+    setMovingRestPointId(rp.id)
+    setRestPointMovePreview({ x: rp.position_x, y: rp.position_y })
+    setSelectedRestPoint(null)
+  }
+
+  function cancelRestPointMoveMode() {
+    setMovingRestPointId(null)
+    setRestPointMovePreview(null)
+  }
+
+  function finalizeRestPointMove(targetX: number, targetY: number) {
+    if (!movingRestPointId) return
+    const rpId = movingRestPointId
+    const rp = restPoints.find(r => r.id === rpId)
+    if (!rp) return
+
+    // Optimistic update
+    setRestPoints(prev => prev.map(r => r.id === rpId ? { ...r, position_x: targetX, position_y: targetY } : r))
+    setMovingRestPointId(null)
+    setRestPointMovePreview(null)
+
+    startTransition(async () => {
+      const r = await moveRestPointAction(rpId, targetX, targetY)
+      if (r?.error) {
+        // Rollback
+        setRestPoints(prev => prev.map(r2 => r2.id === rpId ? { ...r2, position_x: rp.position_x, position_y: rp.position_y } : r2))
+        showToast(r.error, 'error')
+      } else {
+        showToast(`ย้ายจุดพัก ${rp.name} สำเร็จ`, 'info')
+      }
+    })
+  }
+
+  function openRestPointModal() {
+    setRestPointName('')
+    setRestPointUrl('')
+    setRestPointRadius(10)
+    setShowRestPointModal(true)
+  }
+
+  function handleAddRestPoint() {
+    if (!restPointName.trim()) return
+    startTransition(async () => {
+      const r = await addRestPoint(map.id, restPointName, restPointRadius, restPointUrl || undefined)
+      if (r?.error) showToast(r.error, 'error')
+      else { setShowRestPointModal(false); fetchMapDataRef.current?.() }
+    })
+  }
+
+  function handleDeleteRestPoint(rpId: string) {
+    if (!confirm('ลบจุดพักนี้ออกจากแมพ?')) return
+    startTransition(async () => {
+      const r = await deleteRestPoint(rpId)
+      if (r?.error) showToast(r.error, 'error')
+      else { setSelectedRestPoint(null); fetchMapDataRef.current?.() }
+    })
+  }
+
+  function handleUpdateRestPointRadius(rpId: string, radius: number) {
+    startTransition(async () => {
+      const r = await updateRestPointRadius(rpId, radius)
+      if (r?.error) showToast(r.error, 'error')
+      else { setSelectedRestPoint(null); fetchMapDataRef.current?.() }
     })
   }
 
@@ -895,6 +1010,24 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
             </div>
           </div>
 
+          {/* ── Sleep Pending Alert ── */}
+          {isSleepPending && !isAdmin && (
+            <div className="px-4 py-2 lg:py-3 border-b border-indigo-400/30 bg-indigo-950/40">
+              <div className="flex items-center gap-2 mb-1">
+                <Moon className="w-4 h-4 text-indigo-400 animate-pulse" />
+                <span className="text-indigo-300 font-display text-[10px] lg:text-xs font-bold uppercase tracking-wider">💤 กำลังนอนหลับ</span>
+              </div>
+              <p className="text-indigo-400/70 text-[10px] lg:text-xs">
+                ย้ายตัวละครไม่ได้ขณะรออนุมัติ
+              </p>
+              {sleepAutoApproveTime && (
+                <p className="text-indigo-400/50 text-[9px] lg:text-[10px] mt-0.5">
+                  ⏰ อนุมัติอัตโนมัติ: {new Date(sleepAutoApproveTime).toLocaleString('th-TH', { timeStyle: 'short' })}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* ── Join Map Button ── */}
           {!isOnThisMap && !isAdmin && (
             <div className="px-4 py-2 lg:py-3 border-b border-gold-400/10">
@@ -956,6 +1089,11 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                   <Church className="w-4 h-4 lg:w-5 lg:h-5" />
                   <span className="text-[10px] lg:text-xs">โบสถ์</span>
                 </button>
+                <button onClick={openRestPointModal} title="วางจุดพัก"
+                  className="p-1.5 lg:p-2 text-victorian-400 hover:text-gold-400 border border-gold-400/10 hover:border-gold-400/30 rounded-sm cursor-pointer flex items-center gap-1.5">
+                  <Tent className="w-4 h-4 lg:w-5 lg:h-5" />
+                  <span className="text-[10px] lg:text-xs">จุดพัก</span>
+                </button>
               </div>
             </div>
           )}
@@ -979,7 +1117,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
         {/* ══ MAP CANVAS (right side, full area) ══ */}
         <div ref={containerRef}
-          className={`flex-1 min-h-0 overflow-hidden relative ${showZoneCreator ? 'cursor-default' : (movingTokenId || movingChurchId) ? 'cursor-crosshair' : isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+          className={`flex-1 min-h-0 overflow-hidden relative ${showZoneCreator ? 'cursor-default' : (movingTokenId || movingChurchId || movingRestPointId) ? 'cursor-crosshair' : isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
           onMouseDown={handleBgMouseDown}
           onMouseMove={handleBgMouseMove}
           onMouseUp={handleBgMouseUp}
@@ -1113,6 +1251,79 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                   </div>
                 </div>
               ))}
+
+              {/* ── REST POINT RADIUS CIRCLES + MARKERS ── */}
+              {imageLoaded && restPoints.map(rp => (
+                <div key={`rp-${rp.id}`} className="absolute inset-0 z-10 pointer-events-none">
+                  {/* Radius circle */}
+                  <div className="absolute pointer-events-none"
+                    style={{
+                      left: `${rp.position_x}%`,
+                      top: `${rp.position_y}%`,
+                      width: `${rp.radius * 2}%`,
+                      height: `${rp.radius * 2}%`,
+                      transform: 'translate(-50%, -50%)',
+                    }}>
+                    {/* Ripple effect */}
+                    <div className="absolute inset-0 rounded-full border border-indigo-400/40 animate-ripple" />
+                    <div className="absolute inset-0 rounded-full border border-indigo-400/30 animate-ripple" style={{ animationDelay: '1.5s' }} />
+                    {/* Core circle */}
+                    <div className="relative w-full h-full rounded-full border-2 border-indigo-400/50 bg-indigo-400/20"
+                      style={{ boxShadow: '0 0 25px rgba(129, 140, 248, 0.15), inset 0 0 10px rgba(129, 140, 248, 0.1)' }} />
+                    <div className="absolute -bottom-5 left-1/2 whitespace-nowrap text-[8px] text-indigo-400/80 font-display font-semibold drop-shadow-md"
+                      style={{ transform: `translateX(-50%) scale(${1 / scale})`, transformOrigin: 'center top' }}>
+                      เขตจุดพัก {rp.name}
+                    </div>
+                  </div>
+                  {/* Rest point marker icon */}
+                  <div
+                    className={`absolute z-20 cursor-pointer pointer-events-auto group/restpoint ${movingRestPointId === rp.id ? 'animate-wiggle' : ''}`}
+                    style={{
+                      left: `${rp.position_x}%`,
+                      top: `${rp.position_y}%`,
+                      transform: `translate(-50%, -50%) scale(${1 / scale})`,
+                    }}
+                    onClick={e => {
+                      e.stopPropagation()
+                      if (movingRestPointId) {
+                        const pos = screenToMapPercent(e.clientX, e.clientY)
+                        if (pos) finalizeRestPointMove(pos.x, pos.y)
+                        return
+                      }
+                      if (isAdmin) setSelectedRestPoint(rp)
+                    }}>
+                    <div className="w-10 h-10 rounded-full border-2 border-indigo-400/70 bg-[#1A1612] flex items-center justify-center shadow-lg shadow-indigo-900/30
+                      group-hover/restpoint:border-indigo-400 group-hover/restpoint:shadow-indigo-400/30 transition-all">
+                      {rp.image_url ? (
+                        <img src={rp.image_url} alt="" className="w-6 h-6 rounded-full object-cover" />
+                      ) : (
+                        <Tent className="w-5 h-5 text-indigo-400" />
+                      )}
+                    </div>
+                    <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-display text-indigo-300/80 bg-black/60 px-1 rounded-sm">
+                      {rp.name}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* ── Rest point move ghost preview ── */}
+              {movingRestPointId && restPointMovePreview && imageLoaded && (() => {
+                const rp = restPoints.find(r => r.id === movingRestPointId)
+                if (!rp) return null
+                return (
+                  <div className="absolute z-40 pointer-events-none"
+                    style={{
+                      left: `${restPointMovePreview.x}%`,
+                      top: `${restPointMovePreview.y}%`,
+                      transform: `translate(-50%, -50%) scale(${1 / scale})`,
+                    }}>
+                    <div className="w-10 h-10 rounded-full border-2 border-indigo-400 bg-[#1A1612]/60 flex items-center justify-center opacity-50 shadow-[0_0_16px_rgba(129,140,248,0.6)]">
+                      <Tent className="w-5 h-5 text-indigo-400" />
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* ── Church move ghost preview ── */}
               {movingChurchId && churchMovePreview && imageLoaded && (() => {
@@ -1255,6 +1466,21 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
               </div>
             </div>
           )}
+
+          {/* ── Rest point move mode indicator ── */}
+          {movingRestPointId && (
+            <div className="absolute top-4 inset-x-0 z-50 flex justify-center px-4">
+              <div className="bg-black/90 border border-indigo-400/60 text-indigo-400 text-sm font-display font-bold 
+                              px-4 py-2 rounded-lg shadow-lg flex items-center gap-3 pointer-events-auto">
+                <Tent className="w-4 h-4 animate-bounce" />
+                <span>คลิกบนแผนที่เพื่อวางจุดพัก</span>
+                <button onClick={cancelRestPointMoveMode}
+                  className="ml-1 px-3 py-1 text-xs bg-victorian-700 hover:bg-victorian-600 text-victorian-300 hover:text-nouveau-cream rounded cursor-pointer transition-colors">
+                  ยกเลิก
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1373,6 +1599,40 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
           onMove={() => startChurchMoveMode(selectedChurch)}
           onDelete={() => handleDeleteChurch(selectedChurch.id)}
           onSaveRadius={(radius) => handleUpdateChurchRadius(selectedChurch.id, radius)}
+          isPending={isPending}
+        />
+      )}
+
+      {/* Add Rest Point Modal */}
+      {showRestPointModal && (
+        <ModalOverlay onClose={() => setShowRestPointModal(false)} title="วางจุดพักบนแมพ">
+          <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">ชื่อจุดพัก *</label>
+          <input value={restPointName} onChange={e => setRestPointName(e.target.value)} className="input-victorian !py-2 !px-3 w-full mb-3" placeholder="เช่น กระท่อมริมป่า" />
+          <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">URL รูปภาพ (ไม่บังคับ)</label>
+          <input value={restPointUrl} onChange={e => setRestPointUrl(e.target.value)} className="input-victorian !py-2 !px-3 w-full mb-3" placeholder="https://..." />
+          <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">รัศมีเขตพัก (%)</label>
+          <div className="flex items-center gap-3 mb-4">
+            <input type="range" min={1} max={50} step={0.5} value={restPointRadius}
+              onChange={e => setRestPointRadius(parseFloat(e.target.value))}
+              className="flex-1 accent-indigo-400" />
+            <span className="text-indigo-400 font-mono text-sm w-14 text-right">{restPointRadius}%</span>
+          </div>
+          <p className="text-victorian-500 text-xs mb-4">จุดพักจะถูกวางที่กลางแมพ แล้วลากย้ายได้ทีหลัง</p>
+          <button onClick={handleAddRestPoint} disabled={isPending || !restPointName.trim()}
+            className="btn-gold !py-2 !px-4 !text-sm w-full flex items-center justify-center gap-2 disabled:opacity-50">
+            <Tent className="w-4 h-4" />{isPending ? 'กำลังเพิ่ม...' : 'วางจุดพัก'}
+          </button>
+        </ModalOverlay>
+      )}
+
+      {/* Rest Point Info Popup (admin) */}
+      {selectedRestPoint && (
+        <RestPointInfoPopup
+          restPoint={selectedRestPoint}
+          onClose={() => setSelectedRestPoint(null)}
+          onMove={() => startRestPointMoveMode(selectedRestPoint)}
+          onDelete={() => handleDeleteRestPoint(selectedRestPoint.id)}
+          onSaveRadius={(radius) => handleUpdateRestPointRadius(selectedRestPoint.id, radius)}
           isPending={isPending}
         />
       )}
@@ -1628,6 +1888,78 @@ function ChurchInfoPopup({ church, onClose, onMove, onDelete, onSaveRadius, isPe
         <div className="space-y-3">
           <button onClick={onMove}
             className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-amber-400 border-2 border-amber-400/30 hover:border-amber-400/60 rounded-sm cursor-pointer hover:bg-amber-400/10 transition-colors">
+            <Move className="w-6 h-6" /> ย้ายตำแหน่ง
+          </button>
+          <button onClick={onDelete}
+            className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-nouveau-ruby border-2 border-nouveau-ruby/30 hover:border-nouveau-ruby/60 rounded-sm cursor-pointer hover:bg-nouveau-ruby/10 transition-colors">
+            <Trash2 className="w-6 h-6" /> ลบออกจากแมพ
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RestPointInfoPopup({ restPoint, onClose, onMove, onDelete, onSaveRadius, isPending }: {
+  restPoint: MapRestPoint
+  onClose: () => void
+  onMove: () => void
+  onDelete: () => void
+  onSaveRadius: (radius: number) => void
+  isPending: boolean
+}) {
+  const [editRadius, setEditRadius] = useState<number>(restPoint.radius)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}
+      style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+      <div className="w-full max-w-lg border-2 border-indigo-400/40 rounded-sm p-8 shadow-2xl shadow-indigo-900/20"
+        style={{ backgroundColor: '#1A1612' }}
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-6 mb-6">
+          <div className="w-20 h-20 rounded-full overflow-hidden border-4 shrink-0 shadow-lg border-indigo-400/60">
+            {restPoint.image_url ? (
+              <img src={restPoint.image_url} className="w-full h-full object-cover" alt="" />
+            ) : (
+              <div className="w-full h-full bg-victorian-800 flex items-center justify-center">
+                <Tent className="w-10 h-10 text-indigo-400" />
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-indigo-400 text-2xl truncate mb-1">จุดพัก {restPoint.name}</p>
+            <p className="text-sm text-victorian-400">ตำแหน่ง: {restPoint.position_x.toFixed(1)}%, {restPoint.position_y.toFixed(1)}%</p>
+          </div>
+          <button onClick={onClose} className="self-start -mt-2 -mr-2 text-victorian-400 hover:text-gold-400 cursor-pointer p-2">
+            <X className="w-8 h-8" />
+          </button>
+        </div>
+
+        {/* Radius editor */}
+        <div className="mb-4 p-4 rounded-sm border border-indigo-400/20 bg-indigo-400/5">
+          <label className="block text-sm font-display text-indigo-400/80 mb-2 uppercase tracking-wider">
+            เขตพัก (รัศมี %)
+          </label>
+          <div className="flex items-center gap-3">
+            <input type="range" min={1} max={50} step={0.5} value={editRadius}
+              onChange={e => setEditRadius(parseFloat(e.target.value))}
+              className="flex-1 accent-indigo-400" />
+            <span className="text-indigo-400 font-mono text-sm w-14 text-right">{editRadius}%</span>
+          </div>
+          <p className="text-victorian-500 text-xs mt-1.5">
+            ผู้เล่นต้องอยู่ภายในรัศมี {editRadius}% จึงจะนอนหลับได้
+          </p>
+          {editRadius !== restPoint.radius && (
+            <button onClick={() => onSaveRadius(editRadius)} disabled={isPending}
+              className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-nouveau-cream border-2 border-indigo-400/40 hover:border-indigo-400/70 rounded-sm cursor-pointer hover:bg-indigo-400/10 transition-colors disabled:opacity-50">
+              <Save className="w-4 h-4" /> {isPending ? 'กำลังบันทึก...' : 'บันทึกรัศมี'}
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <button onClick={onMove}
+            className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-indigo-400 border-2 border-indigo-400/30 hover:border-indigo-400/60 rounded-sm cursor-pointer hover:bg-indigo-400/10 transition-colors">
             <Move className="w-6 h-6" /> ย้ายตำแหน่ง
           </button>
           <button onClick={onDelete}
