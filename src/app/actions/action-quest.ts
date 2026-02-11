@@ -951,11 +951,13 @@ export async function getAllActionAndQuestCodes() {
   const { data: actions } = await supabase
     .from('action_codes')
     .select('id, name, code')
+    .or('archived.is.null,archived.eq.false')
     .order('created_at', { ascending: false })
 
   const { data: quests } = await supabase
     .from('quest_codes')
     .select('id, name, code')
+    .or('archived.is.null,archived.eq.false')
     .order('created_at', { ascending: false })
 
   return {
