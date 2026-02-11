@@ -287,6 +287,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const [editingZone, setEditingZone] = useState<MapLockedZone | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: 'error' | 'info' } | null>(null)
   const [isPending, startTransition] = useTransition()
+  const isDragActiveRef = useRef(false)
 
   /* ── Church UI state ── */
   const [showChurchModal, setShowChurchModal] = useState(false)
@@ -388,6 +389,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         if (movingTokenId) { setMovingTokenId(null); setMovePreview(null) }
         if (movingChurchId) { setMovingChurchId(null); setChurchMovePreview(null) }
         if (movingRestPointId) { setMovingRestPointId(null); setRestPointMovePreview(null) }
+        isDragActiveRef.current = false
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -428,8 +430,6 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     }
     if (movingTokenId || movingChurchId || movingRestPointId) {
       e.preventDefault()
-      const pos = screenToMapPercent(e.clientX, e.clientY)
-      if (pos) dropItemLocally(pos.x, pos.y)
       return
     }
     if (e.button !== 0) return
@@ -553,6 +553,8 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       return
     }
     
+    if (e.pointerType !== 'mouse' || !isDragActiveRef.current) return
+
     // Token follows cursor continuously (existing behavior)
     if (movingTokenId) {
       const pos = screenToMapPercent(e.clientX, e.clientY)
@@ -567,6 +569,38 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     if (movingRestPointId) {
       const pos = screenToMapPercent(e.clientX, e.clientY)
       if (pos) setRestPointMovePreview(pos)
+    }
+  }
+
+  function handlePointerDown(e: React.PointerEvent) {
+    if (e.pointerType !== 'mouse') return
+    if (e.button !== 0) return
+    if (!movingTokenId && !movingChurchId && !movingRestPointId) return
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    isDragActiveRef.current = true
+    const pos = screenToMapPercent(e.clientX, e.clientY)
+    if (!pos) return
+    if (movingTokenId) setMovePreview(pos)
+    if (movingChurchId) setChurchMovePreview(pos)
+    if (movingRestPointId) setRestPointMovePreview(pos)
+  }
+
+  function handlePointerUp(e: React.PointerEvent) {
+    if (e.pointerType !== 'mouse') return
+    if (!isDragActiveRef.current) return
+    isDragActiveRef.current = false
+    if (!movingTokenId && !movingChurchId && !movingRestPointId) return
+    const pos = screenToMapPercent(e.clientX, e.clientY)
+    if (pos) {
+      dropItemLocally(pos.x, pos.y)
+    } else {
+      if (movingTokenId && movePreview) dropItemLocally(movePreview.x, movePreview.y)
+      if (movingChurchId && churchMovePreview) dropItemLocally(churchMovePreview.x, churchMovePreview.y)
+      if (movingRestPointId && restPointMovePreview) dropItemLocally(restPointMovePreview.x, restPointMovePreview.y)
+    }
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
     }
   }
 
@@ -662,6 +696,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     batchMovesRef.current = { tokens: new Map(), churches: new Map(), restPoints: new Map() }
     setBatchMoveCount(0)
     positionSnapshotRef.current = null
+    isDragActiveRef.current = false
     setMovingTokenId(null)
     setMovePreview(null)
     setMoveOriginalPos(null)
@@ -1306,7 +1341,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
 
         {/* ══ LEFT SIDEBAR (desktop) / TOP PANEL (mobile) ══ */}
-        <aside className="shrink-0 lg:w-72 border-b lg:border-b-0 lg:border-r border-gold-400/10 overflow-y-auto overflow-x-hidden"
+        <aside className="shrink-0 lg:w-72 max-h-[38vh] lg:max-h-none min-h-0 border-b lg:border-b-0 lg:border-r border-gold-400/10 overflow-y-auto overflow-x-hidden"
           style={{ backgroundColor: '#1A1612' }}>
 
           {/* ── You are here indicator ── */}
@@ -1548,7 +1583,9 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
           onMouseMove={handleBgMouseMove}
           onMouseUp={handleBgMouseUp}
           onMouseLeave={handleBgMouseUp}
+          onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
           onTouchStart={handleBgTouchStart}
           onTouchMove={handleBgTouchMove}
           onTouchEnd={handleBgTouchEnd}
