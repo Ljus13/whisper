@@ -38,7 +38,31 @@ const MIN_SCALE = 0.5
 const MAX_SCALE = 5
 const ZOOM_STEP = 0.3
 const CLUSTER_THRESHOLD_PX = 44
-const TOKEN_SIZE = 44
+const TOKEN_SIZE_DESKTOP = 44
+const TOKEN_SIZE_MOBILE = 56
+
+/* ══════════════════════════════════════════════
+   UTILITY: Responsive token size
+   ══════════════════════════════════════════════ */
+function getTokenSize() {
+  if (typeof window === 'undefined') return TOKEN_SIZE_DESKTOP
+  return window.innerWidth < 768 ? TOKEN_SIZE_MOBILE : TOKEN_SIZE_DESKTOP
+}
+
+/* ══════════════════════════════════════════════
+   UTILITY: Calculate move cost - FLAT 1 POINT
+   ══════════════════════════════════════════════ */
+function calculateMoveCost(): number {
+  return 1 // Always 1 point per move
+}
+
+/* ══════════════════════════════════════════════
+   UTILITY: Responsive scale (min 0.6 for labels)
+   ══════════════════════════════════════════════ */
+function getResponsiveScale(currentScale: number): number {
+  if (currentScale < 1) return 1 / currentScale
+  return Math.max(0.6, 1 / currentScale)
+}
 
 /* ══════════════════════════════════════════════
    UTILITY: cluster tokens that overlap
@@ -231,6 +255,27 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   // ── Token move state (button-based flow) ──
   const [movingTokenId, setMovingTokenId] = useState<string | null>(null)
   const [movePreview, setMovePreview] = useState<{ x: number; y: number } | null>(null)
+  const [moveOriginalPos, setMoveOriginalPos] = useState<{ x: number; y: number } | null>(null)
+  const [isMoveModeActive, setIsMoveModeActive] = useState(false) // Global move mode toggle
+  
+  // ── Join map position selector state ──
+  const [isJoiningMap, setIsJoiningMap] = useState(false)
+  const [joinPreviewPos, setJoinPreviewPos] = useState<{ x: number; y: number } | null>(null)
+  
+  // ── Tutorial state ──
+  const [hasSeenTutorial, setHasSeenTutorial] = useState(() => {
+    if (typeof window === 'undefined') return true
+    return localStorage.getItem('whisper_map_tutorial_seen') === 'true'
+  })
+  
+  // ── Responsive token size ──
+  const [tokenSize, setTokenSize] = useState(TOKEN_SIZE_DESKTOP)
+  useEffect(() => {
+    setTokenSize(getTokenSize())
+    const handleResize = () => setTokenSize(getTokenSize())
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   // ── UI state ──
   const [selectedCluster, setSelectedCluster] = useState<TokenCluster | null>(null)
@@ -254,6 +299,19 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const [selectedRestPoint, setSelectedRestPoint] = useState<MapRestPoint | null>(null)
   const [movingRestPointId, setMovingRestPointId] = useState<string | null>(null)
   const [restPointMovePreview, setRestPointMovePreview] = useState<{ x: number; y: number } | null>(null)
+
+  /* ── Batch move state (NO server call until save button pressed) ── */
+  const positionSnapshotRef = useRef<{
+    tokens: { id: string; x: number; y: number }[]
+    churches: { id: string; x: number; y: number }[]
+    restPoints: { id: string; x: number; y: number }[]
+  } | null>(null)
+  const batchMovesRef = useRef<{
+    tokens: Map<string, { x: number; y: number }>
+    churches: Map<string, { x: number; y: number }>
+    restPoints: Map<string, { x: number; y: number }>
+  }>({ tokens: new Map(), churches: new Map(), restPoints: new Map() })
+  const [batchMoveCount, setBatchMoveCount] = useState(0)
 
   /* ── Move notification modal ── */
   const [moveNotif, setMoveNotif] = useState<{ name: string; status: 'moving' | 'success' | 'error'; msg?: string } | null>(null)
@@ -361,22 +419,17 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
      PAN: mouse drag on background
      ════════════════════════════════════════════ */
   function handleBgMouseDown(e: React.MouseEvent) {
-    if (movingTokenId) {
+    // Join mode: click to set position (don't confirm yet, just update)
+    if (isJoiningMap) {
       e.preventDefault()
       const pos = screenToMapPercent(e.clientX, e.clientY)
-      if (pos) finalizeMove(pos.x, pos.y)
+      if (pos) setJoinPreviewPos(pos)
       return
     }
-    if (movingChurchId) {
+    if (movingTokenId || movingChurchId || movingRestPointId) {
       e.preventDefault()
       const pos = screenToMapPercent(e.clientX, e.clientY)
-      if (pos) finalizeChurchMove(pos.x, pos.y)
-      return
-    }
-    if (movingRestPointId) {
-      e.preventDefault()
-      const pos = screenToMapPercent(e.clientX, e.clientY)
-      if (pos) finalizeRestPointMove(pos.x, pos.y)
+      if (pos) dropItemLocally(pos.x, pos.y)
       return
     }
     if (e.button !== 0) return
@@ -385,7 +438,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     setPanStart({ x: e.clientX - position.x, y: e.clientY - position.y })
   }
   function handleBgMouseMove(e: React.MouseEvent) {
-    if (movingTokenId) return // Handled by onPointerMove
+    if (movingTokenId || movingChurchId || movingRestPointId) return // Handled by onPointerMove
     if (isPanning) {
       setPosition({ x: e.clientX - panStart.x, y: e.clientY - panStart.y })
     }
@@ -411,6 +464,20 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       }
       return
     }
+    if (movingChurchId) {
+      if (e.touches.length === 1) {
+        const pos = screenToMapPercent(e.touches[0].clientX, e.touches[0].clientY)
+        if (pos) setChurchMovePreview(pos)
+      }
+      return
+    }
+    if (movingRestPointId) {
+      if (e.touches.length === 1) {
+        const pos = screenToMapPercent(e.touches[0].clientX, e.touches[0].clientY)
+        if (pos) setRestPointMovePreview(pos)
+      }
+      return
+    }
     if (showZoneCreator) return
     if (e.touches.length === 1) {
       setIsPanning(true)
@@ -427,6 +494,20 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       }
       return
     }
+    if (movingChurchId) {
+      if (e.touches.length === 1) {
+        const pos = screenToMapPercent(e.touches[0].clientX, e.touches[0].clientY)
+        if (pos) setChurchMovePreview(pos)
+      }
+      return
+    }
+    if (movingRestPointId) {
+      if (e.touches.length === 1) {
+        const pos = screenToMapPercent(e.touches[0].clientX, e.touches[0].clientY)
+        if (pos) setRestPointMovePreview(pos)
+      }
+      return
+    }
     if (e.touches.length === 1 && isPanning) {
       setPosition({ x: e.touches[0].clientX - panStart.x, y: e.touches[0].clientY - panStart.y })
     } else if (e.touches.length === 2) {
@@ -438,8 +519,23 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     }
   }
   function handleBgTouchEnd() {
+    // Drop item at current preview position on touch release
     if (movingTokenId && movePreview) {
-      finalizeMove(movePreview.x, movePreview.y)
+      dropItemLocally(movePreview.x, movePreview.y)
+      setIsPanning(false)
+      setLastTouchDist(0)
+      return
+    }
+    if (movingChurchId && churchMovePreview) {
+      dropItemLocally(churchMovePreview.x, churchMovePreview.y)
+      setIsPanning(false)
+      setLastTouchDist(0)
+      return
+    }
+    if (movingRestPointId && restPointMovePreview) {
+      dropItemLocally(restPointMovePreview.x, restPointMovePreview.y)
+      setIsPanning(false)
+      setLastTouchDist(0)
       return
     }
     setIsPanning(false)
@@ -450,13 +546,27 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
      POINTER events: move preview tracking
      ════════════════════════════════════════════ */
   function handlePointerMove(e: React.PointerEvent) {
-    if (movingTokenId || movingChurchId || movingRestPointId) {
+    // Join mode: update join preview position
+    if (isJoiningMap) {
       const pos = screenToMapPercent(e.clientX, e.clientY)
-      if (pos) {
-        if (movingTokenId) setMovePreview(pos)
-        if (movingChurchId) setChurchMovePreview(pos)
-        if (movingRestPointId) setRestPointMovePreview(pos)
-      }
+      if (pos) setJoinPreviewPos(pos)
+      return
+    }
+    
+    // Token follows cursor continuously (existing behavior)
+    if (movingTokenId) {
+      const pos = screenToMapPercent(e.clientX, e.clientY)
+      if (pos) setMovePreview(pos)
+    }
+    // Church follows cursor continuously (same pattern as token)
+    if (movingChurchId) {
+      const pos = screenToMapPercent(e.clientX, e.clientY)
+      if (pos) setChurchMovePreview(pos)
+    }
+    // RestPoint follows cursor continuously (same pattern as token)
+    if (movingRestPointId) {
+      const pos = screenToMapPercent(e.clientX, e.clientY)
+      if (pos) setRestPointMovePreview(pos)
     }
   }
 
@@ -489,37 +599,205 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     return token.token_type === 'player' && token.user_id === currentUserId
   }
 
-  function startMoveMode(token: MapTokenWithProfile) {
-    // Check sleep pending (non-admin, own token only)
-    const isOwnToken = token.user_id === currentUserId
-    if (!isAdmin && isOwnToken && isSleepPending) {
-      showToast('กำลังนอนหลับ — ไม่สามารถย้ายตัวละครได้', 'error')
-      return
+  // Toggle global move mode - all moveable tokens wiggle
+  function toggleMoveMode() {
+    if (isMoveModeActive) {
+      cancelMoveMode()
+    } else {
+      if (!isAdmin && isSleepPending) {
+        showToast('💤 กำลังนอนหลับ — ไม่สามารถย้ายตัวละครได้', 'error')
+        return
+      }
+      if (!isAdmin && currentUser.travel_points <= 0) {
+        showToast('🚫 แต้มเดินทางหมดแล้ว!', 'error')
+        return
+      }
+      // Snapshot all positions for cancel/rollback
+      positionSnapshotRef.current = {
+        tokens: tokens.map(t => ({ id: t.id, x: t.position_x, y: t.position_y })),
+        churches: churches.map(c => ({ id: c.id, x: c.position_x, y: c.position_y })),
+        restPoints: restPoints.map(r => ({ id: r.id, x: r.position_x, y: r.position_y })),
+      }
+      batchMovesRef.current = { tokens: new Map(), churches: new Map(), restPoints: new Map() }
+      setBatchMoveCount(0)
+      setIsMoveModeActive(true)
+      if (navigator.vibrate) navigator.vibrate([30, 20, 30])
     }
-    // Check travel points (non-admin, own token only)
-    if (!isAdmin && isOwnToken && currentUser.travel_points <= 0) {
-      showToast('แต้มเดินทางหมดแล้ว!', 'error')
-      return
-    }
+  }
+
+  // Select a specific token to move (when in move mode)
+  function selectTokenToMove(token: MapTokenWithProfile) {
+    if (!isMoveModeActive) return
+    if (!canMoveToken(token)) return
+    
     setMovingTokenId(token.id)
     setMovePreview({ x: token.position_x, y: token.position_y })
+    setMoveOriginalPos({ x: token.position_x, y: token.position_y })
     setSelectedToken(null)
     setSelectedCluster(null)
-    if (navigator.vibrate) navigator.vibrate(30)
+    if (navigator.vibrate) navigator.vibrate(20)
   }
 
   function cancelMoveMode() {
+    // Restore ALL positions from snapshot (undo ALL local changes)
+    const snap = positionSnapshotRef.current
+    if (snap) {
+      setTokens(prev => prev.map(t => {
+        const orig = snap.tokens.find(s => s.id === t.id)
+        return orig ? { ...t, position_x: orig.x, position_y: orig.y } : t
+      }))
+      setChurches(prev => prev.map(c => {
+        const orig = snap.churches.find(s => s.id === c.id)
+        return orig ? { ...c, position_x: orig.x, position_y: orig.y } : c
+      }))
+      setRestPoints(prev => prev.map(r => {
+        const orig = snap.restPoints.find(s => s.id === r.id)
+        return orig ? { ...r, position_x: orig.x, position_y: orig.y } : r
+      }))
+    }
+    // Clear pending moves from batch
+    for (const tokenId of batchMovesRef.current.tokens.keys()) {
+      pendingMovesRef.current.delete(tokenId)
+    }
+    batchMovesRef.current = { tokens: new Map(), churches: new Map(), restPoints: new Map() }
+    setBatchMoveCount(0)
+    positionSnapshotRef.current = null
     setMovingTokenId(null)
     setMovePreview(null)
+    setMoveOriginalPos(null)
+    setMovingChurchId(null)
+    setChurchMovePreview(null)
+    setMovingRestPointId(null)
+    setRestPointMovePreview(null)
+    setIsMoveModeActive(false)
+  }
+
+  // Drop the currently-moving item at the given position (LOCAL ONLY — no server call)
+  function dropItemLocally(x: number, y: number) {
+    if (movingTokenId) {
+      const tokenId = movingTokenId
+      setTokens(prev => prev.map(t => t.id === tokenId ? { ...t, position_x: x, position_y: y } : t))
+      pendingMovesRef.current.set(tokenId, { x, y })
+      batchMovesRef.current.tokens.set(tokenId, { x, y })
+      setBatchMoveCount(batchMovesRef.current.tokens.size + batchMovesRef.current.churches.size + batchMovesRef.current.restPoints.size)
+      setMovingTokenId(null)
+      setMovePreview(null)
+      setMoveOriginalPos(null)
+    } else if (movingChurchId) {
+      const churchId = movingChurchId
+      setChurches(prev => prev.map(c => c.id === churchId ? { ...c, position_x: x, position_y: y } : c))
+      batchMovesRef.current.churches.set(churchId, { x, y })
+      setBatchMoveCount(batchMovesRef.current.tokens.size + batchMovesRef.current.churches.size + batchMovesRef.current.restPoints.size)
+      setMovingChurchId(null)
+      setChurchMovePreview(null)
+    } else if (movingRestPointId) {
+      const rpId = movingRestPointId
+      setRestPoints(prev => prev.map(r => r.id === rpId ? { ...r, position_x: x, position_y: y } : r))
+      batchMovesRef.current.restPoints.set(rpId, { x, y })
+      setBatchMoveCount(batchMovesRef.current.tokens.size + batchMovesRef.current.churches.size + batchMovesRef.current.restPoints.size)
+      setMovingRestPointId(null)
+      setRestPointMovePreview(null)
+    }
+  }
+
+  // Send ALL batched moves to server (called ONLY when user clicks "บันทึกตำแหน่ง")
+  async function saveAllMoves() {
+    const tokenMoves = new Map(batchMovesRef.current.tokens)
+    const churchMoves = new Map(batchMovesRef.current.churches)
+    const restPointMoves = new Map(batchMovesRef.current.restPoints)
+
+    // Clear batch state
+    batchMovesRef.current = { tokens: new Map(), churches: new Map(), restPoints: new Map() }
+    setBatchMoveCount(0)
+    positionSnapshotRef.current = null
+    setIsMoveModeActive(false)
+    setMovingTokenId(null)
+    setMovePreview(null)
+    setMoveOriginalPos(null)
+    setMovingChurchId(null)
+    setChurchMovePreview(null)
+    setMovingRestPointId(null)
+    setRestPointMovePreview(null)
+
+    setMoveNotif({ name: 'บันทึกทั้งหมด', status: 'moving' })
+    const errors: string[] = []
+
+    for (const [tokenId, pos] of tokenMoves) {
+      const result = await moveToken(tokenId, pos.x, pos.y)
+      pendingMovesRef.current.delete(tokenId)
+      if (result?.error) errors.push(result.error)
+    }
+    for (const [churchId, pos] of churchMoves) {
+      const result = await moveChurch(churchId, pos.x, pos.y)
+      if (result?.error) errors.push(result.error)
+    }
+    for (const [rpId, pos] of restPointMoves) {
+      const result = await moveRestPointAction(rpId, pos.x, pos.y)
+      if (result?.error) errors.push(result.error)
+    }
+
+    if (errors.length > 0) {
+      setMoveNotif({ name: 'บันทึก', status: 'error', msg: errors.join(', ') })
+      setTimeout(() => setMoveNotif(null), 3000)
+    } else {
+      setMoveNotif({ name: 'บันทึก', status: 'success', msg: 'บันทึกตำแหน่งทั้งหมดสำเร็จ' })
+      setTimeout(() => setMoveNotif(null), 2000)
+    }
+  }
+
+  // Start move from popup (used by TokenInfoPopup)
+  function startMoveFromPopup(token: MapTokenWithProfile) {
+    if (!canMoveToken(token)) return
+    const isOwnToken = token.user_id === currentUserId
+    if (!isAdmin && isOwnToken && isSleepPending) {
+      showToast('💤 กำลังนอนหลับ — ไม่สามารถย้ายตัวละครได้', 'error')
+      return
+    }
+    if (!isAdmin && isOwnToken && currentUser.travel_points <= 0) {
+      showToast('🚫 แต้มเดินทางหมดแล้ว!', 'error')
+      return
+    }
+    // If not already in move mode, snapshot positions first
+    if (!isMoveModeActive) {
+      positionSnapshotRef.current = {
+        tokens: tokens.map(t => ({ id: t.id, x: t.position_x, y: t.position_y })),
+        churches: churches.map(c => ({ id: c.id, x: c.position_x, y: c.position_y })),
+        restPoints: restPoints.map(r => ({ id: r.id, x: r.position_x, y: r.position_y })),
+      }
+      batchMovesRef.current = { tokens: new Map(), churches: new Map(), restPoints: new Map() }
+      setBatchMoveCount(0)
+      setIsMoveModeActive(true)
+    }
+    selectTokenToMove(token)
+    setSelectedToken(null)
+  }
+
+  function resetToOriginalPosition() {
+    if (moveOriginalPos) {
+      setMovePreview({ x: moveOriginalPos.x, y: moveOriginalPos.y })
+    }
   }
 
   function handleTokenClick(token: MapTokenWithProfile) {
+    // In move mode, select token to move
+    if (isMoveModeActive && canMoveToken(token)) {
+      selectTokenToMove(token)
+      return
+    }
     if (movingTokenId) return
     setSelectedToken(token)
     setSelectedCluster(null)
   }
 
   function handleClusterClick(cluster: TokenCluster) {
+    // In move mode with cluster, select first moveable token
+    if (isMoveModeActive) {
+      const moveableToken = cluster.tokens.find(t => canMoveToken(t))
+      if (moveableToken) {
+        selectTokenToMove(moveableToken)
+      }
+      return
+    }
     if (movingTokenId) return
     setSelectedCluster(cluster)
     setSelectedToken(null)
@@ -592,6 +870,16 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
      CHURCH: move mode
      ════════════════════════════════════════════ */
   function startChurchMoveMode(church: MapChurchWithReligion) {
+    if (!isMoveModeActive) {
+      positionSnapshotRef.current = {
+        tokens: tokens.map(t => ({ id: t.id, x: t.position_x, y: t.position_y })),
+        churches: churches.map(c => ({ id: c.id, x: c.position_x, y: c.position_y })),
+        restPoints: restPoints.map(r => ({ id: r.id, x: r.position_x, y: r.position_y })),
+      }
+      batchMovesRef.current = { tokens: new Map(), churches: new Map(), restPoints: new Map() }
+      setBatchMoveCount(0)
+      setIsMoveModeActive(true)
+    }
     setMovingChurchId(church.id)
     setChurchMovePreview({ x: church.position_x, y: church.position_y })
     setSelectedChurch(null)
@@ -663,6 +951,16 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
      REST POINT: move mode
      ════════════════════════════════════════════ */
   function startRestPointMoveMode(rp: MapRestPoint) {
+    if (!isMoveModeActive) {
+      positionSnapshotRef.current = {
+        tokens: tokens.map(t => ({ id: t.id, x: t.position_x, y: t.position_y })),
+        churches: churches.map(c => ({ id: c.id, x: c.position_x, y: c.position_y })),
+        restPoints: restPoints.map(r => ({ id: r.id, x: r.position_x, y: r.position_y })),
+      }
+      batchMovesRef.current = { tokens: new Map(), churches: new Map(), restPoints: new Map() }
+      setBatchMoveCount(0)
+      setIsMoveModeActive(true)
+    }
     setMovingRestPointId(rp.id)
     setRestPointMovePreview({ x: rp.position_x, y: rp.position_y })
     setSelectedRestPoint(null)
@@ -730,7 +1028,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   }
 
   /* ════════════════════════════════════════════
-     PLAYER: Join this map
+     PLAYER: Join this map (enter position selection mode)
      ════════════════════════════════════════════ */
   function handleJoinMap() {
     // Block join/transfer map when sleeping
@@ -738,15 +1036,37 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       showToast('กำลังนอนหลับ — ไม่สามารถย้ายแมพได้', 'error')
       return
     }
+    // Enter position selection mode
+    setIsJoiningMap(true)
+    setJoinPreviewPos({ x: 50, y: 50 }) // Start at center
+    showToast('📍 คลิกบนแมพเพื่อเลือกจุดเกิด', 'info')
+  }
+  
+  /* ════════════════════════════════════════════
+     PLAYER: Confirm join with selected position
+     ════════════════════════════════════════════ */
+  function confirmJoinMap() {
+    if (!joinPreviewPos) return
     startTransition(async () => {
-      const result = await addPlayerToMap(map.id)
+      const result = await addPlayerToMap(map.id, undefined, joinPreviewPos.x, joinPreviewPos.y)
       if (result?.error) {
         showToast(result.error, 'error')
       } else {
         showToast('เข้าร่วมแมพสำเร็จ!', 'info')
         fetchMapDataRef.current?.()
       }
+      // Reset join mode
+      setIsJoiningMap(false)
+      setJoinPreviewPos(null)
     })
+  }
+  
+  /* ════════════════════════════════════════════
+     PLAYER: Cancel join mode
+     ════════════════════════════════════════════ */
+  function cancelJoinMode() {
+    setIsJoiningMap(false)
+    setJoinPreviewPos(null)
   }
 
   /* ════════════════════════════════════════════
@@ -1033,16 +1353,114 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
             </div>
           )}
 
-          {/* ── Join Map Button ── */}
+          {/* ── Join Map Button / Position Selector ── */}
           {!isOnThisMap && !isAdmin && (
-            <div className="px-4 py-2 lg:py-3 border-b border-gold-400/10">
-              <button onClick={handleJoinMap} disabled={isPending || isSleepPending}
-                className="btn-gold !py-2 !px-4 !text-xs lg:!text-sm w-full flex items-center justify-center gap-2 disabled:opacity-50">
-                <MapPin className="w-4 h-4" />
-                {isSleepPending ? '💤 กำลังหลับ — ย้ายแมพไม่ได้' : myToken ? `ย้ายมาแมพนี้ (−3 แต้ม)` : 'เข้าร่วมแมพนี้'}
-              </button>
-              {myToken && (
-                <p className="text-victorian-500 text-[10px] lg:text-xs text-center mt-1">แต้มเดินทาง: {currentUser.travel_points}</p>
+            <div className="px-4 py-2 lg:py-3 border-b border-gold-400/10 space-y-2">
+              {isJoiningMap ? (
+                // ── Position selection mode ──
+                <>
+                  <div className="flex items-center gap-2 text-emerald-300 text-xs lg:text-sm font-display animate-pulse">
+                    <MapPin className="w-4 h-4" />
+                    <span>📍 คลิกบนแมพเพื่อเลือกจุดเกิด</span>
+                  </div>
+                  {joinPreviewPos && (
+                    <p className="text-victorian-500 text-[10px] lg:text-xs text-center">
+                      ตำแหน่ง: ({joinPreviewPos.x.toFixed(0)}%, {joinPreviewPos.y.toFixed(0)}%)
+                    </p>
+                  )}
+                  <button onClick={confirmJoinMap} disabled={isPending || !joinPreviewPos}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 lg:py-3 px-4 rounded-sm font-display text-sm lg:text-base uppercase tracking-wider transition-all bg-gradient-to-r from-green-500 to-emerald-400 hover:from-green-400 hover:to-emerald-300 text-white shadow-lg shadow-green-500/40 disabled:opacity-50">
+                    <Save className="w-5 h-5" />
+                    ✅ ยืนยันจุดเกิด
+                  </button>
+                  <button onClick={cancelJoinMode}
+                    className="w-full flex items-center justify-center gap-2 py-2 lg:py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-sm font-display text-sm lg:text-base transition-colors shadow-lg shadow-red-900/30">
+                    <X className="w-4 h-4 lg:w-5 lg:h-5" />
+                    ❌ ยกเลิก
+                  </button>
+                </>
+              ) : (
+                // ── Normal join button ──
+                <>
+                  <button onClick={handleJoinMap} disabled={isPending || isSleepPending}
+                    className="btn-gold !py-2 !px-4 !text-xs lg:!text-sm w-full flex items-center justify-center gap-2 disabled:opacity-50">
+                    <MapPin className="w-4 h-4" />
+                    {isSleepPending ? '💤 กำลังหลับ — ย้ายแมพไม่ได้' : myToken ? `ย้ายมาแมพนี้ (−3 แต้ม)` : 'เข้าร่วมแมพนี้'}
+                  </button>
+                  {myToken && (
+                    <p className="text-victorian-500 text-[10px] lg:text-xs text-center mt-1">แต้มเดินทาง: {currentUser.travel_points}</p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── 🚶‍♂️ Move / Save Position Button ── */}
+          {(isOnThisMap || isAdmin) && (isAdmin || !isSleepPending) && (
+            <div className="px-4 py-2 lg:py-3 border-b border-gold-400/10 space-y-2">
+              {isMoveModeActive ? (
+                <>
+                  {/* Currently dragging indicator */}
+                  {(movingTokenId || movingChurchId || movingRestPointId) && (
+                    <div className="flex items-center gap-2 text-amber-300 text-xs lg:text-sm font-display">
+                      <Move className="w-4 h-4 animate-bounce" />
+                      <span>📌 คลิกบนแมพเพื่อวาง</span>
+                    </div>
+                  )}
+
+                  {/* Batch count badge */}
+                  {batchMoveCount > 0 && (
+                    <div className="text-center text-amber-400/80 text-xs font-display">
+                      🔄 เปลี่ยนตำแหน่งแล้ว {batchMoveCount} รายการ
+                    </div>
+                  )}
+
+                  {/* Save ALL / Select prompt */}
+                  <button
+                    onClick={() => startTransition(() => saveAllMoves())}
+                    disabled={isPending || batchMoveCount === 0}
+                    className={`w-full flex items-center justify-center gap-2 py-2.5 lg:py-3 px-4 rounded-sm font-display text-sm lg:text-base uppercase tracking-wider transition-all ${
+                      batchMoveCount > 0
+                        ? 'bg-gradient-to-r from-green-500 to-emerald-400 hover:from-green-400 hover:to-emerald-300 text-white shadow-lg shadow-green-500/40'
+                        : 'bg-amber-400 text-amber-900 hover:bg-amber-300 shadow-lg shadow-amber-400/30 animate-pulse'
+                    } disabled:opacity-50`}
+                  >
+                    {batchMoveCount > 0 ? (
+                      <>
+                        <Save className="w-5 h-5" />
+                        💾 บันทึกตำแหน่ง ({batchMoveCount})
+                      </>
+                    ) : (
+                      <>
+                        <Move className="w-5 h-5" />
+                        🔍 เลือก Token ที่จะย้าย
+                      </>
+                    )}
+                  </button>
+
+                  {/* Cancel button */}
+                  <button
+                    onClick={cancelMoveMode}
+                    className="w-full flex items-center justify-center gap-2 py-2 lg:py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-sm font-display text-sm lg:text-base transition-colors shadow-lg shadow-red-900/30"
+                  >
+                    <X className="w-4 h-4 lg:w-5 lg:h-5" />
+                    ❌ ยกเลิก
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={toggleMoveMode}
+                    disabled={!isAdmin && currentUser.travel_points <= 0}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 lg:py-3 px-4 rounded-sm font-display text-sm lg:text-base uppercase tracking-wider transition-all bg-gradient-to-r from-amber-500 to-yellow-400 text-amber-900 hover:from-amber-400 hover:to-yellow-300 shadow-md hover:shadow-lg hover:shadow-amber-400/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Move className="w-5 h-5" />
+                    ✨ ย้ายตำแหน่ง
+                  </button>
+                  {!isAdmin && currentUser.travel_points <= 0 && (
+                    <p className="text-red-400/70 text-[10px] lg:text-xs text-center mt-1">🚫 แต้มเดินทางหมด</p>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -1103,26 +1521,29 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
             </div>
           )}
 
-          {/* ── Tips ── */}
-          <div className="px-4 py-2 lg:py-3 space-y-1.5">
-            <div className="flex items-center gap-2 text-victorian-400 text-[10px] lg:text-xs">
-              <Info className="w-3.5 h-3.5 text-gold-400/60 shrink-0" />
-              <span>คลิกตัวละครแล้วกด &quot;ย้าย&quot; เพื่อเดิน</span>
+          {/* ── Tips - Colorful Guide ── */}
+          <div className="px-4 py-3 lg:py-4 space-y-2.5">
+            <p className="text-gold-400 font-display text-xs lg:text-sm uppercase tracking-wider mb-2 flex items-center gap-2">
+              📖 <span>วิธีใช้งาน</span>
+            </p>
+            <div className="flex items-start gap-2 p-2 bg-amber-900/20 border border-amber-400/20 rounded-lg">
+              <span className="text-lg">👆</span>
+              <span className="text-amber-200 text-xs lg:text-sm font-medium">คลิกตัวละครแล้วกด &quot;ย้าย&quot; เพื่อเดิน</span>
             </div>
-            <div className="flex items-center gap-2 text-victorian-400 text-[10px] lg:text-xs">
-              <Move className="w-3.5 h-3.5 text-gold-400/60 shrink-0" />
-              <span>ลากพื้นหลังเพื่อเลื่อน</span>
+            <div className="flex items-start gap-2 p-2 bg-blue-900/20 border border-blue-400/20 rounded-lg">
+              <span className="text-lg">✋</span>
+              <span className="text-blue-200 text-xs lg:text-sm font-medium">ลากพื้นหลังเพื่อเลื่อน</span>
             </div>
-            <div className="flex items-center gap-2 text-victorian-400 text-[10px] lg:text-xs">
-              <ZoomIn className="w-3.5 h-3.5 text-gold-400/60 shrink-0" />
-              <span>ซูมด้วยสกรอลล์</span>
+            <div className="flex items-start gap-2 p-2 bg-purple-900/20 border border-purple-400/20 rounded-lg">
+              <span className="text-lg">🔍</span>
+              <span className="text-purple-200 text-xs lg:text-sm font-medium">ซูมด้วยสกรอลล์</span>
             </div>
           </div>
         </aside>
 
         {/* ══ MAP CANVAS (right side, full area) ══ */}
         <div ref={containerRef}
-          className={`flex-1 min-h-0 overflow-hidden relative ${showZoneCreator ? 'cursor-default' : (movingTokenId || movingChurchId || movingRestPointId) ? 'cursor-crosshair' : isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+          className={`flex-1 min-h-0 overflow-hidden relative ${showZoneCreator ? 'cursor-default' : (movingTokenId || movingChurchId || movingRestPointId || isJoiningMap) ? 'cursor-crosshair' : isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
           onMouseDown={handleBgMouseDown}
           onMouseMove={handleBgMouseMove}
           onMouseUp={handleBgMouseUp}
@@ -1193,192 +1614,205 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                   <div className="absolute inset-0 rounded-full border border-yellow-400/40 animate-ripple" />
                   <div className="absolute inset-0 rounded-full border border-yellow-400/30 animate-ripple" style={{ animationDelay: '1.5s' }} />
                   {/* Core circle */}
-                  <div className="relative w-full h-full rounded-full border-2 border-yellow-400/50 bg-yellow-400/30"
-                    style={{ boxShadow: '0 0 20px rgba(250, 204, 21, 0.2), inset 0 0 10px rgba(250, 204, 21, 0.1)' }} />
-                  <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[8px] text-yellow-400/80 font-display font-semibold drop-shadow-md"
-                    style={{ transform: `translateX(-50%) scale(${1 / scale})`, transformOrigin: 'center top' }}>
+                  <div className="relative w-full h-full rounded-full border-[3px] sm:border-2 border-yellow-400/60 bg-yellow-400/50"
+                    style={{ boxShadow: '0 0 24px rgba(250, 204, 21, 0.35), inset 0 0 12px rgba(250, 204, 21, 0.2)' }} />
+                  <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] sm:text-[8px] text-yellow-400/80 font-display font-semibold drop-shadow-md"
+                    style={{ transform: `translateX(-50%) scale(${getResponsiveScale(scale)})`, transformOrigin: 'center top' }}>
                     เขตทำการ {npc.npc_name}
                   </div>
                 </div>
               ))}
 
               {/* ── CHURCH RADIUS CIRCLES + MARKERS ── */}
-              {imageLoaded && churches.map(ch => (
-                <div key={`church-${ch.id}`} className="absolute inset-0 z-10 pointer-events-none">
-                  {/* Radius circle */}
-                  <div className="absolute pointer-events-none"
-                    style={{
-                      left: `${ch.position_x}%`,
-                      top: `${ch.position_y}%`,
-                      width: `${ch.radius * 2}%`,
-                      height: `${ch.radius * 2}%`,
-                      transform: 'translate(-50%, -50%)',
-                    }}>
-                    {/* Ripple effect */}
-                    <div className="absolute inset-0 rounded-full border border-emerald-400/40 animate-ripple" />
-                    <div className="absolute inset-0 rounded-full border border-emerald-400/30 animate-ripple" style={{ animationDelay: '1.5s' }} />
-                    {/* Core circle */}
-                    <div className="relative w-full h-full rounded-full border-2 border-emerald-400/50 bg-emerald-400/30"
-                      style={{ boxShadow: '0 0 25px rgba(52, 211, 153, 0.15), inset 0 0 10px rgba(52, 211, 153, 0.1)' }} />
-                    <div className="absolute -bottom-5 left-1/2 whitespace-nowrap text-[8px] text-emerald-400/80 font-display font-semibold drop-shadow-md"
-                      style={{ transform: `translateX(-50%) scale(${1 / scale})`, transformOrigin: 'center top' }}>
-                      เขตโบสถ์ {ch.religion_name_th}
+              {imageLoaded && churches.map(ch => {
+                const isMovingThisChurch = movingChurchId === ch.id
+                const displayChurchX = isMovingThisChurch && churchMovePreview ? churchMovePreview.x : ch.position_x
+                const displayChurchY = isMovingThisChurch && churchMovePreview ? churchMovePreview.y : ch.position_y
+                
+                return (
+                  <div key={`church-${ch.id}`} className="absolute inset-0 z-10 pointer-events-none">
+                    {/* Radius circle */}
+                    <div className="absolute pointer-events-none"
+                      style={{
+                        left: `${displayChurchX}%`,
+                        top: `${displayChurchY}%`,
+                        width: `${ch.radius * 2}%`,
+                        height: `${ch.radius * 2}%`,
+                        transform: 'translate(-50%, -50%)',
+                        transition: isMovingThisChurch && churchMovePreview ? 'none' : 'left 0.3s ease, top 0.3s ease',
+                      }}>
+                      {/* Ripple effect */}
+                      <div className="absolute inset-0 rounded-full border border-emerald-400/40 animate-ripple" />
+                      <div className="absolute inset-0 rounded-full border border-emerald-400/30 animate-ripple" style={{ animationDelay: '1.5s' }} />
+                      {/* Core circle */}
+                      <div className="relative w-full h-full rounded-full border-[3px] sm:border-2 border-emerald-400/60 bg-emerald-400/50"
+                        style={{ boxShadow: '0 0 28px rgba(52, 211, 153, 0.35), inset 0 0 12px rgba(52, 211, 153, 0.2)' }} />
+                    </div>
+                    {/* Church marker icon */}
+                    <div
+                      className={`absolute ${isMovingThisChurch ? 'z-50' : 'z-20'} cursor-pointer pointer-events-auto group/church`}
+                      style={{
+                        left: `${displayChurchX}%`,
+                        top: `${displayChurchY}%`,
+                        transform: `translate(-50%, -50%) scale(${getResponsiveScale(scale)})`,
+                        transition: isMovingThisChurch && churchMovePreview ? 'none' : 'left 0.3s ease, top 0.3s ease',
+                      }}
+                      onClick={e => {
+                        e.stopPropagation()
+                        if (movingChurchId === ch.id) return
+                        if (movingChurchId) return
+                        if (isMoveModeActive && isAdmin) {
+                          startChurchMoveMode(ch)
+                          return
+                        }
+                        if (!isMoveModeActive && isAdmin) setSelectedChurch(ch)
+                      }}>
+                      <div className={`${isMovingThisChurch ? 'animate-wiggle' : ''} ${isMoveModeActive && isAdmin && !movingChurchId ? 'animate-wiggle' : ''}`}>
+                      <div className="w-12 h-12 sm:w-10 sm:h-10 rounded-full border-[3px] sm:border-2 border-amber-400/70 bg-[#1A1612] flex items-center justify-center shadow-lg shadow-amber-900/30
+                        group-hover/church:border-amber-400 group-hover/church:shadow-amber-400/30 transition-all">
+                        {ch.religion_logo_url ? (
+                          <img src={ch.religion_logo_url} alt="" className="w-8 h-8 sm:w-6 sm:h-6 rounded-full object-cover" />
+                        ) : (
+                          <Church className="w-6 h-6 sm:w-5 sm:h-5 text-amber-400" />
+                        )}
+                      </div>
+                      {/* Enhanced label - bigger and clearer */}
+                      <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                        <span className="inline-block px-2 py-1 rounded-md text-xs font-display font-bold text-amber-100 bg-gradient-to-r from-amber-700/90 to-amber-600/90 border border-amber-400/50 shadow-lg">
+                          ⛪ {ch.religion_name_th}
+                        </span>
+                      </div>
+                      </div>
                     </div>
                   </div>
-                  {/* Church marker icon */}
-                  <div
-                    className={`absolute z-20 cursor-pointer pointer-events-auto group/church ${movingChurchId === ch.id ? 'animate-wiggle' : ''}`}
-                    style={{
-                      left: `${ch.position_x}%`,
-                      top: `${ch.position_y}%`,
-                      transform: `translate(-50%, -50%) scale(${1 / scale})`,
-                    }}
-                    onClick={e => {
-                      e.stopPropagation()
-                      if (movingChurchId) {
-                        const pos = screenToMapPercent(e.clientX, e.clientY)
-                        if (pos) finalizeChurchMove(pos.x, pos.y)
-                        return
-                      }
-                      if (isAdmin) setSelectedChurch(ch)
-                    }}>
-                    <div className="w-10 h-10 rounded-full border-2 border-amber-400/70 bg-[#1A1612] flex items-center justify-center shadow-lg shadow-amber-900/30
-                      group-hover/church:border-amber-400 group-hover/church:shadow-amber-400/30 transition-all">
-                      {ch.religion_logo_url ? (
-                        <img src={ch.religion_logo_url} alt="" className="w-6 h-6 rounded-full object-cover" />
-                      ) : (
-                        <Church className="w-5 h-5 text-amber-400" />
-                      )}
-                    </div>
-                    <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-display text-amber-300/80 bg-black/60 px-1 rounded-sm">
-                      {ch.religion_name_th}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
 
               {/* ── REST POINT RADIUS CIRCLES + MARKERS ── */}
-              {imageLoaded && restPoints.map(rp => (
-                <div key={`rp-${rp.id}`} className="absolute inset-0 z-10 pointer-events-none">
-                  {/* Radius circle */}
-                  <div className="absolute pointer-events-none"
-                    style={{
-                      left: `${rp.position_x}%`,
-                      top: `${rp.position_y}%`,
-                      width: `${rp.radius * 2}%`,
-                      height: `${rp.radius * 2}%`,
-                      transform: 'translate(-50%, -50%)',
-                    }}>
-                    {/* Ripple effect */}
-                    <div className="absolute inset-0 rounded-full border border-indigo-400/40 animate-ripple" />
-                    <div className="absolute inset-0 rounded-full border border-indigo-400/30 animate-ripple" style={{ animationDelay: '1.5s' }} />
-                    {/* Core circle */}
-                    <div className="relative w-full h-full rounded-full border-2 border-indigo-400/50 bg-indigo-400/20"
-                      style={{ boxShadow: '0 0 25px rgba(129, 140, 248, 0.15), inset 0 0 10px rgba(129, 140, 248, 0.1)' }} />
-                    <div className="absolute -bottom-5 left-1/2 whitespace-nowrap text-[8px] text-indigo-400/80 font-display font-semibold drop-shadow-md"
-                      style={{ transform: `translateX(-50%) scale(${1 / scale})`, transformOrigin: 'center top' }}>
-                      เขตจุดพัก {rp.name}
+              {imageLoaded && restPoints.map(rp => {
+                const isMovingThisRP = movingRestPointId === rp.id
+                const displayRPX = isMovingThisRP && restPointMovePreview ? restPointMovePreview.x : rp.position_x
+                const displayRPY = isMovingThisRP && restPointMovePreview ? restPointMovePreview.y : rp.position_y
+                
+                return (
+                  <div key={`rp-${rp.id}`} className="absolute inset-0 z-10 pointer-events-none">
+                    {/* Radius circle */}
+                    <div className="absolute pointer-events-none"
+                      style={{
+                        left: `${displayRPX}%`,
+                        top: `${displayRPY}%`,
+                        width: `${rp.radius * 2}%`,
+                        height: `${rp.radius * 2}%`,
+                        transform: 'translate(-50%, -50%)',
+                        transition: isMovingThisRP && restPointMovePreview ? 'none' : 'left 0.3s ease, top 0.3s ease',
+                      }}>
+                      {/* Ripple effect */}
+                      <div className="absolute inset-0 rounded-full border border-indigo-400/40 animate-ripple" />
+                      <div className="absolute inset-0 rounded-full border border-indigo-400/30 animate-ripple" style={{ animationDelay: '1.5s' }} />
+                      {/* Core circle */}
+                      <div className="relative w-full h-full rounded-full border-[3px] sm:border-2 border-indigo-400/60 bg-indigo-400/50"
+                        style={{ boxShadow: '0 0 28px rgba(129, 140, 248, 0.35), inset 0 0 12px rgba(129, 140, 248, 0.2)' }} />
+                    </div>
+                    {/* Rest point marker icon */}
+                    <div
+                      className={`absolute ${isMovingThisRP ? 'z-50' : 'z-20'} cursor-pointer pointer-events-auto group/restpoint`}
+                      style={{
+                        left: `${displayRPX}%`,
+                        top: `${displayRPY}%`,
+                        transform: `translate(-50%, -50%) scale(${getResponsiveScale(scale)})`,
+                        transition: isMovingThisRP && restPointMovePreview ? 'none' : 'left 0.3s ease, top 0.3s ease',
+                      }}
+                      onClick={e => {
+                        e.stopPropagation()
+                        if (movingRestPointId === rp.id) return
+                        if (movingRestPointId) return
+                        if (isMoveModeActive && isAdmin) {
+                          startRestPointMoveMode(rp)
+                          return
+                        }
+                        if (!isMoveModeActive && isAdmin) setSelectedRestPoint(rp)
+                      }}>
+                      <div className={`${isMovingThisRP ? 'animate-wiggle' : ''} ${isMoveModeActive && isAdmin && !movingRestPointId ? 'animate-wiggle' : ''}`}>
+                      <div className="w-12 h-12 sm:w-10 sm:h-10 rounded-full border-[3px] sm:border-2 border-indigo-400/70 bg-[#1A1612] flex items-center justify-center shadow-lg shadow-indigo-900/30
+                        group-hover/restpoint:border-indigo-400 group-hover/restpoint:shadow-indigo-400/30 transition-all">
+                        {rp.image_url ? (
+                          <img src={rp.image_url} alt="" className="w-8 h-8 sm:w-6 sm:h-6 rounded-full object-cover" />
+                        ) : (
+                          <Tent className="w-6 h-6 sm:w-5 sm:h-5 text-indigo-400" />
+                        )}
+                      </div>
+                      {/* Enhanced label - bigger and clearer */}
+                      <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                        <span className="inline-block px-2 py-1 rounded-md text-xs font-display font-bold text-indigo-100 bg-gradient-to-r from-indigo-700/90 to-indigo-600/90 border border-indigo-400/50 shadow-lg">
+                          ⛺ {rp.name}
+                        </span>
+                      </div>
+                      </div>
                     </div>
                   </div>
-                  {/* Rest point marker icon */}
-                  <div
-                    className={`absolute z-20 cursor-pointer pointer-events-auto group/restpoint ${movingRestPointId === rp.id ? 'animate-wiggle' : ''}`}
-                    style={{
-                      left: `${rp.position_x}%`,
-                      top: `${rp.position_y}%`,
-                      transform: `translate(-50%, -50%) scale(${1 / scale})`,
-                    }}
-                    onClick={e => {
-                      e.stopPropagation()
-                      if (movingRestPointId) {
-                        const pos = screenToMapPercent(e.clientX, e.clientY)
-                        if (pos) finalizeRestPointMove(pos.x, pos.y)
-                        return
-                      }
-                      if (isAdmin) setSelectedRestPoint(rp)
-                    }}>
-                    <div className="w-10 h-10 rounded-full border-2 border-indigo-400/70 bg-[#1A1612] flex items-center justify-center shadow-lg shadow-indigo-900/30
-                      group-hover/restpoint:border-indigo-400 group-hover/restpoint:shadow-indigo-400/30 transition-all">
-                      {rp.image_url ? (
-                        <img src={rp.image_url} alt="" className="w-6 h-6 rounded-full object-cover" />
-                      ) : (
-                        <Tent className="w-5 h-5 text-indigo-400" />
-                      )}
+                )
+              })}
+
+
+
+              {/* ── JOIN POSITION GHOST PREVIEW ── */}
+              {imageLoaded && isJoiningMap && joinPreviewPos && (
+                <div className="absolute z-30 pointer-events-none"
+                  style={{
+                    left: `${joinPreviewPos.x}%`,
+                    top: `${joinPreviewPos.y}%`,
+                    transform: 'translate(-50%, -50%)'
+                  }}>
+                  <div className="relative animate-pulse" style={{ width: tokenSize, height: tokenSize }}>
+                    <div className="absolute inset-0 rounded-full bg-emerald-400/30 animate-ping" />
+                    <div className="w-full h-full rounded-full border-4 border-emerald-400 bg-emerald-500/50 flex items-center justify-center shadow-lg shadow-emerald-500/50">
+                      <MapPin className="w-6 h-6 text-white" />
                     </div>
-                    <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-display text-indigo-300/80 bg-black/60 px-1 rounded-sm">
-                      {rp.name}
+                    <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                      <span className="inline-block px-3 py-1 rounded-md text-sm font-display font-bold text-white bg-gradient-to-r from-emerald-600 to-green-500 border border-emerald-300/50 shadow-lg">
+                        📍 จุดเกิดของคุณ
+                      </span>
                     </div>
                   </div>
                 </div>
-              ))}
-
-              {/* ── Rest point move ghost preview ── */}
-              {movingRestPointId && restPointMovePreview && imageLoaded && (() => {
-                const rp = restPoints.find(r => r.id === movingRestPointId)
-                if (!rp) return null
-                return (
-                  <div className="absolute z-40 pointer-events-none"
-                    style={{
-                      left: `${restPointMovePreview.x}%`,
-                      top: `${restPointMovePreview.y}%`,
-                      transform: `translate(-50%, -50%) scale(${1 / scale})`,
-                    }}>
-                    <div className="w-10 h-10 rounded-full border-2 border-indigo-400 bg-[#1A1612]/60 flex items-center justify-center opacity-50 shadow-[0_0_16px_rgba(129,140,248,0.6)]">
-                      <Tent className="w-5 h-5 text-indigo-400" />
-                    </div>
-                  </div>
-                )
-              })()}
-
-              {/* ── Church move ghost preview ── */}
-              {movingChurchId && churchMovePreview && imageLoaded && (() => {
-                const ch = churches.find(c => c.id === movingChurchId)
-                if (!ch) return null
-                return (
-                  <div className="absolute z-40 pointer-events-none"
-                    style={{
-                      left: `${churchMovePreview.x}%`,
-                      top: `${churchMovePreview.y}%`,
-                      transform: `translate(-50%, -50%) scale(${1 / scale})`,
-                    }}>
-                    <div className="w-10 h-10 rounded-full border-2 border-amber-400 bg-[#1A1612]/60 flex items-center justify-center opacity-50 shadow-[0_0_16px_rgba(245,158,11,0.6)]">
-                      <Church className="w-5 h-5 text-amber-400" />
-                    </div>
-                  </div>
-                )
-              })()}
+              )}
 
               {/* ── TOKEN CLUSTERS ── */}
               {imageLoaded && clusters.map((cluster, ci) => {
                 const isCluster = cluster.tokens.length > 1
                 const displayToken = cluster.tokens[0]
                 const isMovingThis = cluster.tokens.some(t => t.id === movingTokenId)
+                
+                // Use movePreview position for the token being moved (real-time follow)
+                const displayX = isMovingThis && movePreview ? movePreview.x : cluster.centerX
+                const displayY = isMovingThis && movePreview ? movePreview.y : cluster.centerY
 
                 return (
                   <div key={ci}
                     className={`absolute ${isMovingThis ? 'z-50' : 'z-20'}`}
                     style={{
-                      left: `${cluster.centerX}%`, top: `${cluster.centerY}%`,
-                      transform: `translate(-50%, -50%) scale(${1 / scale})`,
-                      transition: 'left 0.3s ease, top 0.3s ease',
+                      left: `${displayX}%`, top: `${displayY}%`,
+                      transform: `translate(-50%, -50%) scale(${getResponsiveScale(scale)})`,
+                      transition: isMovingThis && movePreview ? 'none' : 'left 0.3s ease, top 0.3s ease',
                     }}>
                     {/* Token circle */}
                     <div
                       className={`relative select-none cursor-pointer
                         ${isMovingThis ? 'animate-wiggle' : ''}
+                        ${isMoveModeActive && !isMovingThis && cluster.tokens.some(t => canMoveToken(t)) ? 'animate-wiggle' : ''}
                       `}
-                      style={{ width: TOKEN_SIZE, height: TOKEN_SIZE }}
+                      style={{ width: tokenSize, height: tokenSize }}
                       onClick={e => {
                         e.stopPropagation()
                         if (movingTokenId) {
                           const pos = screenToMapPercent(e.clientX, e.clientY)
-                          if (pos) finalizeMove(pos.x, pos.y)
+                          if (pos) dropItemLocally(pos.x, pos.y)
                           return
                         }
                         if (isCluster) { handleClusterClick(cluster) } else { handleTokenClick(displayToken) }
                       }}
                     >
-                      <div className={`w-full h-full rounded-full overflow-hidden border-2 
+                      <div className={`w-full h-full rounded-full overflow-hidden border-[3px] sm:border-2 
                         ${displayToken.user_id === currentUserId ? 'border-gold-400 shadow-[0_0_8px_rgba(212,175,55,0.5)]' : 
                           displayToken.token_type === 'npc' ? 'border-nouveau-ruby/60' : 'border-victorian-400/60'}`}>
                         {(displayToken.avatar_url || displayToken.npc_image_url) ? (
@@ -1390,9 +1824,15 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                           </div>
                         )}
                       </div>
-                      {/* Name label */}
-                      <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-display text-nouveau-cream/80 bg-black/60 px-1 rounded-sm">
-                        {displayToken.display_name || displayToken.npc_name || '?'}
+                      {/* Name label - enhanced visibility */}
+                      <div className={`absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-[12px] sm:text-[11px] font-display font-bold px-2 py-0.5 rounded-sm border shadow-lg ${
+                        displayToken.token_type === 'npc' 
+                          ? 'text-amber-200 bg-gradient-to-r from-amber-900/90 to-amber-800/90 border-amber-500/40' 
+                          : displayToken.user_id === currentUserId
+                            ? 'text-gold-300 bg-gradient-to-r from-gold-900/90 to-amber-900/90 border-gold-400/50'
+                            : 'text-nouveau-cream bg-gradient-to-r from-victorian-900/90 to-gray-900/90 border-victorian-400/40'
+                      }`}>
+                        {displayToken.token_type === 'npc' ? '👤 ' : ''}{displayToken.display_name || displayToken.npc_name || '?'}
                       </div>
                       {/* Cluster count badge */}
                       {isCluster && (
@@ -1411,62 +1851,21 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                   </div>
                 )
               })}
-              {/* ── Ghost preview during move mode ── */}
-              {movingTokenId && movePreview && imageLoaded && (() => {
-                const movingToken = tokens.find(t => t.id === movingTokenId)
-                if (!movingToken) return null
-                return (
-                  <div className="absolute z-40 pointer-events-none"
-                    style={{
-                      left: `${movePreview.x}%`,
-                      top: `${movePreview.y}%`,
-                      transform: `translate(-50%, -50%) scale(${1 / scale})`,
-                    }}>
-                    <div style={{ width: TOKEN_SIZE, height: TOKEN_SIZE }}>
-                      <div className="w-full h-full rounded-full overflow-hidden border-2 border-gold-400 opacity-50 shadow-[0_0_16px_rgba(212,175,55,0.6)]">
-                        {(movingToken.avatar_url || movingToken.npc_image_url) ? (
-                          <img src={movingToken.avatar_url || movingToken.npc_image_url || ''}
-                            className="w-full h-full object-cover" draggable={false} alt="" />
-                        ) : (
-                          <div className="w-full h-full bg-victorian-800 flex items-center justify-center text-gold-400 text-xs font-display">
-                            {(movingToken.display_name || movingToken.npc_name || '?')[0]}
-                          </div>
-                        )}
-                      </div>
-                      {/* Crosshair marker */}
-                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 border-2 border-gold-400 rounded-full" />
-                    </div>
-                  </div>
-                )
-              })()}
+
+
             </div>
           </div>
-
-          {/* ── Move mode indicator ── */}
-          {movingTokenId && (
-            <div className="absolute top-4 inset-x-0 z-50 flex justify-center px-4">
-              <div className="bg-black/90 border border-gold-400/60 text-gold-400 text-sm font-display font-bold 
-                              px-4 py-2 rounded-lg shadow-lg flex items-center gap-3 pointer-events-auto">
-                <Footprints className="w-4 h-4 animate-bounce" />
-                <span>คลิกบนแผนที่เพื่อวางตัวละคร</span>
-                <button onClick={cancelMoveMode}
-                  className="ml-1 px-3 py-1 text-xs bg-victorian-700 hover:bg-victorian-600 text-victorian-300 hover:text-nouveau-cream rounded cursor-pointer transition-colors">
-                  ยกเลิก
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* ── Church move mode indicator ── */}
           {movingChurchId && (
             <div className="absolute top-4 inset-x-0 z-50 flex justify-center px-4">
-              <div className="bg-black/90 border border-amber-400/60 text-amber-400 text-sm font-display font-bold 
-                              px-4 py-2 rounded-lg shadow-lg flex items-center gap-3 pointer-events-auto">
-                <Church className="w-4 h-4 animate-bounce" />
-                <span>คลิกบนแผนที่เพื่อวางโบสถ์</span>
+              <div className="bg-black/95 border-2 border-amber-400 text-amber-300 text-sm sm:text-base font-display font-bold 
+                              px-4 sm:px-6 py-3 rounded-xl shadow-2xl shadow-amber-900/30 flex items-center gap-3 pointer-events-auto">
+                <Church className="w-5 h-5 animate-bounce text-amber-400" />
+                <span>⛪ คลิกบนแมพเพื่อย้าย แล้วกดบันทึก</span>
                 <button onClick={cancelChurchMoveMode}
-                  className="ml-1 px-3 py-1 text-xs bg-victorian-700 hover:bg-victorian-600 text-victorian-300 hover:text-nouveau-cream rounded cursor-pointer transition-colors">
-                  ยกเลิก
+                  className="ml-2 px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg cursor-pointer transition-colors font-bold shadow-lg shadow-red-900/20">
+                  ❌ ยกเลิก
                 </button>
               </div>
             </div>
@@ -1475,13 +1874,28 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
           {/* ── Rest point move mode indicator ── */}
           {movingRestPointId && (
             <div className="absolute top-4 inset-x-0 z-50 flex justify-center px-4">
-              <div className="bg-black/90 border border-indigo-400/60 text-indigo-400 text-sm font-display font-bold 
-                              px-4 py-2 rounded-lg shadow-lg flex items-center gap-3 pointer-events-auto">
-                <Tent className="w-4 h-4 animate-bounce" />
-                <span>คลิกบนแผนที่เพื่อวางจุดพัก</span>
+              <div className="bg-black/95 border-2 border-indigo-400 text-indigo-300 text-sm sm:text-base font-display font-bold 
+                              px-4 sm:px-6 py-3 rounded-xl shadow-2xl shadow-indigo-900/30 flex items-center gap-3 pointer-events-auto">
+                <Tent className="w-5 h-5 animate-bounce text-indigo-400" />
+                <span>⛺ คลิกบนแมพเพื่อย้าย แล้วกดบันทึก</span>
                 <button onClick={cancelRestPointMoveMode}
-                  className="ml-1 px-3 py-1 text-xs bg-victorian-700 hover:bg-victorian-600 text-victorian-300 hover:text-nouveau-cream rounded cursor-pointer transition-colors">
-                  ยกเลิก
+                  className="ml-2 px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg cursor-pointer transition-colors font-bold shadow-lg shadow-red-900/20">
+                  ❌ ยกเลิก
+                </button>
+              </div>
+            </div>
+          )}
+          
+          {/* ── Join map position selector indicator ── */}
+          {isJoiningMap && (
+            <div className="absolute top-4 inset-x-0 z-50 flex justify-center px-4">
+              <div className="bg-black/95 border-2 border-emerald-400 text-emerald-300 text-sm sm:text-base font-display font-bold 
+                              px-4 sm:px-6 py-3 rounded-xl shadow-2xl shadow-emerald-900/30 flex items-center gap-3 pointer-events-auto">
+                <MapPin className="w-5 h-5 animate-bounce text-emerald-400" />
+                <span>📍 คลิกบนแมพเพื่อเลือกจุดเกิดของคุณ!</span>
+                <button onClick={cancelJoinMode}
+                  className="ml-2 px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg cursor-pointer transition-colors font-bold shadow-lg shadow-red-900/20">
+                  ❌ ยกเลิก
                 </button>
               </div>
             </div>
@@ -1504,7 +1918,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
               fetchMapDataRef.current?.()
             })
           }}
-          onMove={() => startMoveMode(selectedToken)}
+          onMove={() => startMoveFromPopup(selectedToken)}
           onSaveRadius={(radius) => {
             startTransition(async () => {
               const r = await updateNpcRadius(selectedToken.id, radius)
@@ -1773,16 +2187,10 @@ function TokenInfoPopup({ token, isAdmin, isMe, canMove, onClose, onRemove, onMo
         )}
 
         <div className="space-y-3">
-          {canMove && (
-            <button onClick={onMove}
-              className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-gold-400 border-2 border-gold-400/30 hover:border-gold-400/60 rounded-sm cursor-pointer hover:bg-gold-400/10 transition-colors">
-              <Move className="w-6 h-6" /> ย้ายตำแหน่ง
-            </button>
-          )}
           {isAdmin && (
             <button onClick={onRemove}
-              className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-nouveau-ruby border-2 border-nouveau-ruby/30 hover:border-nouveau-ruby/60 rounded-sm cursor-pointer hover:bg-nouveau-ruby/10 transition-colors">
-              <Trash2 className="w-6 h-6" /> ลบออกจากแมพ
+              className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-nouveau-ruby border-2 border-nouveau-ruby/30 hover:border-nouveau-ruby/60 rounded-lg cursor-pointer hover:bg-nouveau-ruby/10 transition-colors">
+              <Trash2 className="w-6 h-6" /> 🗑️ ลบออกจากแมพ
             </button>
           )}
         </div>
@@ -1892,12 +2300,12 @@ function ChurchInfoPopup({ church, onClose, onMove, onDelete, onSaveRadius, isPe
 
         <div className="space-y-3">
           <button onClick={onMove}
-            className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-amber-400 border-2 border-amber-400/30 hover:border-amber-400/60 rounded-sm cursor-pointer hover:bg-amber-400/10 transition-colors">
-            <Move className="w-6 h-6" /> ย้ายตำแหน่ง
+            className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-amber-400 border-2 border-amber-400/30 hover:border-amber-400/60 rounded-lg cursor-pointer hover:bg-amber-400/10 transition-colors">
+            <Move className="w-6 h-6" /> 📍 ย้ายตำแหน่ง
           </button>
           <button onClick={onDelete}
-            className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-nouveau-ruby border-2 border-nouveau-ruby/30 hover:border-nouveau-ruby/60 rounded-sm cursor-pointer hover:bg-nouveau-ruby/10 transition-colors">
-            <Trash2 className="w-6 h-6" /> ลบออกจากแมพ
+            className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-nouveau-ruby border-2 border-nouveau-ruby/30 hover:border-nouveau-ruby/60 rounded-lg cursor-pointer hover:bg-nouveau-ruby/10 transition-colors">
+            <Trash2 className="w-6 h-6" /> 🗑️ ลบออกจากแมพ
           </button>
         </div>
       </div>
@@ -1964,12 +2372,12 @@ function RestPointInfoPopup({ restPoint, onClose, onMove, onDelete, onSaveRadius
 
         <div className="space-y-3">
           <button onClick={onMove}
-            className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-indigo-400 border-2 border-indigo-400/30 hover:border-indigo-400/60 rounded-sm cursor-pointer hover:bg-indigo-400/10 transition-colors">
-            <Move className="w-6 h-6" /> ย้ายตำแหน่ง
+            className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-indigo-400 border-2 border-indigo-400/30 hover:border-indigo-400/60 rounded-lg cursor-pointer hover:bg-indigo-400/10 transition-colors">
+            <Move className="w-6 h-6" /> 📍 ย้ายตำแหน่ง
           </button>
           <button onClick={onDelete}
-            className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-nouveau-ruby border-2 border-nouveau-ruby/30 hover:border-nouveau-ruby/60 rounded-sm cursor-pointer hover:bg-nouveau-ruby/10 transition-colors">
-            <Trash2 className="w-6 h-6" /> ลบออกจากแมพ
+            className="w-full flex items-center justify-center gap-3 px-6 py-4 text-xl font-bold text-nouveau-ruby border-2 border-nouveau-ruby/30 hover:border-nouveau-ruby/60 rounded-lg cursor-pointer hover:bg-nouveau-ruby/10 transition-colors">
+            <Trash2 className="w-6 h-6" /> 🗑️ ลบออกจากแมพ
           </button>
         </div>
       </div>
@@ -1992,3 +2400,4 @@ function handlePosition(h: string): React.CSSProperties {
     default: return {}
   }
 }
+

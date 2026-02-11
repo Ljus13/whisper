@@ -106,11 +106,15 @@ export async function getMyTokenLocation() {
    - Player adds self (free first time)
    - Admin/DM adds anyone
    ══════════════════════════════════════════════ */
-export async function addPlayerToMap(mapId: string, targetUserId?: string) {
+export async function addPlayerToMap(mapId: string, targetUserId?: string, positionX?: number, positionY?: number) {
   const { supabase, user, profile, isAdmin } = await getAuthUser()
 
   const userId = targetUserId ?? user.id
   const isSelf = userId === user.id
+
+  // Use provided position or default to center
+  const startX = positionX ?? 50
+  const startY = positionY ?? 50
 
   // Only admin/dm can add others
   if (!isSelf && !isAdmin) {
@@ -147,7 +151,7 @@ export async function addPlayerToMap(mapId: string, targetUserId?: string) {
     // Update existing token to new map
     const { error: moveErr } = await supabase
       .from('map_tokens')
-      .update({ map_id: mapId, position_x: 50, position_y: 50 })
+      .update({ map_id: mapId, position_x: startX, position_y: startY })
       .eq('id', existing.id)
 
     if (moveErr) return { error: moveErr.message }
@@ -159,8 +163,8 @@ export async function addPlayerToMap(mapId: string, targetUserId?: string) {
         map_id: mapId,
         user_id: userId,
         token_type: 'player',
-        position_x: 50,
-        position_y: 50,
+        position_x: startX,
+        position_y: startY,
         created_by: user.id,
       })
 
