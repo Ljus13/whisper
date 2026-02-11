@@ -733,6 +733,11 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
      PLAYER: Join this map
      ════════════════════════════════════════════ */
   function handleJoinMap() {
+    // Block join/transfer map when sleeping
+    if (!isAdmin && isSleepPending) {
+      showToast('กำลังนอนหลับ — ไม่สามารถย้ายแมพได้', 'error')
+      return
+    }
     startTransition(async () => {
       const result = await addPlayerToMap(map.id)
       if (result?.error) {
@@ -1031,10 +1036,10 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
           {/* ── Join Map Button ── */}
           {!isOnThisMap && !isAdmin && (
             <div className="px-4 py-2 lg:py-3 border-b border-gold-400/10">
-              <button onClick={handleJoinMap} disabled={isPending}
+              <button onClick={handleJoinMap} disabled={isPending || isSleepPending}
                 className="btn-gold !py-2 !px-4 !text-xs lg:!text-sm w-full flex items-center justify-center gap-2 disabled:opacity-50">
                 <MapPin className="w-4 h-4" />
-                {myToken ? `ย้ายมาแมพนี้ (−3 แต้ม)` : 'เข้าร่วมแมพนี้'}
+                {isSleepPending ? '💤 กำลังหลับ — ย้ายแมพไม่ได้' : myToken ? `ย้ายมาแมพนี้ (−3 แต้ม)` : 'เข้าร่วมแมพนี้'}
               </button>
               {myToken && (
                 <p className="text-victorian-500 text-[10px] lg:text-xs text-center mt-1">แต้มเดินทาง: {currentUser.travel_points}</p>

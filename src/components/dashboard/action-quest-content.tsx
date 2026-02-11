@@ -36,7 +36,6 @@ import {
 } from '@/app/actions/action-quest'
 import type { ActionRewards, CodeExpiration } from '@/app/actions/action-quest'
 import { submitPrayer, getPrayerLogs, getAllPrayerLogs } from '@/app/actions/religions'
-import { getPlayerSleepPendingStatus } from '@/app/actions/rest-points'
 import { OrnamentedCard } from '@/components/ui/ornaments'
 import { MapPin, Gift, Ghost } from 'lucide-react'
 
@@ -233,9 +232,11 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   const [sleepStatus, setSleepStatus] = useState<string | null>(null)
   const [sleepError, setSleepError] = useState<string | null>(null)
 
-  // ─── Sleep pending state ───
-  const [isSleepPending, setIsSleepPending] = useState(false)
-  const [sleepAutoApproveTime, setSleepAutoApproveTime] = useState<string | null>(null)
+  // ─── Derived: sleep pending (reliable — uses sleepStatus which is always correctly set) ───
+  const isSleepPending = !isAdmin && sleepStatus === 'pending'
+  const sleepAutoApproveTime = isSleepPending ? (() => {
+    const m = new Date(); m.setDate(m.getDate() + 1); m.setHours(0, 0, 0, 0); return m.toISOString()
+  })() : null
 
   // ─── Code generation modals ───
   const [showGenAction, setShowGenAction] = useState(false)
@@ -496,12 +497,6 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   // ─── Init ───
   useEffect(() => {
     getTodaySleepStatus().then(r => { setSleepSubmitted(r.submitted); setSleepStatus(r.status || null) })
-    if (!isAdmin) {
-      getPlayerSleepPendingStatus().then(r => {
-        setIsSleepPending(r.isSleeping)
-        setSleepAutoApproveTime(r.autoApproveTime ?? null)
-      })
-    }
     if (isAdmin) {
       autoApproveExpiredRequests()
       autoApplyExpiredPunishments()
@@ -529,12 +524,6 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
       if (r.error) { setSleepError(r.error) } else {
         setSleepSubmitted(true); setSleepStatus('pending'); setShowSleepForm(false)
         setMealUrl(''); setSleepUrl(''); fetchSleepLogs(1)
-        // Also update sleep pending state
-        setIsSleepPending(true)
-        const midnight = new Date()
-        midnight.setDate(midnight.getDate() + 1)
-        midnight.setHours(0, 0, 0, 0)
-        setSleepAutoApproveTime(midnight.toISOString())
       }
     })
   }

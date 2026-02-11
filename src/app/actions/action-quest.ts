@@ -80,9 +80,33 @@ export async function submitSleepRequest(mealUrl: string, sleepUrl: string) {
     return { error: 'กรุณากรอก URL ทั้ง 2 ลิงก์' }
   }
 
-  // Check if player is in a rest zone
-  const { isPlayerInRestZone } = await import('@/app/actions/rest-points')
-  const inRestZone = await isPlayerInRestZone()
+  // Check if player is in a rest zone (inline check using same supabase client)
+  const { data: playerToken } = await supabase
+    .from('map_tokens')
+    .select('position_x, position_y, map_id')
+    .eq('user_id', user.id)
+    .eq('token_type', 'player')
+    .maybeSingle()
+
+  if (!playerToken) {
+    return { error: 'ไม่พบตัวละครบนแผนที่ — ต้องอยู่ในเขตจุดพักเท่านั้นจึงจะนอนหลับได้' }
+  }
+
+  const { data: nearbyRestPoints } = await supabase
+    .from('map_rest_points')
+    .select('position_x, position_y, radius')
+    .eq('map_id', playerToken.map_id)
+
+  let inRestZone = false
+  if (nearbyRestPoints && nearbyRestPoints.length > 0) {
+    for (const rp of nearbyRestPoints) {
+      const dx = playerToken.position_x - rp.position_x
+      const dy = playerToken.position_y - rp.position_y
+      const distance = Math.sqrt(dx * dx + dy * dy)
+      if (distance <= rp.radius) { inRestZone = true; break }
+    }
+  }
+
   if (!inRestZone) {
     return { error: 'ต้องอยู่ในเขตจุดพักเท่านั้นจึงจะนอนหลับได้' }
   }
