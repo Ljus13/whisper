@@ -115,6 +115,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const pendingMovesRef = useRef<Map<string, { x: number; y: number }>>(new Map())
   /* ── Ref to call fetchMapData from outside useEffect ── */
   const fetchMapDataRef = useRef<(() => void) | null>(null)
+  const broadcastRef = useRef<(event: string, payload: Record<string, unknown>) => void>(() => {})
 
   /* ── client-side data ── */
   const currentUserId = userId
@@ -233,7 +234,26 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     fetchMapData()
 
     const channel = supabase
-      .channel(`map_view:${mapId}`)
+      .channel(`map_view:${mapId}`, { config: { broadcast: { self: false } } })
+      .on('broadcast', { event: 'token_moved' }, ({ payload }) => {
+        const id = payload?.id as string | undefined
+        const x = payload?.x as number | undefined
+        const y = payload?.y as number | undefined
+        if (!id || typeof x !== 'number' || typeof y !== 'number') return
+        setTokens(prev => prev.map(t => {
+          if (t.id !== id) return t
+          if (pendingMovesRef.current.has(id)) return t
+          return { ...t, position_x: x, position_y: y }
+        }))
+      })
+      .on('broadcast', { event: 'token_removed' }, ({ payload }) => {
+        const id = payload?.id as string | undefined
+        if (!id) return
+        setTokens(prev => prev.filter(t => t.id !== id))
+      })
+      .on('broadcast', { event: 'token_added' }, () => {
+        fetchMapDataRef.current?.()
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'map_tokens', filter: `map_id=eq.${mapId}` }, fetchMapData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'map_locked_zones', filter: `map_id=eq.${mapId}` }, fetchMapData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'map_churches', filter: `map_id=eq.${mapId}` }, fetchMapData)
@@ -241,7 +261,14 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'maps', filter: `id=eq.${mapId}` }, fetchMapData)
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    broadcastRef.current = (event, payload) => {
+      channel.send({ type: 'broadcast', event, payload })
+    }
+
+    return () => {
+      broadcastRef.current = () => {}
+      supabase.removeChannel(channel)
+    }
   }, [userId, mapId])
 
   // ── Fetch sleep pending status ──
@@ -760,7 +787,13 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     for (const [tokenId, pos] of tokenMoves) {
       const result = await moveToken(tokenId, pos.x, pos.y)
       pendingMovesRef.current.delete(tokenId)
-      if (result?.error) errors.push(result.error)
+      if (result?.error) {
+        errors.push(result.error)
+      } else {
+        const x = Math.max(0, Math.min(100, pos.x))
+        const y = Math.max(0, Math.min(100, pos.y))
+        broadcastRef.current('token_moved', { id: tokenId, x, y })
+      }
     }
     for (const [churchId, pos] of churchMoves) {
       const result = await moveChurch(churchId, pos.x, pos.y)
@@ -890,6 +923,9 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         setMoveNotif({ name: tokenName, status: 'error', msg: result.error })
         setTimeout(() => setMoveNotif(null), 3000)
       } else {
+        const x = Math.max(0, Math.min(100, newX))
+        const y = Math.max(0, Math.min(100, newY))
+        broadcastRef.current('token_moved', { id: tokenId, x, y })
         const cost = result?.cost ?? 0
         setMoveNotif({
           name: tokenName,
@@ -1089,6 +1125,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       } else {
         showToast('เข้าร่วมแมพสำเร็จ!', 'info')
         fetchMapDataRef.current?.()
+        broadcastRef.current('token_added', { mapId: map.id })
       }
       // Reset join mode
       setIsJoiningMap(false)
@@ -1953,6 +1990,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
               await removeTokenFromMap(selectedToken.id)
               setSelectedToken(null)
               fetchMapDataRef.current?.()
+              broadcastRef.current('token_removed', { id: selectedToken.id })
             })
           }}
           onMove={() => startMoveFromPopup(selectedToken)}
@@ -1986,7 +2024,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
             startTransition(async () => {
               const r = await addNpcToMap(map.id, npcName, npcUrl)
               if (r?.error) showToast(r.error, 'error')
-              else { setShowNpcModal(false); setNpcName(''); setNpcUrl(''); fetchMapDataRef.current?.() }
+              else { setShowNpcModal(false); setNpcName(''); setNpcUrl(''); fetchMapDataRef.current?.(); broadcastRef.current('token_added', { mapId: map.id }) }
             })
           }} disabled={isPending} className="btn-gold !py-2 !px-4 !text-sm w-full flex items-center justify-center gap-2">
             <Ghost className="w-4 h-4" />{isPending ? 'กำลังเพิ่ม...' : 'เพิ่ม NPC'}
@@ -2009,7 +2047,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
             startTransition(async () => {
               const r = await addPlayerToMap(map.id, selectedPlayerId)
               if (r?.error) showToast(r.error, 'error')
-              else { setShowAddPlayer(false); setSelectedPlayerId(''); fetchMapDataRef.current?.() }
+              else { setShowAddPlayer(false); setSelectedPlayerId(''); fetchMapDataRef.current?.(); broadcastRef.current('token_added', { mapId: map.id }) }
             })
           }} disabled={isPending || !selectedPlayerId}
             className="btn-gold !py-2 !px-4 !text-sm w-full flex items-center justify-center gap-2 disabled:opacity-50">

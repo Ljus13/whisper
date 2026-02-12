@@ -79,3 +79,4 @@ CREATE POLICY "Admin can delete maps"
 -- │  4. INDEX: sort_order for gallery display   │
 -- └────────────────────────────────────────────┘
 CREATE INDEX IF NOT EXISTS idx_maps_sort_order ON public.maps (sort_order ASC, created_at DESC);
+ALTER PUBLICATION supabase_realtime ADD TABLE public.maps;

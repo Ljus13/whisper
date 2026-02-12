@@ -3,6 +3,7 @@
 import type { GameMap, MapTokenWithProfile, MapLockedZone } from '@/lib/types/database'
 import { Lock, ZoomIn, ZoomOut, Maximize, Move, Crown, Shield } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 interface Props {
   map: GameMap
@@ -18,6 +19,9 @@ export default function EmbedMapViewer({ map, tokens, zones }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
 
+  const [mapState, setMapState] = useState(map)
+  const [tokensState, setTokensState] = useState(tokens)
+  const [zonesState, setZonesState] = useState(zones)
   const [scale, setScale] = useState(1)
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
@@ -25,7 +29,66 @@ export default function EmbedMapViewer({ map, tokens, zones }: Props) {
   const [lastTouchDist, setLastTouchDist] = useState(0)
   const [imageLoaded, setImageLoaded] = useState(false)
 
-  // Mouse wheel zoom
+  useEffect(() => {
+    setMapState(map)
+    setTokensState(tokens)
+    setZonesState(zones)
+  }, [map, tokens, zones])
+
+  useEffect(() => {
+    const supabase = createClient()
+    const mapId = map.id
+
+    const fetchData = async () => {
+      const [mapRes, rawTokensRes, zonesRes] = await Promise.all([
+        supabase.from('maps').select('*').eq('id', mapId).single(),
+        supabase.from('map_tokens').select('*, profiles:user_id(display_name, avatar_url, role)').eq('map_id', mapId),
+        supabase.from('map_locked_zones').select('*').eq('map_id', mapId),
+      ])
+
+      if (mapRes.data) setMapState(mapRes.data as GameMap)
+
+      const builtTokens: MapTokenWithProfile[] = (rawTokensRes.data ?? []).map((t: Record<string, unknown>) => {
+        const profile = t.profiles as Record<string, unknown> | null
+        return {
+          ...t,
+          display_name: profile?.display_name as string | null ?? t.npc_name as string | null,
+          avatar_url: profile?.avatar_url as string | null ?? t.npc_image_url as string | null,
+          role: profile?.role as string ?? 'player',
+        } as MapTokenWithProfile
+      })
+
+      setTokensState(builtTokens)
+      setZonesState((zonesRes.data ?? []) as MapLockedZone[])
+    }
+
+    fetchData()
+
+    const channel = supabase
+      .channel(`embed_map_view:${mapId}`, { config: { broadcast: { self: false } } })
+      .on('broadcast', { event: 'token_moved' }, ({ payload }) => {
+        const id = payload?.id as string | undefined
+        const x = payload?.x as number | undefined
+        const y = payload?.y as number | undefined
+        if (!id || typeof x !== 'number' || typeof y !== 'number') return
+        setTokensState(prev => prev.map(t => t.id === id ? { ...t, position_x: x, position_y: y } : t))
+      })
+      .on('broadcast', { event: 'token_removed' }, ({ payload }) => {
+        const id = payload?.id as string | undefined
+        if (!id) return
+        setTokensState(prev => prev.filter(t => t.id !== id))
+      })
+      .on('broadcast', { event: 'token_added' }, () => {
+        fetchData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_tokens', filter: `map_id=eq.${mapId}` }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_locked_zones', filter: `map_id=eq.${mapId}` }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'maps', filter: `id=eq.${mapId}` }, fetchData)
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [map.id])
+
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -77,7 +140,7 @@ export default function EmbedMapViewer({ map, tokens, zones }: Props) {
       {/* Top bar */}
       <div className="flex items-center justify-between px-3 py-2 border-b" 
         style={{ backgroundColor: '#1A1612', borderColor: 'rgba(212,175,55,0.1)' }}>
-        <h1 style={{ color: '#D4AF37', fontSize: '0.9rem' }}>{map.name}</h1>
+        <h1 style={{ color: '#D4AF37', fontSize: '0.9rem' }}>{mapState.name}</h1>
         <div className="flex items-center gap-1">
           <button onClick={() => setScale(s => Math.max(MIN_SCALE, s - 0.3))} className="p-1.5 cursor-pointer" style={{ color: '#8B7D6B' }}>
             <ZoomOut className="w-3.5 h-3.5" />
@@ -114,12 +177,12 @@ export default function EmbedMapViewer({ map, tokens, zones }: Props) {
             transition: isPanning ? 'none' : 'transform 0.15s ease-out',
           }}>
           <div className="relative">
-            <img ref={imgRef} src={map.image_url} alt={map.name}
+            <img ref={imgRef} src={mapState.image_url} alt={mapState.name}
               className="max-w-full max-h-full object-contain select-none block"
               draggable={false} onLoad={() => setImageLoaded(true)} />
 
             {/* Locked zones */}
-            {imageLoaded && zones.map(z => (
+            {imageLoaded && zonesState.map(z => (
               <div key={z.id} className="absolute" style={{
                 left: `${z.zone_x}%`, top: `${z.zone_y}%`,
                 width: `${z.zone_width}%`, height: `${z.zone_height}%`,
@@ -131,7 +194,7 @@ export default function EmbedMapViewer({ map, tokens, zones }: Props) {
             ))}
 
             {/* NPC Interaction Radius Circles */}
-            {imageLoaded && tokens.filter(t => t.token_type === 'npc' && (t.interaction_radius ?? 0) > 0).map(npc => (
+            {imageLoaded && tokensState.filter(t => t.token_type === 'npc' && (t.interaction_radius ?? 0) > 0).map(npc => (
               <div key={`radius-${npc.id}`} className="absolute pointer-events-none" style={{
                 left: `${npc.position_x}%`, top: `${npc.position_y}%`,
                 width: `${(npc.interaction_radius ?? 0) * 2}%`,
@@ -145,7 +208,7 @@ export default function EmbedMapViewer({ map, tokens, zones }: Props) {
             ))}
 
             {/* Tokens */}
-            {imageLoaded && tokens.map(t => (
+            {imageLoaded && tokensState.map(t => (
               <div key={t.id} className="absolute" style={{
                 left: `${t.position_x}%`, top: `${t.position_y}%`,
                 transform: `translate(-50%, -50%) scale(${1 / scale})`,

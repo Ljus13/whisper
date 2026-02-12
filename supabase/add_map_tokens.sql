@@ -225,3 +225,5 @@ CREATE POLICY "Anon can view embeddable maps"
 CREATE INDEX IF NOT EXISTS idx_map_tokens_map_id     ON public.map_tokens (map_id);
 CREATE INDEX IF NOT EXISTS idx_map_tokens_user_id    ON public.map_tokens (user_id) WHERE user_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_map_locked_zones_map  ON public.map_locked_zones (map_id);
+ALTER PUBLICATION supabase_realtime ADD TABLE public.map_tokens;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.map_locked_zones;

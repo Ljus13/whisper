@@ -533,6 +533,7 @@ CREATE POLICY "Admin can delete maps"
 -- │  4. INDEX: sort_order for gallery display   │
 -- └────────────────────────────────────────────┘
 CREATE INDEX IF NOT EXISTS idx_maps_sort_order ON public.maps (sort_order ASC, created_at DESC);
+ALTER PUBLICATION supabase_realtime ADD TABLE public.maps;
 
 
 -- END OF FILE: add_maps.sql
@@ -767,6 +768,8 @@ CREATE POLICY "Anon can view embeddable maps"
 CREATE INDEX IF NOT EXISTS idx_map_tokens_map_id     ON public.map_tokens (map_id);
 CREATE INDEX IF NOT EXISTS idx_map_tokens_user_id    ON public.map_tokens (user_id) WHERE user_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_map_locked_zones_map  ON public.map_locked_zones (map_id);
+ALTER PUBLICATION supabase_realtime ADD TABLE public.map_tokens;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.map_locked_zones;
 
 
 -- END OF FILE: add_map_tokens.sql
