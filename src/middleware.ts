@@ -25,19 +25,7 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh session — getSession() reads from cookie (fast, no network call)
-  // getUser() makes a network call to Supabase Auth (~200-400ms) — avoid in middleware
-  const { data: { session } } = await supabase.auth.getSession()
-
-  // Protect /dashboard routes — redirect to login if not authenticated
-  if (request.nextUrl.pathname.startsWith('/dashboard') && !session) {
-    return NextResponse.redirect(new URL('/', request.url))
-  }
-
-  // If user is logged in and visits login page, redirect to dashboard
-  if (request.nextUrl.pathname === '/' && session) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
-  }
+  await supabase.auth.getSession()
 
   return response
 }

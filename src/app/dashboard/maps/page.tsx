@@ -1,14 +1,11 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+ 'use client'
 import MapsContent from '@/components/dashboard/maps-content'
+ import ProtectedClientPage from '@/components/auth/protected-client-page'
 
-export default async function MapsPage() {
-  const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-
-  if (!session?.user) {
-    redirect('/')
-  }
-
-  return <MapsContent userId={session.user.id} />
-}
+ export default function MapsPage() {
+   return (
+     <ProtectedClientPage>
+       {({ userId }) => <MapsContent userId={userId} />}
+     </ProtectedClientPage>
+   )
+ }

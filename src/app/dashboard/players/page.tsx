@@ -1,14 +1,11 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+ 'use client'
 import PlayersContent from '@/components/dashboard/players-content'
+ import ProtectedClientPage from '@/components/auth/protected-client-page'
 
-export default async function PlayersPage() {
-  const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-
-  if (!session?.user) {
-    redirect('/')
-  }
-
-  return <PlayersContent userId={session.user.id} />
-}
+ export default function PlayersPage() {
+   return (
+     <ProtectedClientPage>
+       {({ userId }) => <PlayersContent userId={userId} />}
+     </ProtectedClientPage>
+   )
+ }

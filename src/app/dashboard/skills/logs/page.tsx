@@ -1,14 +1,11 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+ 'use client'
 import SkillLogsContent from '@/components/dashboard/skill-logs-content'
+ import ProtectedClientPage from '@/components/auth/protected-client-page'
 
-export default async function SkillLogsPage() {
-  const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-
-  if (!session?.user) {
-    redirect('/')
-  }
-
-  return <SkillLogsContent />
-}
+ export default function SkillLogsPage() {
+   return (
+     <ProtectedClientPage>
+       {() => <SkillLogsContent />}
+     </ProtectedClientPage>
+   )
+ }

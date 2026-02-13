@@ -1,29 +1,11 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+ 'use client'
 import PrayerLogsContent from '@/components/dashboard/prayer-logs-content'
+ import ProtectedClientPage from '@/components/auth/protected-client-page'
 
-export default async function PrayerLogsPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/dashboard')
-  }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile) {
-    redirect('/dashboard')
-  }
-
-  const isAdmin = profile.role === 'admin' || profile.role === 'dm'
-  if (!isAdmin) {
-    redirect('/dashboard')
-  }
-
-  return <PrayerLogsContent userId={user.id} />
-}
+ export default function PrayerLogsPage() {
+   return (
+     <ProtectedClientPage requireAdmin>
+       {({ userId }) => <PrayerLogsContent userId={userId} />}
+     </ProtectedClientPage>
+   )
+ }

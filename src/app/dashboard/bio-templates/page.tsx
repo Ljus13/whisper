@@ -1,14 +1,11 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+ 'use client'
 import BioTemplatesContent from '@/components/dashboard/bio-templates-content'
+ import ProtectedClientPage from '@/components/auth/protected-client-page'
 
-export default async function BioTemplatesPage() {
-  const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-
-  if (!session?.user) {
-    redirect('/')
-  }
-
-  return <BioTemplatesContent />
-}
+ export default function BioTemplatesPage() {
+   return (
+     <ProtectedClientPage>
+       {() => <BioTemplatesContent />}
+     </ProtectedClientPage>
+   )
+ }
