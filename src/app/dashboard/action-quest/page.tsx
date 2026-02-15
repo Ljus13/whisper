@@ -4,17 +4,17 @@ import ActionQuestContent from '@/components/dashboard/action-quest-content'
 
 export default async function ActionQuestPage() {
   const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!session?.user) redirect('/auth/callback')
+  if (!user) redirect('/auth/callback')
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('role')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
 
-  return <ActionQuestContent userId={session.user.id} isAdmin={isAdmin} />
+  return <ActionQuestContent userId={user.id} isAdmin={isAdmin} />
 }

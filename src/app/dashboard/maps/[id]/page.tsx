@@ -5,11 +5,11 @@ import MapViewerLoader from '@/components/dashboard/map-viewer-loader'
 export default async function MapDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!session?.user) {
+  if (!user) {
     redirect('/')
   }
 
-  return <MapViewerLoader userId={session.user.id} mapId={id} />
+  return <MapViewerLoader userId={user.id} mapId={id} />
 }

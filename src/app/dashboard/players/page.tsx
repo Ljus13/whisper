@@ -4,11 +4,11 @@ import PlayersContent from '@/components/dashboard/players-content'
 
 export default async function PlayersPage() {
   const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!session?.user) {
+  if (!user) {
     redirect('/')
   }
 
-  return <PlayersContent userId={session.user.id} />
+  return <PlayersContent userId={user.id} />
 }

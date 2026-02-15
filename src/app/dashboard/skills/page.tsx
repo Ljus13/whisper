@@ -4,11 +4,11 @@ import SkillsContent from '@/components/dashboard/skills-content'
 
 export default async function SkillsPage() {
   const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!session?.user) {
+  if (!user) {
     redirect('/')
   }
 
-  return <SkillsContent userId={session.user.id} />
+  return <SkillsContent userId={user.id} />
 }

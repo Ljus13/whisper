@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { ArrowLeft, ChevronLeft, ChevronRight, Copy, Check } from 'lucide-react'
 import { getSkillUsageLogs } from '@/app/actions/skills'
 
@@ -87,12 +88,12 @@ export default function SkillLogsContent() {
         {/* Header */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-4">
-            <a
+            <Link
               href="/dashboard/skills"
               className="p-2 rounded-lg border border-gold-400/10 text-gold-400 hover:bg-victorian-800/50 transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
-            </a>
+            </Link>
             <div>
               <h1 className="heading-victorian text-2xl md:text-4xl">ประวัติการใช้สกิล</h1>
               <p className="text-victorian-400 text-xs md:text-sm mt-1">

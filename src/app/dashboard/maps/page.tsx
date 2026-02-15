@@ -4,11 +4,11 @@ import MapsContent from '@/components/dashboard/maps-content'
 
 export default async function MapsPage() {
   const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!session?.user) {
+  if (!user) {
     redirect('/')
   }
 
-  return <MapsContent userId={session.user.id} />
+  return <MapsContent userId={user.id} />
 }

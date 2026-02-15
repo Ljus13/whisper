@@ -34,33 +34,35 @@ export default function PunishmentBanner() {
 
   return (
     <>
-      <div className="rounded-xl border-2 border-red-500/50 bg-gradient-to-r from-red-950/80 via-red-900/60 to-red-950/80 p-4 md:p-5 space-y-3 animate-pulse-slow shadow-lg shadow-red-500/10">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-red-500/20 border border-red-500/40 flex items-center justify-center shrink-0">
-            <Skull className="w-5 h-5 text-red-400" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-red-300 font-bold text-base md:text-lg">⚠️ คุณกำลังอยู่ในบทลงโทษ!</h3>
-            <p className="text-red-400/80 text-xs mt-0.5">
-              มี {punishments.length} บทลงโทษที่ต้องดำเนินการ — ทำภารกิจให้ครบเพื่อขอเทพเมตตา
-            </p>
-          </div>
-        </div>
-        <div className="space-y-2">
-          {punishments.map((pun: any) => (
-            <div key={pun.id} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-red-950/60 border border-red-500/30">
-              <div className="flex-1 min-w-0">
-                <p className="text-red-200 text-sm font-semibold truncate">{pun.name}</p>
-                {pun.deadline && (
-                  <p className="text-red-400/70 text-[10px] mt-0.5">⏰ กำหนด: {fmtDate(pun.deadline)}</p>
-                )}
-              </div>
-              <button type="button" onClick={() => setDetail(pun)}
-                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 text-xs font-bold cursor-pointer transition-colors">
-                <Eye className="w-3.5 h-3.5" /> ดูรายละเอียด
-              </button>
+      <div className="max-w-screen-2xl mx-auto px-4 md:px-8 pt-4">
+        <div className="rounded-xl border-2 border-red-500/50 bg-gradient-to-r from-red-950/80 via-red-900/60 to-red-950/80 p-4 md:p-5 space-y-3 animate-pulse-slow shadow-lg shadow-red-500/10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-500/20 border border-red-500/40 flex items-center justify-center shrink-0">
+              <Skull className="w-5 h-5 text-red-400" />
             </div>
-          ))}
+            <div className="flex-1">
+              <h3 className="text-red-300 font-bold text-base md:text-lg">⚠️ คุณกำลังอยู่ในบทลงโทษ!</h3>
+              <p className="text-red-400/80 text-xs mt-0.5">
+                มี {punishments.length} บทลงโทษที่ต้องดำเนินการ — ทำภารกิจให้ครบเพื่อขอเทพเมตตา
+              </p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {punishments.map((pun: any) => (
+              <div key={pun.id} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-red-950/60 border border-red-500/30">
+                <div className="flex-1 min-w-0">
+                  <p className="text-red-200 text-sm font-semibold truncate">{pun.name}</p>
+                  {pun.deadline && (
+                    <p className="text-red-400/70 text-[10px] mt-0.5">⏰ กำหนด: {fmtDate(pun.deadline)}</p>
+                  )}
+                </div>
+                <button type="button" onClick={() => setDetail(pun)}
+                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 text-xs font-bold cursor-pointer transition-colors">
+                  <Eye className="w-3.5 h-3.5" /> ดูรายละเอียด
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

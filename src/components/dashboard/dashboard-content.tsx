@@ -355,8 +355,9 @@ export default function DashboardContent({
             </div>
           </Link>
 
-          <a 
-            href={isSanityLocked ? "#" : "/dashboard/skills"} 
+          <Link
+            href={isSanityLocked ? "#" : "/dashboard/skills"}
+            prefetch={!isSanityLocked}
             className={`group relative overflow-hidden card-victorian p-6 md:p-12 lg:p-16 flex flex-col items-center justify-center gap-4 md:gap-8 
                         hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[180px] md:min-h-[350px]
                         ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
@@ -380,10 +381,11 @@ export default function DashboardContent({
                 จัดการทักษะและความสามารถพิเศษ
               </p>
             </div>
-          </a>
+          </Link>
 
-          <a 
-            href={isSanityLocked ? "#" : "/dashboard/action-quest"} 
+          <Link
+            href={isSanityLocked ? "#" : "/dashboard/action-quest"}
+            prefetch={!isSanityLocked}
             className={`group relative overflow-hidden card-victorian p-6 md:p-12 lg:p-16 flex flex-col items-center justify-center gap-4 md:gap-8 
                         hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[180px] md:min-h-[350px]
                         ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
@@ -407,10 +409,11 @@ export default function DashboardContent({
                 ส่งการกระทำ / ภารกิจ
               </p>
             </div>
-          </a>
+          </Link>
 
-          <a 
-            href={isSanityLocked ? "#" : "/dashboard/players"} 
+          <Link
+            href={isSanityLocked ? "#" : "/dashboard/players"}
+            prefetch={!isSanityLocked}
             className={`group relative overflow-hidden card-victorian p-6 md:p-12 lg:p-16 flex flex-col items-center justify-center gap-4 md:gap-8 
                         hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[180px] md:min-h-[350px]
                         ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
@@ -434,7 +437,7 @@ export default function DashboardContent({
                 รายชื่อนักผจญภัยและสหายร่วมรบ
               </p>
             </div>
-          </a>
+          </Link>
         </section>
 
       </main>
@@ -513,8 +516,9 @@ export default function DashboardContent({
                 แก้ไขประวัติ
               </button>
 
-              <a
+              <Link
                 href={isSanityLocked ? "#" : "/dashboard/bio-templates"}
+                prefetch={!isSanityLocked}
                 className={`w-full flex items-center justify-center gap-3 px-4 py-3
                            border border-gold-400/20 rounded-sm
                            text-nouveau-cream hover:text-gold-400 hover:border-gold-400/40
@@ -529,7 +533,7 @@ export default function DashboardContent({
                   <FileText className="w-5 h-5" />
                 )}
                 เทมเพลตประวัติ
-              </a>
+              </Link>
 
               <button
                 type="button"

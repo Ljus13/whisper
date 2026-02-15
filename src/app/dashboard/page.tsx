@@ -4,13 +4,11 @@ import DashboardContent from '@/components/dashboard/dashboard-content'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!session?.user) {
+  if (!user) {
     redirect('/')
   }
-
-  const user = session.user
 
   // Fetch profile and pathway info in parallel (not sequential!)
   const [{ data: profile }, { data: playerPathways }] = await Promise.all([

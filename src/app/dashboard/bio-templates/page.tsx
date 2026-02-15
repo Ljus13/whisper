@@ -4,9 +4,9 @@ import BioTemplatesContent from '@/components/dashboard/bio-templates-content'
 
 export default async function BioTemplatesPage() {
   const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!session?.user) {
+  if (!user) {
     redirect('/')
   }
 
