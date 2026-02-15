@@ -74,6 +74,7 @@ interface RoleplayLink {
 interface RoleplaySubmission {
   id: string; player_id: string; player_name: string; player_avatar: string | null
   created_at: string; links: RoleplayLink[]
+  sequence_labels?: string[]
 }
 
 interface PlayerOption { id: string; display_name: string; avatar_url: string | null }
@@ -91,7 +92,43 @@ interface PunishmentLogEntry {
   action: string; details: Record<string, unknown>; created_by_name: string | null; created_at: string
 }
 
-type TabKey = 'actions' | 'quests' | 'sleep' | 'prayer' | 'punishments'
+type TabKey = 'actions' | 'quests' | 'sleep' | 'prayer' | 'punishments' | 'roleplay'
+
+const actionRewardFields: Array<{ key: keyof ActionRewards; label: string; icon: string }> = [
+  { key: 'reward_hp', label: 'HP', icon: '❤️' },
+  { key: 'reward_sanity', label: 'Sanity', icon: '🧠' },
+  { key: 'reward_travel', label: 'Travel', icon: '🗺️' },
+  { key: 'reward_spirituality', label: 'Spirituality', icon: '✨' },
+]
+
+const actionMaxRewardFields: Array<{ key: keyof ActionRewards; label: string; icon: string }> = [
+  { key: 'reward_max_sanity', label: 'Max Sanity', icon: '🧠' },
+  { key: 'reward_max_travel', label: 'Max Travel', icon: '🗺️' },
+  { key: 'reward_max_spirituality', label: 'Max Spirit', icon: '✨' },
+]
+
+const emptyPenalties = {
+  penalty_sanity: 0,
+  penalty_hp: 0,
+  penalty_travel: 0,
+  penalty_spirituality: 0,
+  penalty_max_sanity: 0,
+  penalty_max_travel: 0,
+  penalty_max_spirituality: 0,
+}
+
+const penaltyFields: Array<{ key: keyof typeof emptyPenalties; label: string; icon: string }> = [
+  { key: 'penalty_hp', label: 'HP', icon: '❤️' },
+  { key: 'penalty_sanity', label: 'Sanity', icon: '🧠' },
+  { key: 'penalty_travel', label: 'Travel Point', icon: '🗺️' },
+  { key: 'penalty_spirituality', label: 'Spirituality', icon: '✨' },
+]
+
+const penaltyMaxFields: Array<{ key: keyof typeof emptyPenalties; label: string; icon: string }> = [
+  { key: 'penalty_max_sanity', label: 'Max Sanity', icon: '🧠' },
+  { key: 'penalty_max_travel', label: 'Max Travel', icon: '🗺️' },
+  { key: 'penalty_max_spirituality', label: 'Max Spirit', icon: '✨' },
+]
 
 /* ═══════════════════ Shared UI ═══════════════════ */
 
@@ -339,6 +376,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   const [digestLevel, setDigestLevel] = useState<'none' | 'low' | 'medium' | 'high'>('none')
   const [digestNote, setDigestNote] = useState('')
   const [digestError, setDigestError] = useState<string | null>(null)
+  const [promoteResult, setPromoteResult] = useState<{ seqNumber: number; seqName: string | null } | null>(null)
 
   // ─── Prayer logs ───
   const [prayerLogs, setPrayerLogs] = useState<any[]>([])
@@ -357,10 +395,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   const [punDeadlineDate, setPunDeadlineDate] = useState('')
   const [punDeadlineTime, setPunDeadlineTime] = useState('')
   const [punNoDeadline, setPunNoDeadline] = useState(true)
-  const [punPenalties, setPunPenalties] = useState({
-    penalty_sanity: 0, penalty_hp: 0, penalty_travel: 0, penalty_spirituality: 0,
-    penalty_max_sanity: 0, penalty_max_travel: 0, penalty_max_spirituality: 0,
-  })
+  const [punPenalties, setPunPenalties] = useState({ ...emptyPenalties })
   const [punSelectedTasks, setPunSelectedTasks] = useState<{ action_code_id?: string; quest_code_id?: string }[]>([])
   const [punSelectedPlayers, setPunSelectedPlayers] = useState<string[]>([])
   const [punError, setPunError] = useState<string | null>(null)
@@ -410,10 +445,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   const [editPunDeadlineDate, setEditPunDeadlineDate] = useState('')
   const [editPunDeadlineTime, setEditPunDeadlineTime] = useState('')
   const [editPunNoDeadline, setEditPunNoDeadline] = useState(true)
-  const [editPunPenalties, setEditPunPenalties] = useState({
-    penalty_sanity: 0, penalty_hp: 0, penalty_travel: 0, penalty_spirituality: 0,
-    penalty_max_sanity: 0, penalty_max_travel: 0, penalty_max_spirituality: 0,
-  })
+  const [editPunPenalties, setEditPunPenalties] = useState({ ...emptyPenalties })
   const [editPunSelectedTasks, setEditPunSelectedTasks] = useState<{ action_code_id?: string; quest_code_id?: string }[]>([])
   const [editPunSelectedPlayers, setEditPunSelectedPlayers] = useState<string[]>([])
   const [editPunError, setEditPunError] = useState<string | null>(null)
@@ -422,6 +454,96 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   function toast(type: 'success' | 'error', text: string) {
     setMsg({ type, text })
     setTimeout(() => setMsg(null), 3500)
+  }
+
+  function resetGenCommon() {
+    setGenName('')
+    setGenResult(null)
+    setGenError(null)
+  }
+
+  function openGenActionModal() {
+    resetGenCommon()
+    setGenRewards({})
+    setGenExpiresDate('')
+    setGenExpiresTime('')
+    setGenMaxRepeats('')
+    setGenNoExpiry(true)
+    setGenUnlimitedRepeats(true)
+    setShowGenAction(true)
+  }
+
+  function openGenQuestModal() {
+    resetGenCommon()
+    setGenMapId('')
+    setGenNpcId('')
+    setGenQuestExpiresDate('')
+    setGenQuestExpiresTime('')
+    setGenQuestMaxRepeats('')
+    setGenQuestNoExpiry(true)
+    setGenQuestUnlimitedRepeats(true)
+    setShowGenQuest(true)
+  }
+
+  function resetSubmissionForm() {
+    setSubCode('')
+    setSubUrls([''])
+    setSubError(null)
+    setSubSuccess(null)
+  }
+
+  function resetRoleplayForm() {
+    setRoleplayUrls([''])
+    setRoleplayError(null)
+    setRoleplaySuccess(null)
+  }
+
+  function resetPrayerForm() {
+    setPrayerUrls(['', ''])
+    setPrayerError(null)
+    setPrayerSuccess(null)
+  }
+
+  function resetPunishmentForm() {
+    setPunName('')
+    setPunDesc('')
+    setPunDeadlineDate('')
+    setPunDeadlineTime('')
+    setPunNoDeadline(true)
+    setPunPenalties({ ...emptyPenalties })
+    setPunSelectedTasks([])
+    setPunSelectedPlayers([])
+    setPunError(null)
+    setPunSuccess(false)
+  }
+
+  function openSubmitActionModal() {
+    if (isSleepPending) return
+    resetSubmissionForm()
+    setShowSubmitAction(true)
+  }
+
+  function openSubmitQuestModal() {
+    if (isSleepPending) return
+    resetSubmissionForm()
+    setShowSubmitQuest(true)
+  }
+
+  function openRoleplayModal() {
+    if (isSleepPending) return
+    resetRoleplayForm()
+    setShowRoleplayForm(true)
+  }
+
+  function openPrayerModal() {
+    if (isSleepPending) return
+    resetPrayerForm()
+    setShowPrayerForm(true)
+  }
+
+  function openCreatePunishmentModal() {
+    resetPunishmentForm()
+    setShowCreatePunishment(true)
   }
 
   // ─── Fetch functions ───
@@ -482,7 +604,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   const fetchDigestProgress = useCallback(async () => {
     const r = await getPotionDigestStatus()
     if (typeof r.progress === 'number') {
-      setDigestProgress(r.progress)
+      setDigestProgress(Math.min(100, Math.max(0, r.progress)))
     }
   }, [])
 
@@ -650,8 +772,12 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
       const r = await promotePotionDigest()
       if (r.error) toast('error', r.error)
       else {
-        toast('success', 'เลื่อนลำดับขั้นสำเร็จ')
+        setPromoteResult({ seqNumber: r.newSeqNumber || 0, seqName: r.newSeqName || null })
         setDigestProgress(0)
+        fetchActionCodes(acPage)
+        fetchQuestCodes(qcPage)
+        fetchActionSubs(asPage)
+        fetchQuestSubs(qsPage)
       }
       setIsPromotingDigest(false)
     })
@@ -713,11 +839,11 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
 
   function handleCreatePunishment() {
     setPunError(null)
-    if (!punName.trim()) { setPunError('กรุณากรอกชื่อบทลงโทษ'); return }
+    if (!punName.trim()) { setPunError('กรุณากรอกชื่อเหตุการณ์'); return }
     if (punSelectedTasks.length === 0) { setPunError('กรุณาเลือกแอคชั่น/ภารกิจที่ต้องทำอย่างน้อย 1 รายการ'); return }
     if (punSelectedPlayers.length === 0) { setPunError('กรุณาเลือกผู้เล่นอย่างน้อย 1 คน'); return }
     const hasPenalty = Object.values(punPenalties).some(v => v > 0)
-    if (!hasPenalty) { setPunError('กรุณากำหนดบทลงโทษอย่างน้อย 1 รายการ'); return }
+    if (!hasPenalty) { setPunError('กรุณากำหนดเหตุการณ์อย่างน้อย 1 รายการ'); return }
 
     startTransition(async () => {
       const r = await createPunishment({
@@ -742,7 +868,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
       const r = await requestMercy(punishmentId)
       if (r.error) toast('error', r.error)
       else {
-        toast('success', 'ขอเทพเมตตาสำเร็จ! คุณรอดพ้นบทลงโทษ')
+        toast('success', 'ส่งเหตุการณ์สำเร็จ! คุณรอดพ้นเหตุการณ์')
         fetchPunishments(punPage)
         fetchPunishmentLogs(punLogPage)
       }
@@ -910,7 +1036,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
     if (editPunSelectedTasks.length === 0) { setEditPunError('กรุณาเลือกแอคชั่น/ภารกิจอย่างน้อย 1 รายการ'); return }
     if (editPunSelectedPlayers.length === 0) { setEditPunError('กรุณาเลือกผู้เล่นอย่างน้อย 1 คน'); return }
     const hasPenalty = Object.values(editPunPenalties).some(v => v > 0)
-    if (!hasPenalty) { setEditPunError('กรุณากำหนดบทลงโทษอย่างน้อย 1 รายการ'); return }
+    if (!hasPenalty) { setEditPunError('กรุณากำหนดเหตุการณ์อย่างน้อย 1 รายการ'); return }
 
     startTransition(async () => {
       const r = await updatePunishment(editPunishment!.id, {
@@ -923,7 +1049,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
       })
       if (r.error) { setEditPunError(r.error) }
       else {
-        toast('success', 'แก้ไขบทลงโทษสำเร็จ')
+        toast('success', 'แก้ไขเหตุการณ์สำเร็จ')
         setEditPunishment(null)
         fetchPunishments(punPage)
         fetchPunishmentLogs(punLogPage)
@@ -937,7 +1063,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
     { key: 'quests', label: 'ภารกิจ', icon: <Target className="w-4 h-4" /> },
     { key: 'prayer', label: 'ภาวนา', icon: <Church className="w-4 h-4" /> },
     { key: 'sleep', label: 'นอนหลับ', icon: <Moon className="w-4 h-4" /> },
-    { key: 'punishments', label: 'บทลงโทษ', icon: <Skull className="w-4 h-4" /> },
+    { key: 'punishments', label: 'เหตุการณ์', icon: <Skull className="w-4 h-4" /> },
+    { key: 'roleplay', label: 'สวมบทบาท', icon: <Sparkles className="w-4 h-4" /> },
   ]
 
   return (
@@ -998,25 +1125,27 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
             <h2 className="heading-victorian text-xl md:text-2xl flex items-center gap-3 mb-5">
               <Shield className="w-5 h-5 text-gold-400" /> เครื่องมือ DM / Admin
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <button type="button"
-                onClick={() => { setShowGenAction(true); setGenName(''); setGenResult(null); setGenError(null); setGenRewards({}); setGenExpiresDate(''); setGenExpiresTime(''); setGenMaxRepeats(''); setGenNoExpiry(true); setGenUnlimitedRepeats(true) }}
+                onClick={openGenActionModal}
                 className="btn-gold !px-5 !py-4 !text-sm flex items-center justify-center gap-2 cursor-pointer">
                 <Swords className="w-5 h-5" /> สร้างโค้ดแอคชั่น
               </button>
               <button type="button"
-                onClick={() => { setShowGenQuest(true); setGenName(''); setGenMapId(''); setGenNpcId(''); setGenResult(null); setGenError(null); setGenQuestExpiresDate(''); setGenQuestExpiresTime(''); setGenQuestMaxRepeats(''); setGenQuestNoExpiry(true); setGenQuestUnlimitedRepeats(true) }}
+                onClick={openGenQuestModal}
                 className="btn-gold !px-5 !py-4 !text-sm flex items-center justify-center gap-2 cursor-pointer">
                 <Target className="w-5 h-5" /> สร้างโค้ดภารกิจ
               </button>
+              <a
+                href="/dashboard/action-quest/roleplay-guide"
+                className="btn-victorian !px-5 !py-4 !text-sm flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <ScrollText className="w-5 h-5" /> แนวทางการสวมบทบาท
+              </a>
               <button type="button"
-                onClick={() => {
-                  setShowCreatePunishment(true); setPunName(''); setPunDesc(''); setPunDeadlineDate(''); setPunDeadlineTime(''); setPunNoDeadline(true)
-                  setPunPenalties({ penalty_sanity: 0, penalty_hp: 0, penalty_travel: 0, penalty_spirituality: 0, penalty_max_sanity: 0, penalty_max_travel: 0, penalty_max_spirituality: 0 })
-                  setPunSelectedTasks([]); setPunSelectedPlayers([]); setPunError(null); setPunSuccess(false)
-                }}
+                onClick={openCreatePunishmentModal}
                 className="px-5 py-4 rounded-lg border-2 border-red-500/30 bg-red-500/5 text-red-300 hover:border-red-400/50 hover:bg-red-500/10 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all">
-                <Skull className="w-5 h-5" /> สร้างบทลงโทษ
+                <Skull className="w-5 h-5" /> สร้างเหตุการณ์
               </button>
             </div>
           </Card>
@@ -1033,7 +1162,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
               <div className="min-w-0 flex-1">
                 <h3 className="text-indigo-300 font-display text-lg font-bold mb-1">💤 กำลังนอนหลับ — รออนุมัติ</h3>
                 <p className="text-indigo-300/80 text-sm mb-2">
-                  ขณะที่คำขอนอนหลับยังรออนุมัติ คุณจะไม่สามารถ <strong>ส่งแอคชั่น / ภารกิจ / บทลงโทษ / ภาวนา</strong> และ <strong>ย้ายตัวละครบนแผนที่</strong> ได้
+                  ขณะที่คำขอนอนหลับยังรออนุมัติ คุณจะไม่สามารถ <strong>ส่งแอคชั่น / ภารกิจ / เหตุการณ์ / ภาวนา</strong> และ <strong>ย้ายตัวละครบนแผนที่</strong> ได้
                 </p>
                 {sleepAutoApproveTime && (
                   <p className="text-indigo-400 text-xs font-display">
@@ -1070,7 +1199,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
 
             {/* ภาวนา (Prayer) */}
             <button type="button"
-              onClick={() => { if (!isSleepPending) { setShowPrayerForm(true); setPrayerUrls(['', '']); setPrayerError(null); setPrayerSuccess(null) } }}
+              onClick={openPrayerModal}
               disabled={isSleepPending}
               className={`px-5 py-4 rounded-lg border-2 text-base font-bold flex flex-col items-center gap-2 transition-all
                 ${isSleepPending
@@ -1083,7 +1212,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
 
             {/* ส่งภารกิจ */}
             <button type="button"
-              onClick={() => { if (!isSleepPending) { setShowSubmitQuest(true); setSubCode(''); setSubUrls(['']); setSubError(null); setSubSuccess(null) } }}
+              onClick={openSubmitQuestModal}
               disabled={isSleepPending}
               className={`px-5 py-4 rounded-lg border-2 text-base font-bold flex flex-col items-center gap-2 transition-all
                 ${isSleepPending
@@ -1096,7 +1225,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
 
             {/* ส่งแอคชั่น */}
             <button type="button"
-              onClick={() => { if (!isSleepPending) { setShowSubmitAction(true); setSubCode(''); setSubUrls(['']); setSubError(null); setSubSuccess(null) } }}
+              onClick={openSubmitActionModal}
               disabled={isSleepPending}
               className={`px-5 py-4 rounded-lg border-2 text-base font-bold flex flex-col items-center gap-2 transition-all
                 ${isSleepPending
@@ -1108,7 +1237,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
             </button>
 
             <button type="button"
-              onClick={() => { if (!isSleepPending) { setShowRoleplayForm(true); setRoleplayUrls(['']); setRoleplayError(null); setRoleplaySuccess(null) } }}
+              onClick={openRoleplayModal}
               disabled={isSleepPending}
               className={`px-5 py-4 rounded-lg border-2 text-base font-bold flex flex-col items-center gap-2 transition-all
                 ${isSleepPending
@@ -1264,72 +1393,6 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
               )}
             </div>
 
-            <div className="space-y-3">
-              <h3 className="heading-victorian text-lg flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-fuchsia-400" /> ประวัติสวมบทบาท
-                <span className="text-victorian-500 text-xs font-normal ml-1">({rpTotal})</span>
-              </h3>
-              {rpLoading ? <SkeletonTable /> : roleplaySubs.length === 0 ? (
-                <div className="p-8 text-center border border-gold-400/10 rounded-sm" style={{ backgroundColor: 'rgba(26,22,18,0.6)' }}>
-                  <p className="text-victorian-400 heading-victorian">ยังไม่มีประวัติสวมบทบาท</p>
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-4">
-                    {roleplaySubs.map(sub => (
-                      <div key={sub.id} className="p-4 rounded-sm border border-gold-400/10 bg-victorian-900/40">
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <div className="flex items-center gap-2">
-                            <div className="w-9 h-9 rounded-full overflow-hidden border border-gold-400/20 bg-victorian-900">
-                              {sub.player_avatar ? (
-                                <img src={sub.player_avatar} alt="" className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-victorian-600 text-xs">—</div>
-                              )}
-                            </div>
-                            <div className="text-sm">
-                              <div className="text-victorian-200 font-semibold">{sub.player_name}</div>
-                              <div className="text-victorian-500 text-xs">{fmtDate(sub.created_at)}</div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="mt-3 space-y-2">
-                          {sub.links.map(link => (
-                            <div key={link.id} className="flex flex-col gap-2 rounded-sm border border-victorian-800/50 p-3 bg-victorian-950/40">
-                              <a href={link.url} target="_blank" rel="noreferrer" className="text-fuchsia-300 hover:text-fuchsia-200 break-all text-sm">
-                                {link.url}
-                              </a>
-                              <div className="flex items-center justify-between flex-wrap gap-2">
-                                <div className="text-xs text-victorian-400">
-                                  {link.digest_level === 'pending' ? 'รอตรวจสอบ' : 'ย่อยน้ำยาแล้ว'}
-                                </div>
-                                {link.digest_level === 'pending' && isAdmin ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => { setDigestReviewTarget({ submissionId: sub.id, link }); setDigestLevel('none'); setDigestNote(''); setDigestError(null) }}
-                                    className="px-3 py-1.5 rounded-sm border border-fuchsia-500/30 text-fuchsia-300 text-xs hover:bg-fuchsia-500/10"
-                                  >
-                                    ช่วยย่อยน้ำยา
-                                  </button>
-                                ) : (
-                                  <span className="text-xs text-amber-200">{link.reviewed_at ? fmtDate(link.reviewed_at) : ''}</span>
-                                )}
-                              </div>
-                              {link.digest_note && (
-                                <div className="text-xs text-amber-200">
-                                  หมายเหตุ: {link.digest_note}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <Pagination page={rpPage} totalPages={rpTotalPages} onPage={fetchRoleplaySubs} />
-                </>
-              )}
-            </div>
           </div>
         )}
 
@@ -1631,13 +1694,13 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
             {/* Punishment list — Grid layout */}
             <div className="space-y-3">
               <h3 className="heading-victorian text-lg flex items-center gap-2">
-                <Skull className="w-4 h-4 text-red-400" /> บทลงโทษ
+                <Skull className="w-4 h-4 text-red-400" /> เหตุการณ์
                 <span className="text-victorian-500 text-xs font-normal ml-1">({punTotal})</span>
               </h3>
 
               {punLoading ? <SkeletonTable /> : punishments.length === 0 ? (
                 <div className="p-8 text-center border border-gold-400/10 rounded-sm" style={{ backgroundColor: 'rgba(26,22,18,0.6)' }}>
-                  <p className="text-victorian-400 heading-victorian">ยังไม่มีบทลงโทษ</p>
+                  <p className="text-victorian-400 heading-victorian">ยังไม่มีเหตุการณ์</p>
                 </div>
               ) : (
                 <>
@@ -1712,7 +1775,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                                   {isAdmin && !ap.penalty_applied && !ap.mercy_requested && (
                                     <button type="button" onClick={() => handleApplyPenalty(p.id, ap.player_id)} disabled={isPending}
                                       className="px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-[9px] font-bold hover:bg-red-500/20 cursor-pointer disabled:opacity-50 shrink-0">
-                                      ลงโทษ
+                                      ดำเนินการ
                                     </button>
                                   )}
                                 </div>
@@ -1760,7 +1823,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
             {/* Punishment logs */}
             <div className="space-y-3">
               <h3 className="heading-victorian text-lg flex items-center gap-2">
-                <ScrollText className="w-4 h-4 text-red-400" /> บันทึกบทลงโทษ
+                <ScrollText className="w-4 h-4 text-red-400" /> บันทึกเหตุการณ์
                 <span className="text-victorian-500 text-xs font-normal ml-1">({punLogTotal})</span>
               </h3>
 
@@ -1775,7 +1838,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                       <thead>
                         <tr className="text-victorian-500 text-left border-b border-gold-400/10">
                           {isAdmin && <th className="pb-2 pr-3">ผู้เล่น</th>}
-                          <th className="pb-2 pr-3">บทลงโทษ</th>
+                          <th className="pb-2 pr-3">เหตุการณ์</th>
                           <th className="pb-2 pr-3">เหตุการณ์</th>
                           <th className="pb-2 pr-3">โดย</th>
                           <th className="pb-2">วันที่</th>
@@ -1784,9 +1847,9 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                       <tbody>
                         {punLogs.map(log => {
                           const actionLabel: Record<string, string> = {
-                            assigned: '📋 มอบหมายบทลงโทษ',
-                            penalty_applied: '💀 ลงโทษแล้ว',
-                            mercy_requested: '🙏 ขอเทพเมตตา',
+                            assigned: '📋 มอบหมายเหตุการณ์',
+                            penalty_applied: '💀 ดำเนินการแล้ว',
+                            mercy_requested: '📨 ส่งเหตุการณ์',
                             completed: '✅ สำเร็จ',
                             expired: '⏰ หมดเวลา',
                           }
@@ -1817,6 +1880,90 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
           </div>
         )}
 
+        {/* ═══════════════════════════════════════ */}
+        {/*  TAB: ROLEPLAY                          */}
+        {/* ═══════════════════════════════════════ */}
+        {activeTab === 'roleplay' && (
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <h3 className="heading-victorian text-lg flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-fuchsia-400" /> ประวัติสวมบทบาท
+                <span className="text-victorian-500 text-xs font-normal ml-1">({rpTotal})</span>
+              </h3>
+              {rpLoading ? <SkeletonTable /> : roleplaySubs.length === 0 ? (
+                <div className="p-8 text-center border border-gold-400/10 rounded-sm" style={{ backgroundColor: 'rgba(26,22,18,0.6)' }}>
+                  <p className="text-victorian-400 heading-victorian">ยังไม่มีประวัติสวมบทบาท</p>
+                </div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-victorian-500 text-left border-b border-gold-400/10">
+                          {isAdmin && <th className="pb-2 pr-3">ผู้เล่น</th>}
+                          <th className="pb-2 pr-3">ลำดับ</th>
+                          <th className="pb-2 pr-3">วันที่</th>
+                          <th className="pb-2 pr-3">ลิงก์ทั้งหมด</th>
+                          <th className="pb-2">ผลการย่อย / หมายเหตุ</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {roleplaySubs.map(sub => (
+                          <tr key={sub.id} className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
+                            {isAdmin && (
+                              <td className="py-2.5 pr-3">
+                                <div className="flex items-center gap-2">
+                                  <Avatar name={sub.player_name} url={sub.player_avatar} />
+                                  <span className="text-victorian-200 text-xs">{sub.player_name}</span>
+                                </div>
+                              </td>
+                            )}
+                            <td className="py-2.5 pr-3 text-victorian-300 text-xs">
+                              {sub.sequence_labels && sub.sequence_labels.length > 0 ? sub.sequence_labels.join(' / ') : '—'}
+                            </td>
+                            <td className="py-2.5 pr-3 text-victorian-500 text-xs">{fmtDate(sub.created_at)}</td>
+                            <td className="py-2.5 pr-3">
+                              <div className="flex flex-wrap gap-2">
+                                {sub.links.map((link, idx) => (
+                                  <div key={link.id} className="flex items-center gap-2">
+                                    <a href={link.url} target="_blank" rel="noreferrer" className="text-fuchsia-300 hover:text-fuchsia-200 break-all text-xs">
+                                      {link.url || `ลิงก์ ${idx + 1}`}
+                                    </a>
+                                    {link.digest_level === 'pending' && isAdmin && (
+                                      <button
+                                        type="button"
+                                        onClick={() => { setDigestReviewTarget({ submissionId: sub.id, link }); setDigestLevel('none'); setDigestNote(''); setDigestError(null) }}
+                                        className="px-2 py-1 rounded-sm border border-fuchsia-500/30 text-fuchsia-300 text-[10px] hover:bg-fuchsia-500/10"
+                                      >
+                                        ช่วยย่อยน้ำยา
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="py-2.5 text-xs text-victorian-400">
+                              <div className="flex flex-wrap gap-2">
+                                {sub.links.map((link, idx) => (
+                                  <span key={link.id}>
+                                    #{idx + 1}: {link.digest_level === 'pending' ? 'รอตรวจสอบ' : 'ย่อยน้ำยาแล้ว'}
+                                    {link.digest_note ? ` (${link.digest_note})` : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <Pagination page={rpPage} totalPages={rpTotalPages} onPage={fetchRoleplaySubs} />
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* ═══════════════════════════════════════════════════ */}
@@ -1839,7 +1986,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
               เข้าคลังหรือไม่?
             </p>
             <p className="text-victorian-500 text-xs">
-              {archiveConfirm.type === 'action' ? 'แอคชั่น' : archiveConfirm.type === 'quest' ? 'ภารกิจ' : 'บทลงโทษ'}นี้จะไม่แสดงในรายการอีกต่อไป แต่ข้อมูลยังคงอยู่ในระบบ
+              {archiveConfirm.type === 'action' ? 'แอคชั่น' : archiveConfirm.type === 'quest' ? 'ภารกิจ' : 'เหตุการณ์'}นี้จะไม่แสดงในรายการอีกต่อไป แต่ข้อมูลยังคงอยู่ในระบบ
             </p>
           </div>
           <div className="flex justify-end gap-3">
@@ -1872,7 +2019,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
               <div className="space-y-1.5 text-indigo-200/90 text-sm pl-7">
                 <p className="flex items-start gap-2">
                   <span className="text-red-400 font-bold">🚫</span>
-                  <span><strong>ไม่สามารถส่ง:</strong> แอคชั่น / ภารกิจ / บทลงโทษ / ภาวนา</span>
+                  <span><strong>ไม่สามารถส่ง:</strong> แอคชั่น / ภารกิจ / เหตุการณ์ / ภาวนา</span>
                 </p>
                 <p className="flex items-start gap-2">
                   <span className="text-red-400 font-bold">🚫</span>
@@ -1931,15 +2078,10 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                   <Gift className="w-3.5 h-3.5 text-emerald-400" /> มอบรางวัล <span className="text-victorian-600 text-xs font-normal">(เพิ่มค่าปัจจุบัน)</span>
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {([
-                    ['reward_hp', 'HP', '❤️'],
-                    ['reward_sanity', 'Sanity', '🧠'],
-                    ['reward_travel', 'Travel', '🗺️'],
-                    ['reward_spirituality', 'Spirituality', '✨'],
-                  ] as const).map(([key, lbl, ico]) => (
+                  {actionRewardFields.map(({ key, label, icon }) => (
                     <div key={key} className="flex items-center gap-1.5">
-                      <span className="text-sm">{ico}</span>
-                      <input type="number" min={0} placeholder={lbl}
+                      <span className="text-sm">{icon}</span>
+                      <input type="number" min={0} placeholder={label}
                         value={genRewards[key] || ''}
                         onChange={e => setGenRewards(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))}
                         className="input-victorian w-full !py-1.5 !text-xs" />
@@ -1954,14 +2096,10 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                   <Gift className="w-3.5 h-3.5 text-amber-400" /> เพิ่มค่าสูงสุด <span className="text-victorian-600 text-xs font-normal">(ขยายลิมิต)</span>
                 </label>
                 <div className="grid grid-cols-3 gap-2">
-                  {([
-                    ['reward_max_sanity', 'Max Sanity', '🧠'],
-                    ['reward_max_travel', 'Max Travel', '🗺️'],
-                    ['reward_max_spirituality', 'Max Spirit', '✨'],
-                  ] as const).map(([key, lbl, ico]) => (
+                  {actionMaxRewardFields.map(({ key, label, icon }) => (
                     <div key={key} className="flex items-center gap-1.5">
-                      <span className="text-sm">{ico}</span>
-                      <input type="number" min={0} placeholder={lbl}
+                      <span className="text-sm">{icon}</span>
+                      <input type="number" min={0} placeholder={label}
                         value={genRewards[key] || ''}
                         onChange={e => setGenRewards(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))}
                         className="input-victorian w-full !py-1.5 !text-xs" />
@@ -2263,6 +2401,29 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
         </Modal>
       )}
 
+      {promoteResult && (
+        <Modal onClose={() => setPromoteResult(null)}>
+          <div className="relative overflow-hidden rounded-xl border border-amber-400/40 bg-victorian-950/90">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.35),_transparent_60%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(245,158,11,0.25),_transparent_60%)]" />
+            <div className="relative p-6 md:p-10 text-center space-y-5">
+              <div className="mx-auto w-16 h-16 rounded-full border border-amber-400/50 bg-amber-500/10 flex items-center justify-center shadow-[0_0_25px_rgba(251,191,36,0.5)]">
+                <Flame className="w-8 h-8 text-amber-300" />
+              </div>
+              <div className="heading-victorian text-2xl md:text-3xl text-amber-200 drop-shadow-[0_0_12px_rgba(251,191,36,0.7)]">
+                ย่อยโอสถเสร็จสมบูรณ์
+              </div>
+              <div className="text-amber-100 text-sm md:text-lg drop-shadow-[0_0_10px_rgba(251,191,36,0.6)]">
+                คุณเลื่อนสู่ลำดับที่ {promoteResult.seqNumber} {promoteResult.seqName ? `(${promoteResult.seqName})` : ''}
+              </div>
+              <button type="button" onClick={() => setPromoteResult(null)} className="btn-gold !px-6 !py-2 !text-sm">
+                รับทราบ
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* --- Prayer modal --- */}
       {showPrayerForm && (
         <Modal onClose={() => setShowPrayerForm(false)}>
@@ -2389,7 +2550,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
         <Modal onClose={() => setShowCreatePunishment(false)}>
           <div className="flex items-center justify-between">
             <h3 className="heading-victorian text-2xl flex items-center gap-3">
-              <Skull className="w-6 h-6 text-red-400" /> สร้างบทลงโทษ
+              <Skull className="w-6 h-6 text-red-400" /> สร้างเหตุการณ์
             </h3>
             <button type="button" onClick={() => setShowCreatePunishment(false)} className="text-victorian-400 hover:text-gold-400 cursor-pointer"><X className="w-5 h-5" /></button>
           </div>
@@ -2398,14 +2559,14 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
             <>
               {/* Name */}
               <div>
-                <label className="block text-sm text-victorian-300 mb-1.5">ชื่อบทลงโทษ <span className="text-nouveau-ruby">*</span></label>
+                <label className="block text-sm text-victorian-300 mb-1.5">ชื่อเหตุการณ์ <span className="text-nouveau-ruby">*</span></label>
                 <input type="text" value={punName} onChange={e => setPunName(e.target.value)} placeholder="เช่น ไม่ทำภารกิจประจำวัน" className="input-victorian w-full !py-3 !text-sm" />
               </div>
 
               {/* Description */}
               <div>
                 <label className="block text-sm text-victorian-300 mb-1.5">รายละเอียด</label>
-                <textarea value={punDesc} onChange={e => setPunDesc(e.target.value)} placeholder="อธิบายเหตุผลบทลงโทษ..." rows={2} className="input-victorian w-full !py-2 !text-sm resize-none" />
+                <textarea value={punDesc} onChange={e => setPunDesc(e.target.value)} placeholder="อธิบายเหตุการณ์..." rows={2} className="input-victorian w-full !py-2 !text-sm resize-none" />
               </div>
 
               {/* Required tasks */}
@@ -2450,20 +2611,15 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
               {/* Penalties */}
               <div className="space-y-2">
                 <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
-                  <Skull className="w-3.5 h-3.5 text-red-400" /> บทลงโทษ <span className="text-nouveau-ruby">*</span>
+                  <Skull className="w-3.5 h-3.5 text-red-400" /> เหตุการณ์ <span className="text-nouveau-ruby">*</span>
                   <span className="text-victorian-600 text-xs font-normal">(ลบค่าจากผู้เล่น)</span>
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {([
-                    ['penalty_hp', 'HP', '❤️'],
-                    ['penalty_sanity', 'Sanity', '🧠'],
-                    ['penalty_travel', 'Travel Point', '🗺️'],
-                    ['penalty_spirituality', 'Spirituality', '✨'],
-                  ] as const).map(([key, lbl, ico]) => (
+                  {penaltyFields.map(({ key, label, icon }) => (
                     <div key={key} className="flex items-center gap-1.5">
-                      <span className="text-sm">{ico}</span>
+                      <span className="text-sm">{icon}</span>
                       <span className="text-red-400 text-sm">-</span>
-                      <input type="number" min={0} placeholder={lbl}
+                      <input type="number" min={0} placeholder={label}
                         value={punPenalties[key] || ''}
                         onChange={e => setPunPenalties(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))}
                         className="input-victorian w-full !py-1.5 !text-xs" />
@@ -2471,15 +2627,11 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                   ))}
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  {([
-                    ['penalty_max_sanity', 'Max Sanity', '🧠'],
-                    ['penalty_max_travel', 'Max Travel', '🗺️'],
-                    ['penalty_max_spirituality', 'Max Spirit', '✨'],
-                  ] as const).map(([key, lbl, ico]) => (
+                  {penaltyMaxFields.map(({ key, label, icon }) => (
                     <div key={key} className="flex items-center gap-1.5">
-                      <span className="text-sm">{ico}</span>
+                      <span className="text-sm">{icon}</span>
                       <span className="text-red-400 text-sm">-</span>
-                      <input type="number" min={0} placeholder={lbl}
+                      <input type="number" min={0} placeholder={label}
                         value={punPenalties[key] || ''}
                         onChange={e => setPunPenalties(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))}
                         className="input-victorian w-full !py-1.5 !text-xs" />
@@ -2491,7 +2643,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
               {/* Assigned players */}
               <div className="space-y-2">
                 <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5 text-purple-400" /> ผู้เล่นที่รับโทษ <span className="text-nouveau-ruby">*</span>
+                  <Users className="w-3.5 h-3.5 text-purple-400" /> ผู้เล่นที่เกี่ยวข้อง <span className="text-nouveau-ruby">*</span>
                 </label>
                 <div className="max-h-40 overflow-y-auto space-y-1 p-2 rounded-lg border border-gold-400/10 bg-victorian-900/40">
                   {playerOptions.length === 0 ? (
@@ -2536,24 +2688,24 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
               {punError && <div className="p-3 bg-red-900/40 border border-red-500/30 rounded-lg text-red-300 text-sm text-center">{punError}</div>}
 
               <div className="p-3 bg-victorian-800/40 border border-gold-400/10 rounded-lg text-victorian-500 text-xs space-y-1">
-                <p>• ผู้เล่นที่ถูกกำหนดจะเห็นบทลงโทษนี้ในแท็บ &quot;บทลงโทษ&quot;</p>
-                <p>• ผู้เล่นต้องทำแอคชั่น/ภารกิจที่กำหนดให้ครบ ถึงจะกดปุ่ม &quot;ขอเทพเมตตา&quot; ได้</p>
-                <p>• หากไม่ทำครบ ทีมงานสามารถลงโทษ (ลบค่า) ได้โดยตรง</p>
+                <p>• ผู้เล่นที่ถูกกำหนดจะเห็นเหตุการณ์นี้ในแท็บ &quot;เหตุการณ์&quot;</p>
+                <p>• ผู้เล่นต้องทำแอคชั่น/ภารกิจที่กำหนดให้ครบ ถึงจะกดปุ่ม &quot;ส่งเหตุการณ์&quot; ได้</p>
+                <p>• หากไม่ทำครบ ทีมงานสามารถดำเนินการ (ลบค่า) ได้โดยตรง</p>
               </div>
 
               <div className="flex justify-end gap-3">
                 <button type="button" onClick={() => setShowCreatePunishment(false)} className="btn-victorian px-4 py-2 text-sm cursor-pointer">ยกเลิก</button>
                 <button type="button" onClick={handleCreatePunishment} disabled={isPending || !punName.trim() || punSelectedTasks.length === 0 || punSelectedPlayers.length === 0}
                   className="px-5 py-2 rounded-lg bg-red-600 text-white text-sm font-bold hover:bg-red-500 disabled:opacity-50 cursor-pointer transition-colors">
-                  {isPending ? 'กำลังสร้าง...' : '💀 สร้างบทลงโทษ'}
+                  {isPending ? 'กำลังสร้าง...' : '💀 สร้างเหตุการณ์'}
                 </button>
               </div>
             </>
           ) : (
             <div className="text-center space-y-4">
               <CheckCircle className="w-12 h-12 text-green-400 mx-auto" />
-              <p className="text-green-300 text-lg font-bold">สร้างบทลงโทษสำเร็จ!</p>
-              <p className="text-victorian-400 text-sm">ผู้เล่นที่ถูกกำหนดจะเห็นบทลงโทษนี้ในแท็บ &quot;บทลงโทษ&quot;</p>
+              <p className="text-green-300 text-lg font-bold">สร้างเหตุการณ์สำเร็จ!</p>
+              <p className="text-victorian-400 text-sm">ผู้เล่นที่ถูกกำหนดจะเห็นเหตุการณ์นี้ในแท็บ &quot;เหตุการณ์&quot;</p>
               <button type="button" onClick={() => setShowCreatePunishment(false)} className="btn-victorian px-6 py-2 text-sm cursor-pointer">ปิด</button>
             </div>
           )}
@@ -2580,10 +2732,10 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
               <Gift className="w-3.5 h-3.5 text-emerald-400" /> มอบรางวัล
             </label>
             <div className="grid grid-cols-2 gap-2">
-              {([['reward_hp', 'HP', '❤️'], ['reward_sanity', 'Sanity', '🧠'], ['reward_travel', 'Travel', '🗺️'], ['reward_spirituality', 'Spirituality', '✨']] as const).map(([key, lbl, ico]) => (
+              {actionRewardFields.map(({ key, label, icon }) => (
                 <div key={key} className="flex items-center gap-1.5">
-                  <span className="text-sm">{ico}</span>
-                  <input type="number" min={0} placeholder={lbl} value={editActionRewards[key] || ''} onChange={e => setEditActionRewards(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))} className="input-victorian w-full !py-1.5 !text-xs" />
+                  <span className="text-sm">{icon}</span>
+                  <input type="number" min={0} placeholder={label} value={editActionRewards[key] || ''} onChange={e => setEditActionRewards(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))} className="input-victorian w-full !py-1.5 !text-xs" />
                 </div>
               ))}
             </div>
@@ -2593,10 +2745,10 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
               <Gift className="w-3.5 h-3.5 text-amber-400" /> เพิ่มค่าสูงสุด
             </label>
             <div className="grid grid-cols-3 gap-2">
-              {([['reward_max_sanity', 'Max Sanity', '🧠'], ['reward_max_travel', 'Max Travel', '🗺️'], ['reward_max_spirituality', 'Max Spirit', '✨']] as const).map(([key, lbl, ico]) => (
+              {actionMaxRewardFields.map(({ key, label, icon }) => (
                 <div key={key} className="flex items-center gap-1.5">
-                  <span className="text-sm">{ico}</span>
-                  <input type="number" min={0} placeholder={lbl} value={editActionRewards[key] || ''} onChange={e => setEditActionRewards(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))} className="input-victorian w-full !py-1.5 !text-xs" />
+                  <span className="text-sm">{icon}</span>
+                  <input type="number" min={0} placeholder={label} value={editActionRewards[key] || ''} onChange={e => setEditActionRewards(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))} className="input-victorian w-full !py-1.5 !text-xs" />
                 </div>
               ))}
             </div>
@@ -2706,11 +2858,11 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
       {editPunishment && (
         <Modal onClose={() => setEditPunishment(null)}>
           <div className="flex items-center justify-between">
-            <h3 className="heading-victorian text-2xl flex items-center gap-3"><Pencil className="w-5 h-5 text-red-400" /> แก้ไขบทลงโทษ</h3>
+            <h3 className="heading-victorian text-2xl flex items-center gap-3"><Pencil className="w-5 h-5 text-red-400" /> แก้ไขเหตุการณ์</h3>
             <button type="button" onClick={() => setEditPunishment(null)} className="text-victorian-400 hover:text-gold-400 cursor-pointer"><X className="w-5 h-5" /></button>
           </div>
           <div>
-            <label className="block text-sm text-victorian-300 mb-1.5">ชื่อบทลงโทษ <span className="text-nouveau-ruby">*</span></label>
+            <label className="block text-sm text-victorian-300 mb-1.5">ชื่อเหตุการณ์ <span className="text-nouveau-ruby">*</span></label>
             <input type="text" value={editPunName} onChange={e => setEditPunName(e.target.value)} className="input-victorian w-full !py-3 !text-sm" />
           </div>
           <div>
@@ -2739,7 +2891,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
           </div>
           <div className="space-y-2">
             <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
-              <Skull className="w-3.5 h-3.5 text-red-400" /> บทลงโทษ <span className="text-nouveau-ruby">*</span>
+              <Skull className="w-3.5 h-3.5 text-red-400" /> เหตุการณ์ <span className="text-nouveau-ruby">*</span>
             </label>
             <div className="grid grid-cols-2 gap-2">
               {([['penalty_hp', 'HP', '❤️'], ['penalty_sanity', 'Sanity', '🧠'], ['penalty_travel', 'Travel', '🗺️'], ['penalty_spirituality', 'Spirit', '✨']] as const).map(([key, lbl, ico]) => (
@@ -2760,7 +2912,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
           </div>
           <div className="space-y-2">
             <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5 text-purple-400" /> ผู้เล่นที่รับโทษ <span className="text-nouveau-ruby">*</span>
+              <Users className="w-3.5 h-3.5 text-purple-400" /> ผู้เล่นที่เกี่ยวข้อง <span className="text-nouveau-ruby">*</span>
             </label>
             <div className="max-h-40 overflow-y-auto space-y-1 p-2 rounded-lg border border-gold-400/10 bg-victorian-900/40">
               {playerOptions.map(pl => {
@@ -2796,7 +2948,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
             <button type="button" onClick={() => setEditPunishment(null)} className="btn-victorian px-4 py-2 text-sm cursor-pointer">ยกเลิก</button>
             <button type="button" onClick={handleUpdatePunishment} disabled={isPending || !editPunName.trim() || editPunSelectedTasks.length === 0 || editPunSelectedPlayers.length === 0}
               className="px-5 py-2 rounded-lg bg-red-600 text-white text-sm font-bold hover:bg-red-500 disabled:opacity-50 cursor-pointer transition-colors">
-              {isPending ? 'กำลังบันทึก...' : '💀 บันทึกบทลงโทษ'}
+              {isPending ? 'กำลังบันทึก...' : '💀 บันทึกเหตุการณ์'}
             </button>
           </div>
         </Modal>
@@ -3023,12 +3175,12 @@ function MercyButton({ punishmentId, onMercy, isPending }: {
       ) : canMercy ? (
         <button type="button" onClick={() => onMercy(punishmentId)} disabled={isPending}
           className="w-full px-4 py-3 rounded-lg bg-green-600/20 border-2 border-green-500/40 text-green-300 font-bold text-sm hover:bg-green-600/30 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 transition-all">
-          <HandHeart className="w-5 h-5" /> ขอเทพเมตตา
+          <HandHeart className="w-5 h-5" /> ส่งเหตุการณ์
         </button>
       ) : (
         <div className="p-3 bg-red-900/20 border border-red-500/20 rounded-lg text-center">
           <p className="text-red-300 text-xs font-semibold flex items-center justify-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5" /> ยังทำภารกิจไม่ครบ ไม่สามารถขอเทพเมตตาได้
+            <AlertTriangle className="w-3.5 h-3.5" /> ยังทำภารกิจไม่ครบ ไม่สามารถส่งเหตุการณ์ได้
           </p>
           <p className="text-victorian-500 text-[10px] mt-1">ทำแอคชั่น/ภารกิจที่กำหนดให้ครบ แล้วรอการอนุมัติจากทีมงาน</p>
         </div>

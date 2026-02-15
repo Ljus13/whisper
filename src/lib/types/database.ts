@@ -30,6 +30,7 @@ export interface SkillType {
   id: string
   name: string
   description: string | null
+  overview: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -40,6 +41,7 @@ export interface SkillPathway {
   type_id: string
   name: string
   description: string | null
+  overview: string | null
   bg_url: string | null
   logo_url: string | null
   sort_order: number
@@ -52,6 +54,7 @@ export interface SkillSequence {
   pathway_id: string
   seq_number: number
   name: string
+  roleplay_keywords: string | null
   created_at: string
   updated_at: string
 }

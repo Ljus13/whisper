@@ -153,12 +153,17 @@ export async function createSkillType(formData: FormData) {
   
   const name = formData.get('name') as string
   const description = formData.get('description') as string | null
+  const overview = formData.get('overview') as string | null
 
   if (!name?.trim()) return { error: 'Name is required' }
 
   const { error } = await supabase
     .from('skill_types')
-    .insert({ name: name.trim(), description: description?.trim() || null })
+    .insert({
+      name: name.trim(),
+      description: description?.trim() || null,
+      overview: overview?.trim() || null
+    })
 
   if (error) return { error: error.message }
   revalidatePath('/dashboard/skills')
@@ -170,12 +175,17 @@ export async function updateSkillType(id: string, formData: FormData) {
   
   const name = formData.get('name') as string
   const description = formData.get('description') as string | null
+  const overview = formData.get('overview') as string | null
 
   if (!name?.trim()) return { error: 'Name is required' }
 
   const { error } = await supabase
     .from('skill_types')
-    .update({ name: name.trim(), description: description?.trim() || null })
+    .update({
+      name: name.trim(),
+      description: description?.trim() || null,
+      overview: overview?.trim() || null
+    })
     .eq('id', id)
 
   if (error) return { error: error.message }
@@ -206,6 +216,7 @@ export async function createSkillPathway(formData: FormData) {
   const name = formData.get('name') as string
   const type_id = formData.get('type_id') as string
   const description = formData.get('description') as string | null
+  const overview = formData.get('overview') as string | null
   const bg_url = formData.get('bg_url') as string | null
   const logo_url = formData.get('logo_url') as string | null
 
@@ -217,6 +228,7 @@ export async function createSkillPathway(formData: FormData) {
       name: name.trim(),
       type_id,
       description: description?.trim() || null,
+      overview: overview?.trim() || null,
       bg_url: bg_url?.trim() || null,
       logo_url: logo_url?.trim() || null
     })
@@ -231,6 +243,7 @@ export async function updateSkillPathway(id: string, formData: FormData) {
 
   const name = formData.get('name') as string
   const description = formData.get('description') as string | null
+  const overview = formData.get('overview') as string | null
   const bg_url = formData.get('bg_url') as string | null
   const logo_url = formData.get('logo_url') as string | null
 
@@ -241,6 +254,7 @@ export async function updateSkillPathway(id: string, formData: FormData) {
     .update({
       name: name.trim(),
       description: description?.trim() || null,
+      overview: overview?.trim() || null,
       bg_url: bg_url?.trim() || null,
       logo_url: logo_url?.trim() || null
     })
@@ -274,6 +288,7 @@ export async function createSkillSequence(formData: FormData) {
   const name = formData.get('name') as string
   const pathway_id = formData.get('pathway_id') as string
   const seq_number = parseInt(formData.get('seq_number') as string)
+  const roleplay_keywords = formData.get('roleplay_keywords') as string | null
 
   if (!name?.trim() || !pathway_id || isNaN(seq_number)) {
     return { error: 'Name, pathway, and sequence number are required' }
@@ -285,7 +300,12 @@ export async function createSkillSequence(formData: FormData) {
 
   const { error } = await supabase
     .from('skill_sequences')
-    .insert({ name: name.trim(), pathway_id, seq_number })
+    .insert({
+      name: name.trim(),
+      pathway_id,
+      seq_number,
+      roleplay_keywords: roleplay_keywords?.trim() || null
+    })
 
   if (error) return { error: error.message }
   revalidatePath('/dashboard/skills')
@@ -297,6 +317,7 @@ export async function updateSkillSequence(id: string, formData: FormData) {
 
   const name = formData.get('name') as string
   const seq_number = parseInt(formData.get('seq_number') as string)
+  const roleplay_keywords = formData.get('roleplay_keywords') as string | null
 
   if (!name?.trim()) return { error: 'Name is required' }
   if (isNaN(seq_number) || seq_number < 0 || seq_number > 9) {
@@ -305,7 +326,11 @@ export async function updateSkillSequence(id: string, formData: FormData) {
 
   const { error } = await supabase
     .from('skill_sequences')
-    .update({ name: name.trim(), seq_number })
+    .update({
+      name: name.trim(),
+      seq_number,
+      roleplay_keywords: roleplay_keywords?.trim() || null
+    })
     .eq('id', id)
 
   if (error) return { error: error.message }

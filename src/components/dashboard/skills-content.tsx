@@ -7,7 +7,7 @@ import {
   GitBranch, Layers, Shield, Lock, BookOpen, Pencil, Copy, Check, X, ScrollText
 } from 'lucide-react'
 import {
-  createSkillType, deleteSkillType,
+  createSkillType, updateSkillType, deleteSkillType,
   createSkillPathway, deleteSkillPathway, updateSkillPathway,
   createSkillSequence, deleteSkillSequence, updateSkillSequence,
   createSkill, deleteSkill,
@@ -43,6 +43,7 @@ function AdminPanel({
   const [showAddPathway, setShowAddPathway] = useState<string | null>(null)
   const [showAddSequence, setShowAddSequence] = useState<string | null>(null)
   const [showAddSkill, setShowAddSkill] = useState<string | null>(null)
+  const [editTypeId, setEditTypeId] = useState<string | null>(null)
   const [editPathwayId, setEditPathwayId] = useState<string | null>(null)
   const [editSequenceId, setEditSequenceId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -86,6 +87,7 @@ function AdminPanel({
           <h3 className="text-gold-300 font-semibold">เพิ่มกลุ่มใหม่ (Type)</h3>
           <input name="name" placeholder="ชื่อกลุ่ม" required className="input-victorian w-full" />
           <textarea name="description" placeholder="คำอธิบาย (ไม่บังคับ)" className="input-victorian w-full" rows={2} />
+          <textarea name="overview" placeholder="ภาพรวมของกลุ่ม" className="input-victorian w-full" rows={3} />
           <div className="flex gap-2">
             <button type="submit" disabled={isPending} className="btn-gold px-4 py-2 text-sm">บันทึก</button>
             <button type="button" onClick={() => setShowAddType(false)} className="btn-victorian px-4 py-2 text-sm">ยกเลิก</button>
@@ -114,10 +116,18 @@ function AdminPanel({
                   <div>
                     <span className="text-gold-300 font-semibold text-lg">{type.name}</span>
                     {type.description && <p className="text-victorian-400 text-sm">{type.description}</p>}
+                    {type.overview && <p className="text-victorian-300 text-sm mt-1">ภาพรวม: {type.overview}</p>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-victorian-400 text-sm">{typePathways.length} เส้นทาง</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setEditTypeId(type.id) }}
+                    className="p-1.5 text-gold-400/50 hover:text-gold-400 hover:bg-gold-400/10 rounded transition-colors"
+                    title="แก้ไขกลุ่ม"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleAction(() => deleteSkillType(type.id)) }}
                     className="p-1.5 text-red-400/60 hover:text-red-400 hover:bg-red-900/20 rounded transition-colors"
@@ -131,6 +141,21 @@ function AdminPanel({
               {/* Pathways under this Type */}
               {isOpen && (
                 <div className="p-4 pt-2 space-y-3 border-t border-gold-400/5">
+                  {editTypeId === type.id && (
+                    <form
+                      className="p-3 bg-victorian-900/30 border border-gold-400/10 rounded space-y-2"
+                      action={(fd) => { handleAction(() => updateSkillType(type.id, fd)); setEditTypeId(null) }}
+                    >
+                      <h4 className="text-gold-300 text-sm font-semibold flex items-center gap-2"><Pencil className="w-3.5 h-3.5" /> แก้ไขกลุ่ม</h4>
+                      <input name="name" defaultValue={type.name} placeholder="ชื่อกลุ่ม" required className="input-victorian w-full text-sm" />
+                      <textarea name="description" defaultValue={type.description || ''} placeholder="คำอธิบาย" className="input-victorian w-full text-sm" rows={2} />
+                      <textarea name="overview" defaultValue={type.overview || ''} placeholder="ภาพรวมของกลุ่ม" className="input-victorian w-full text-sm" rows={3} />
+                      <div className="flex gap-2">
+                        <button type="submit" disabled={isPending} className="btn-gold px-3 py-1.5 text-xs">บันทึก</button>
+                        <button type="button" onClick={() => setEditTypeId(null)} className="btn-victorian px-3 py-1.5 text-xs">ยกเลิก</button>
+                      </div>
+                    </form>
+                  )}
                   <button
                     onClick={() => setShowAddPathway(type.id)}
                     className="text-sm text-gold-400 hover:text-gold-300 flex items-center gap-1"
@@ -146,6 +171,7 @@ function AdminPanel({
                       <input type="hidden" name="type_id" value={type.id} />
                       <input name="name" placeholder="ชื่อเส้นทาง" required className="input-victorian w-full text-sm" />
                       <textarea name="description" placeholder="คำอธิบาย" className="input-victorian w-full text-sm" rows={2} />
+                      <textarea name="overview" placeholder="ภาพรวมของเส้นทาง" className="input-victorian w-full text-sm" rows={3} />
                       <input name="bg_url" placeholder="URL ภาพพื้นหลัง (5:4)" className="input-victorian w-full text-sm" />
                       <input name="logo_url" placeholder="URL โลโก้ (1:1 PNG)" className="input-victorian w-full text-sm" />
                       <div className="flex gap-2">
@@ -171,6 +197,7 @@ function AdminPanel({
                             <h4 className="text-gold-300 text-sm font-semibold flex items-center gap-2"><Pencil className="w-3.5 h-3.5" /> แก้ไขเส้นทาง</h4>
                             <input name="name" defaultValue={pathway.name} placeholder="ชื่อเส้นทาง" required className="input-victorian w-full text-sm" />
                             <textarea name="description" defaultValue={pathway.description || ''} placeholder="คำอธิบาย" className="input-victorian w-full text-sm" rows={2} />
+                            <textarea name="overview" defaultValue={pathway.overview || ''} placeholder="ภาพรวมของเส้นทาง" className="input-victorian w-full text-sm" rows={3} />
                             <input name="bg_url" defaultValue={pathway.bg_url || ''} placeholder="URL ภาพพื้นหลัง (5:4)" className="input-victorian w-full text-sm" />
                             <input name="logo_url" defaultValue={pathway.logo_url || ''} placeholder="URL โลโก้ (1:1 PNG)" className="input-victorian w-full text-sm" />
                             <div className="flex gap-2">
@@ -209,6 +236,9 @@ function AdminPanel({
 
                         {isPathOpen && (
                           <div className="ml-4 space-y-3 py-2">
+                            {pathway.overview && (
+                              <div className="text-victorian-300 text-sm">ภาพรวม: {pathway.overview}</div>
+                            )}
                             {/* Sequences */}
                             <div>
                               <div className="flex items-center justify-between mb-2">
@@ -234,6 +264,7 @@ function AdminPanel({
                                     </div>
                                     <input name="name" placeholder="ชื่อลำดับ" required className="input-victorian flex-1 text-sm" />
                                   </div>
+                                  <input name="roleplay_keywords" placeholder="คีย์เวิร์ด/คอนเซปต์การสวมบทบาท" className="input-victorian w-full text-sm" />
                                   <div className="flex gap-2">
                                     <button type="submit" disabled={isPending} className="btn-gold px-3 py-1 text-xs">บันทึก</button>
                                     <button type="button" onClick={() => setShowAddSequence(null)} className="btn-victorian px-3 py-1 text-xs">ยกเลิก</button>
@@ -257,6 +288,7 @@ function AdminPanel({
                                         </div>
                                         <input name="name" defaultValue={seq.name} placeholder="ชื่อลำดับ" required className="input-victorian flex-1 text-sm" />
                                       </div>
+                                      <input name="roleplay_keywords" defaultValue={seq.roleplay_keywords || ''} placeholder="คีย์เวิร์ด/คอนเซปต์การสวมบทบาท" className="input-victorian w-full text-sm" />
                                       <div className="flex gap-2">
                                         <button type="submit" disabled={isPending} className="btn-gold px-3 py-1 text-xs">บันทึก</button>
                                         <button type="button" onClick={() => setEditSequenceId(null)} className="btn-victorian px-3 py-1 text-xs">ยกเลิก</button>
@@ -271,6 +303,7 @@ function AdminPanel({
                                         {seq.name}
                                         {seq.seq_number === 9 && <span className="text-victorian-500 text-xs ml-2">(เริ่มต้น)</span>}
                                         {seq.seq_number === 0 && <span className="text-red-400 text-xs ml-2">(สูงสุด)</span>}
+                                        {seq.roleplay_keywords && <span className="text-victorian-500 text-xs ml-2">คีย์เวิร์ด: {seq.roleplay_keywords}</span>}
                                       </span>
                                       <div className="flex items-center gap-1">
                                         <button
@@ -865,6 +898,15 @@ export default function SkillsContent({ userId }: SkillsContentProps) {
           </div>
 
           <div className="flex items-center gap-2">
+            {isAdmin && (
+              <a
+                href="/dashboard/skills/codex"
+                className="btn-victorian px-4 py-2 text-sm flex items-center gap-2"
+              >
+                <BookOpen className="w-4 h-4" />
+                <span className="hidden sm:inline">Codex</span>
+              </a>
+            )}
             <a
               href="/dashboard/skills/logs"
               className="btn-victorian px-4 py-2 text-sm flex items-center gap-2"

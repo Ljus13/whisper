@@ -542,6 +542,21 @@ export async function getActionSubmissions(page: number = 1) {
   if (error) return { submissions: [], total: 0 }
   const rows = data || []
 
+  const playerIds = [...new Set(rows.map(r => r.player_id))]
+  const { data: ppData } = playerIds.length > 0
+    ? await supabase
+      .from('player_pathways')
+      .select('player_id, sequence:skill_sequences(id, name, seq_number)')
+      .in('player_id', playerIds)
+    : { data: [] }
+  const playerSequenceMap = new Map<string, { seq_number: number; name: string }[]>()
+  for (const row of (ppData || []) as Array<{ player_id: string; sequence: { seq_number: number; name: string } | null }>) {
+    if (!row.sequence) continue
+    const list = playerSequenceMap.get(row.player_id) || []
+    list.push({ seq_number: row.sequence.seq_number, name: row.sequence.name })
+    playerSequenceMap.set(row.player_id, list)
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const submissions = rows.map((r: any) => {
     const player = r.player
@@ -831,6 +846,21 @@ export async function getQuestSubmissions(page: number = 1) {
   if (error) return { submissions: [], total: 0 }
   const rows = data || []
 
+  const playerIds = [...new Set(rows.map(r => r.player_id))]
+  const { data: ppData } = playerIds.length > 0
+    ? await supabase
+      .from('player_pathways')
+      .select('player_id, sequence:skill_sequences(id, name, seq_number)')
+      .in('player_id', playerIds)
+    : { data: [] }
+  const playerSequenceMap = new Map<string, { seq_number: number; name: string }[]>()
+  for (const row of (ppData || []) as Array<{ player_id: string; sequence: { seq_number: number; name: string } | null }>) {
+    if (!row.sequence) continue
+    const list = playerSequenceMap.get(row.player_id) || []
+    list.push({ seq_number: row.sequence.seq_number, name: row.sequence.name })
+    playerSequenceMap.set(row.player_id, list)
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const submissions = rows.map((r: any) => {
     const player = r.player
@@ -960,6 +990,21 @@ export async function getRoleplaySubmissions(page: number = 1) {
   if (error) return { submissions: [], total: 0 }
   const rows = data || []
 
+  const playerIds = [...new Set(rows.map(r => r.player_id))]
+  const { data: ppData } = playerIds.length > 0
+    ? await supabase
+      .from('player_pathways')
+      .select('player_id, sequence:skill_sequences(id, name, seq_number)')
+      .in('player_id', playerIds)
+    : { data: [] }
+  const playerSequenceMap = new Map<string, { seq_number: number; name: string }[]>()
+  for (const row of (ppData || []) as Array<{ player_id: string; sequence: { seq_number: number; name: string } | null }>) {
+    if (!row.sequence) continue
+    const list = playerSequenceMap.get(row.player_id) || []
+    list.push({ seq_number: row.sequence.seq_number, name: row.sequence.name })
+    playerSequenceMap.set(row.player_id, list)
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const submissions = rows.map((r: any) => {
     const player = r.player
@@ -978,6 +1023,9 @@ export async function getRoleplaySubmissions(page: number = 1) {
       player_name: player?.display_name || 'ไม่ทราบชื่อ',
       player_avatar: player?.avatar_url || null,
       created_at: r.created_at,
+      sequence_labels: Array.from(new Set((playerSequenceMap.get(r.player_id) || [])
+        .filter(seq => seq?.name)
+        .map(seq => `#${seq.seq_number} ${seq.name}`))),
       links,
     }
   })
@@ -1033,8 +1081,10 @@ export async function reviewRoleplayLink(linkId: string, level: string, note: st
   if (playerId && percent > 0) {
     const { data: prof } = await supabase.from('profiles').select('potion_digest_progress').eq('id', playerId).single()
     const current = prof?.potion_digest_progress ?? 0
-    const next = Math.min(100, current + percent)
-    await supabase.from('profiles').update({ potion_digest_progress: next }).eq('id', playerId)
+    if (current < 100) {
+      const next = Math.min(100, current + percent)
+      await supabase.from('profiles').update({ potion_digest_progress: next }).eq('id', playerId)
+    }
   }
 
   revalidatePath('/dashboard/action-quest')
@@ -1071,32 +1121,36 @@ export async function promotePotionDigest() {
 
   const { data: sequences } = await supabase
     .from('skill_sequences')
-    .select('id, seq_number')
+    .select('id, seq_number, name')
     .eq('pathway_id', pathway.pathway_id)
     .order('seq_number', { ascending: true })
 
   if (!sequences || sequences.length === 0) return { error: 'ไม่พบลำดับขั้นในสายนี้' }
 
-  const currentIndex = pathway.sequence_id
-    ? sequences.findIndex(s => s.id === pathway.sequence_id)
-    : -1
-  const nextIndex = currentIndex + 1
-  const nextSequence = sequences[nextIndex] || (currentIndex === -1 ? sequences[0] : null)
-  if (!nextSequence) return { error: 'ถึงลำดับสูงสุดแล้ว' }
+  if (!pathway.sequence_id) return { error: 'ยังไม่มีลำดับขั้น' }
+  const currentSeq = sequences.find(s => s.id === pathway.sequence_id)
+  if (!currentSeq) return { error: 'ไม่พบลำดับขั้นปัจจุบัน' }
+  const nextSequence = sequences
+    .filter(s => s.seq_number < currentSeq.seq_number)
+    .sort((a, b) => b.seq_number - a.seq_number)[0]
+  if (!nextSequence) return { error: 'อยู่ขั้นสูงสุดแล้ว' }
 
-  const { error: updErr } = await supabase
+  const { data: updatedRows, error: updErr } = await supabase
     .from('player_pathways')
     .update({ sequence_id: nextSequence.id })
     .eq('id', pathway.id)
+    .eq('player_id', user.id)
+    .select('id')
 
   if (updErr) return { error: updErr.message }
+  if (!updatedRows || updatedRows.length === 0) return { error: 'ไม่สามารถอัปเดตลำดับได้ (สิทธิ์ไม่เพียงพอ)' }
 
   await supabase.from('profiles').update({ potion_digest_progress: 0 }).eq('id', user.id)
 
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/action-quest')
   revalidatePath('/dashboard/players')
-  return { success: true }
+  return { success: true, newSeqNumber: nextSequence.seq_number, newSeqName: nextSequence.name }
 }
 
 
@@ -1222,7 +1276,7 @@ export async function createPunishment(input: PunishmentInput) {
   if (!user) return { error: 'Not authenticated' }
   if (!(await requireAdmin(supabase, user.id))) return { error: 'Admin/DM required' }
 
-  if (!input.name?.trim()) return { error: 'กรุณากรอกชื่อบทลงโทษ' }
+  if (!input.name?.trim()) return { error: 'กรุณากรอกชื่อเหตุการณ์' }
   if (input.required_task_ids.length === 0) return { error: 'กรุณาเลือกแอคชั่น/ภารกิจที่ต้องทำอย่างน้อย 1 รายการ' }
   if (input.player_ids.length === 0) return { error: 'กรุณาเลือกผู้เล่นอย่างน้อย 1 คน' }
 
@@ -1245,7 +1299,7 @@ export async function createPunishment(input: PunishmentInput) {
     .select()
     .single()
 
-  if (pErr || !punishment) return { error: pErr?.message || 'ไม่สามารถสร้างบทลงโทษได้' }
+  if (pErr || !punishment) return { error: pErr?.message || 'ไม่สามารถสร้างเหตุการณ์ได้' }
 
   // Insert required tasks
   const taskInserts = input.required_task_ids.map(t => ({
@@ -1388,9 +1442,9 @@ export async function requestMercy(punishmentId: string) {
     .eq('player_id', user.id)
     .single()
 
-  if (!pp) return { error: 'คุณไม่ได้ถูกกำหนดให้รับบทลงโทษนี้' }
-  if (pp.penalty_applied) return { error: 'บทลงโทษถูกดำเนินการแล้ว' }
-  if (pp.mercy_requested) return { error: 'คุณขอเทพเมตตาไปแล้ว' }
+  if (!pp) return { error: 'คุณไม่ได้ถูกกำหนดให้รับเหตุการณ์นี้' }
+  if (pp.penalty_applied) return { error: 'เหตุการณ์ถูกดำเนินการแล้ว' }
+  if (pp.mercy_requested) return { error: 'คุณส่งเหตุการณ์ไปแล้ว' }
 
   // Check if all required tasks have approved submissions
   const { data: requiredTasks } = await supabase
@@ -1399,7 +1453,7 @@ export async function requestMercy(punishmentId: string) {
     .eq('punishment_id', punishmentId)
 
   if (!requiredTasks || requiredTasks.length === 0) {
-    return { error: 'ไม่พบภารกิจที่กำหนดในบทลงโทษนี้' }
+    return { error: 'ไม่พบภารกิจที่กำหนดในเหตุการณ์นี้' }
   }
 
   for (const task of requiredTasks) {
@@ -1449,7 +1503,7 @@ export async function requestMercy(punishmentId: string) {
     punishment_id: punishmentId,
     player_id: user.id,
     action: 'mercy_requested',
-    details: { message: 'ผู้เล่นทำภารกิจครบและขอเทพเมตตา' },
+    details: { message: 'ผู้เล่นทำภารกิจครบและส่งเหตุการณ์' },
     created_by: user.id,
   })
 
@@ -1469,7 +1523,7 @@ export async function applyPenalty(punishmentId: string, playerId: string) {
     .eq('id', punishmentId)
     .single()
 
-  if (!punishment) return { error: 'ไม่พบบทลงโทษ' }
+  if (!punishment) return { error: 'ไม่พบเหตุการณ์' }
 
   const { data: pp } = await supabase
     .from('punishment_players')
@@ -1478,8 +1532,8 @@ export async function applyPenalty(punishmentId: string, playerId: string) {
     .eq('player_id', playerId)
     .single()
 
-  if (!pp) return { error: 'ไม่พบผู้เล่นในบทลงโทษนี้' }
-  if (pp.penalty_applied) return { error: 'บทลงโทษถูกดำเนินการไปแล้ว' }
+  if (!pp) return { error: 'ไม่พบผู้เล่นในเหตุการณ์นี้' }
+  if (pp.penalty_applied) return { error: 'เหตุการณ์ถูกดำเนินการไปแล้ว' }
 
   // Get player's current stats
   const { data: profile } = await supabase
@@ -1771,17 +1825,17 @@ export async function updatePunishment(id: string, input: PunishmentUpdateInput)
     .eq('id', id)
     .single()
 
-  if (!existing) return { error: 'ไม่พบบทลงโทษ' }
+  if (!existing) return { error: 'ไม่พบเหตุการณ์' }
 
   // Use server time to check deadline
   const { data: serverTimeResult } = await supabase.rpc('now')
   const serverNow = serverTimeResult ? new Date(serverTimeResult) : new Date()
 
   if (existing.deadline && new Date(existing.deadline) < serverNow) {
-    return { error: 'บทลงโทษหมดเวลาแล้ว ไม่สามารถแก้ไขได้' }
+    return { error: 'เหตุการณ์หมดเวลาแล้ว ไม่สามารถแก้ไขได้' }
   }
 
-  if (!input.name?.trim()) return { error: 'กรุณากรอกชื่อบทลงโทษ' }
+  if (!input.name?.trim()) return { error: 'กรุณากรอกชื่อเหตุการณ์' }
   if (input.required_task_ids.length === 0) return { error: 'กรุณาเลือกแอคชั่น/ภารกิจอย่างน้อย 1 รายการ' }
   if (input.player_ids.length === 0) return { error: 'กรุณาเลือกผู้เล่นอย่างน้อย 1 คน' }
 
@@ -1961,7 +2015,7 @@ export async function autoApplyExpiredPunishments() {
         action: 'penalty_applied',
         details: {
           auto: true,
-          reason: 'หมดเวลาบทลงโทษ — ลงโทษอัตโนมัติ',
+          reason: 'หมดเวลาเหตุการณ์ — ดำเนินการอัตโนมัติ',
           penalty_sanity: punishment.penalty_sanity,
           penalty_hp: punishment.penalty_hp,
           penalty_travel: punishment.penalty_travel,

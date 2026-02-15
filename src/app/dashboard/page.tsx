@@ -30,30 +30,53 @@ export default async function DashboardPage() {
       .from('player_pathways')
       .select(`
         *,
-        skill_pathways (name),
+        skill_pathways (name, logo_url, bg_url),
         skill_sequences (name, seq_number)
       `)
       .eq('player_id', user.id)
+      .not('pathway_id', 'is', null)
+      .order('id', { ascending: true })
       .limit(1),
   ])
 
   let rankDisplay = 'ผู้มาเยือน'
+  let rankInfo: {
+    pathwayName: string
+    pathwayLogoUrl: string | null
+    pathwayBgUrl: string | null
+    seqNumber: number | null
+    sequenceName: string | null
+  } | null = null
   
   if (playerPathways && playerPathways.length > 0) {
     const main = playerPathways[0]
-    const pathwayName = (main.skill_pathways as { name?: string } | null)?.name
-    const seqName = (main.skill_sequences as { name?: string; seq_number?: number } | null)?.name
-    const seqNum = (main.skill_sequences as { name?: string; seq_number?: number } | null)?.seq_number
+    const pathway = Array.isArray(main.skill_pathways) ? main.skill_pathways[0] : main.skill_pathways
+    const sequence = Array.isArray(main.skill_sequences) ? main.skill_sequences[0] : main.skill_sequences
+    const pathwayName = (pathway as { name?: string } | null)?.name
+    const pathwayLogoUrl = (pathway as { logo_url?: string | null } | null)?.logo_url ?? null
+    const pathwayBgUrl = (pathway as { bg_url?: string | null } | null)?.bg_url ?? null
+    const seqName = (sequence as { name?: string; seq_number?: number } | null)?.name
+    const seqNum = (sequence as { name?: string; seq_number?: number } | null)?.seq_number
+    const hasSeqNum = seqNum !== null && seqNum !== undefined
 
-    if (pathwayName && seqNum) {
-       rankDisplay = `${pathwayName} | ลำดับที่ ${seqNum}`
-       if (seqName) {
-         rankDisplay += ` — ${seqName}`
-       }
-    } else if (pathwayName) {
+    if (pathwayName) {
+      rankInfo = {
+        pathwayName,
+        pathwayLogoUrl,
+        pathwayBgUrl,
+        seqNumber: hasSeqNum ? seqNum as number : null,
+        sequenceName: seqName || null,
+      }
+      if (hasSeqNum) {
+        rankDisplay = `${pathwayName} | ลำดับที่ ${seqNum}`
+        if (seqName) {
+          rankDisplay += ` — ${seqName}`
+        }
+      } else {
         rankDisplay = pathwayName
+      }
     }
   }
 
-  return <DashboardContent user={user} profile={profile} rankDisplay={rankDisplay} />
+  return <DashboardContent user={user} profile={profile} rankDisplay={rankDisplay} rankInfo={rankInfo} />
 }

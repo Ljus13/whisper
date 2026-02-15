@@ -40,9 +40,9 @@ export default function PunishmentBanner() {
             <Skull className="w-5 h-5 text-red-400" />
           </div>
           <div className="flex-1">
-            <h3 className="text-red-300 font-bold text-base md:text-lg">⚠️ คุณกำลังอยู่ในบทลงโทษ!</h3>
+            <h3 className="text-red-300 font-bold text-base md:text-lg">⚠️ คุณกำลังอยู่ในเหตุการณ์!</h3>
             <p className="text-red-400/80 text-xs mt-0.5">
-              มี {punishments.length} บทลงโทษที่ต้องดำเนินการ — ทำภารกิจให้ครบเพื่อขอเทพเมตตา
+              มี {punishments.length} เหตุการณ์ที่ต้องดำเนินการ — ทำภารกิจให้ครบเพื่อส่งเหตุการณ์
             </p>
           </div>
         </div>
@@ -69,7 +69,7 @@ export default function PunishmentBanner() {
         <Modal onClose={() => setDetail(null)}>
           <div className="flex items-center justify-between">
             <h3 className="heading-victorian text-xl flex items-center gap-3 text-red-400">
-              <Skull className="w-5 h-5" /> รายละเอียดบทลงโทษ
+              <Skull className="w-5 h-5" /> รายละเอียดเหตุการณ์
             </h3>
             <button type="button" onClick={() => setDetail(null)} className="text-victorian-400 hover:text-gold-400 cursor-pointer"><X className="w-5 h-5" /></button>
           </div>
@@ -91,7 +91,7 @@ export default function PunishmentBanner() {
 
             {/* Penalties */}
             <div className="border-t border-red-500/20 pt-3">
-              <p className="text-red-400 text-xs font-bold mb-2">⚡ บทลงโทษหากไม่ทำสำเร็จ:</p>
+              <p className="text-red-400 text-xs font-bold mb-2">⚡ ผลกระทบจากเหตุการณ์หากไม่ทำสำเร็จ:</p>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 {detail.penalty_sanity !== 0 && (
                   <div className="bg-red-900/40 rounded px-2 py-1.5 border border-red-500/20">

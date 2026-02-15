@@ -42,6 +42,14 @@ interface Profile {
   updated_at: string
 }
 
+interface RankInfo {
+  pathwayName: string
+  pathwayLogoUrl: string | null
+  pathwayBgUrl: string | null
+  seqNumber: number | null
+  sequenceName: string | null
+}
+
 
 function RoleBadge({ role }: { role: string }) {
   const config = {
@@ -64,11 +72,13 @@ function RoleBadge({ role }: { role: string }) {
 export default function DashboardContent({ 
   user, 
   profile,
-  rankDisplay = 'Level 1 Adventurer'
+  rankDisplay = 'Level 1 Adventurer',
+  rankInfo = null
 }: { 
   user: User
   profile: Profile | null
   rankDisplay?: string 
+  rankInfo?: RankInfo | null
 }) {
   const [showProfile, setShowProfile] = useState(false)
   const [showEditAvatar, setShowEditAvatar] = useState(false)
@@ -84,6 +94,7 @@ export default function DashboardContent({
   const [optimisticBio, setOptimisticBio] = useState<string | null | undefined>(undefined)
   const [digestProgress, setDigestProgress] = useState(profile?.potion_digest_progress ?? 0)
   const [isPromotingDigest, setIsPromotingDigest] = useState(false)
+  const [promoteResult, setPromoteResult] = useState<{ seqNumber: number; seqName: string | null } | null>(null)
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
   
@@ -130,6 +141,7 @@ export default function DashboardContent({
         alert(r.error)
       } else {
         setDigestProgress(0)
+        setPromoteResult({ seqNumber: r.newSeqNumber || 0, seqName: r.newSeqName || null })
         router.refresh()
       }
       setIsPromotingDigest(false)
@@ -223,9 +235,42 @@ export default function DashboardContent({
                 </button>
               )}
             </div>
-            <p className="text-victorian-300 font-body text-sm md:text-lg lg:text-xl tracking-wide mt-2 md:mt-3">
-              {rankDisplay}
-            </p>
+            {rankInfo?.pathwayName ? (
+              <div className="mt-3 w-full max-w-[320px]">
+                <div className="relative overflow-hidden rounded-lg border border-gold-400/20 bg-victorian-900/70">
+                  {rankInfo.pathwayBgUrl && (
+                    <img
+                      src={rankInfo.pathwayBgUrl}
+                      alt=""
+                      className="absolute inset-0 w-full h-full object-cover opacity-35"
+                      decoding="async"
+                    />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-r from-victorian-950/80 via-victorian-900/70 to-victorian-950/80" />
+                  <div className="relative p-3 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full border border-gold-400/30 bg-victorian-900/80 flex items-center justify-center overflow-hidden">
+                      {rankInfo.pathwayLogoUrl ? (
+                        <img src={rankInfo.pathwayLogoUrl} alt="" className="w-full h-full object-cover" decoding="async" />
+                      ) : (
+                        <Flame className="w-5 h-5 text-amber-300" />
+                      )}
+                    </div>
+                    <div className="text-left">
+                      <div className="text-gold-200 font-display text-sm md:text-base drop-shadow-[0_0_6px_rgba(251,191,36,0.7)]">
+                        {rankInfo.pathwayName}
+                      </div>
+                      <div className="text-amber-200/90 text-xs md:text-sm drop-shadow-[0_0_6px_rgba(251,191,36,0.5)]">
+                        ลำดับ {rankInfo.seqNumber ?? '-'}{rankInfo.sequenceName ? ` — ${rankInfo.sequenceName}` : ''}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-victorian-300 font-body text-sm md:text-lg lg:text-xl tracking-wide mt-2 md:mt-3">
+                {rankDisplay}
+              </p>
+            )}
           </div>
 
           {/* Right: Stats Grid — fills remaining space */}
@@ -812,6 +857,29 @@ export default function DashboardContent({
           onClose={() => setShowAdminEdit(false)}
           onSaved={() => router.refresh()}
         />
+      )}
+
+      {promoteResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(5,4,3,0.75)' }}>
+          <div className="relative w-full max-w-md overflow-hidden rounded-xl border border-amber-400/40 bg-victorian-950/90">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.35),_transparent_60%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(245,158,11,0.25),_transparent_60%)]" />
+            <div className="relative p-6 md:p-10 text-center space-y-5">
+              <div className="mx-auto w-16 h-16 rounded-full border border-amber-400/50 bg-amber-500/10 flex items-center justify-center shadow-[0_0_25px_rgba(251,191,36,0.5)]">
+                <Flame className="w-8 h-8 text-amber-300" />
+              </div>
+              <div className="heading-victorian text-2xl md:text-3xl text-amber-200 drop-shadow-[0_0_12px_rgba(251,191,36,0.7)]">
+                ย่อยโอสถเสร็จสมบูรณ์
+              </div>
+              <div className="text-amber-100 text-sm md:text-lg drop-shadow-[0_0_10px_rgba(251,191,36,0.6)]">
+                คุณเลื่อนสู่ลำดับที่ {promoteResult.seqNumber} {promoteResult.seqName ? `(${promoteResult.seqName})` : ''}
+              </div>
+              <button type="button" onClick={() => setPromoteResult(null)} className="btn-gold !px-6 !py-2 !text-sm">
+                รับทราบ
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Sanity Lock Overlay - แสดงเมื่อสติเหลือ 0 */}
