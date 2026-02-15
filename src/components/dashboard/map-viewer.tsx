@@ -265,6 +265,13 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         if (!id) return
         setTokens(prev => prev.filter(t => t.id !== id))
       })
+      .on('broadcast', { event: 'profile_travel_delta' }, ({ payload }) => {
+        const userIdPayload = payload?.userId as string | undefined
+        const delta = payload?.delta as number | undefined
+        if (!userIdPayload || typeof delta !== 'number') return
+        if (userIdPayload !== currentUserId) return
+        setCurrentUser(prev => ({ ...prev, travel_points: Math.max(0, prev.travel_points + delta) }))
+      })
       .on('broadcast', { event: 'token_added' }, () => {
         fetchMapDataRef.current?.()
       })
@@ -827,6 +834,9 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     setMoveNotif({ name: 'บันทึกทั้งหมด', status: 'moving' })
     const errors: string[] = []
 
+    const tokenOwnerMap = new Map(tokens.map(t => [t.id, t.user_id]))
+    let travelDelta = 0
+
     for (const [tokenId, pos] of tokenMoves) {
       const result = await moveToken(tokenId, pos.x, pos.y)
       pendingMovesRef.current.delete(tokenId)
@@ -836,6 +846,10 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         const x = Math.max(0, Math.min(100, pos.x))
         const y = Math.max(0, Math.min(100, pos.y))
         broadcastRef.current('token_moved', { id: tokenId, x, y })
+        const cost = result?.cost ?? 0
+        if (!isAdmin && cost > 0 && tokenOwnerMap.get(tokenId) === currentUserId) {
+          travelDelta -= cost
+        }
       }
     }
     for (const [churchId, pos] of churchMoves) {
@@ -845,6 +859,11 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     for (const [rpId, pos] of restPointMoves) {
       const result = await moveRestPointAction(rpId, pos.x, pos.y)
       if (result?.error) errors.push(result.error)
+    }
+
+    if (travelDelta !== 0) {
+      setCurrentUser(prev => ({ ...prev, travel_points: Math.max(0, prev.travel_points + travelDelta) }))
+      broadcastRef.current('profile_travel_delta', { userId: currentUserId, delta: travelDelta })
     }
 
     if (errors.length > 0) {
@@ -970,6 +989,9 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         const y = Math.max(0, Math.min(100, newY))
         broadcastRef.current('token_moved', { id: tokenId, x, y })
         const cost = result?.cost ?? 0
+        if (!isAdmin && isOwnToken && cost > 0) {
+          broadcastRef.current('profile_travel_delta', { userId: currentUserId, delta: -cost })
+        }
         setMoveNotif({
           name: tokenName,
           status: 'success',
