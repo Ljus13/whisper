@@ -233,6 +233,20 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     fetchMapDataRef.current = fetchMapData
     fetchMapData()
 
+    const fetchProfile = () => {
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+        .then(({ data }) => {
+          if (!data) return
+          const profile = data as Profile
+          setCurrentUser(profile)
+          setCache(`mv:${mapId}:me`, profile)
+        })
+    }
+
     const channel = supabase
       .channel(`map_view:${mapId}`, { config: { broadcast: { self: false } } })
       .on('broadcast', { event: 'token_moved' }, ({ payload }) => {
@@ -259,6 +273,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'map_churches', filter: `map_id=eq.${mapId}` }, fetchMapData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'map_rest_points', filter: `map_id=eq.${mapId}` }, fetchMapData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'maps', filter: `id=eq.${mapId}` }, fetchMapData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, fetchProfile)
       .subscribe()
 
     broadcastRef.current = (event, payload) => {
