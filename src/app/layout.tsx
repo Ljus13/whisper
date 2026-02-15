@@ -38,8 +38,7 @@ export default function RootLayout({
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Uncial+Antiqua&display=swap"
           media="print"
-          // @ts-expect-error onLoad sets media to all after async load
-          onLoad="this.media='all'"
+          onLoad={(e) => { e.currentTarget.media = 'all' }}
         />
       </head>
       <body className={`min-h-screen ${kanit.className}`}>
