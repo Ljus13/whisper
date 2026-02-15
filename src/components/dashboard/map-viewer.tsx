@@ -336,6 +336,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const [editingZone, setEditingZone] = useState<MapLockedZone | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: 'error' | 'info' } | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [isSavingMoves, setIsSavingMoves] = useState(false)
   const isDragActiveRef = useRef(false)
 
   /* ── Church UI state ── */
@@ -474,7 +475,14 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     if (isJoiningMap) {
       e.preventDefault()
       const pos = screenToMapPercent(e.clientX, e.clientY)
-      if (pos) setJoinPreviewPos(pos)
+      if (pos) {
+        const isDesktop = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches
+        if (isDesktop) {
+          submitJoinMap(pos)
+        } else {
+          setJoinPreviewPos(pos)
+        }
+      }
       return
     }
     if (movingTokenId || movingChurchId || movingRestPointId) {
@@ -814,64 +822,68 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
   // Send ALL batched moves to server (called ONLY when user clicks "บันทึกตำแหน่ง")
   async function saveAllMoves() {
-    const tokenMoves = new Map(batchMovesRef.current.tokens)
-    const churchMoves = new Map(batchMovesRef.current.churches)
-    const restPointMoves = new Map(batchMovesRef.current.restPoints)
+    setIsSavingMoves(true)
+    try {
+      const tokenMoves = new Map(batchMovesRef.current.tokens)
+      const churchMoves = new Map(batchMovesRef.current.churches)
+      const restPointMoves = new Map(batchMovesRef.current.restPoints)
 
-    // Clear batch state
-    batchMovesRef.current = { tokens: new Map(), churches: new Map(), restPoints: new Map() }
-    setBatchMoveCount(0)
-    positionSnapshotRef.current = null
-    setIsMoveModeActive(false)
-    setMovingTokenId(null)
-    setMovePreview(null)
-    setMoveOriginalPos(null)
-    setMovingChurchId(null)
-    setChurchMovePreview(null)
-    setMovingRestPointId(null)
-    setRestPointMovePreview(null)
+      batchMovesRef.current = { tokens: new Map(), churches: new Map(), restPoints: new Map() }
+      setBatchMoveCount(0)
+      positionSnapshotRef.current = null
+      setIsMoveModeActive(false)
+      setMovingTokenId(null)
+      setMovePreview(null)
+      setMoveOriginalPos(null)
+      setMovingChurchId(null)
+      setChurchMovePreview(null)
+      setMovingRestPointId(null)
+      setRestPointMovePreview(null)
 
-    setMoveNotif({ name: 'บันทึกทั้งหมด', status: 'moving' })
-    const errors: string[] = []
+      setMoveNotif({ name: 'บันทึกทั้งหมด', status: 'moving' })
+      const errors: string[] = []
 
-    const tokenOwnerMap = new Map(tokens.map(t => [t.id, t.user_id]))
-    let travelDelta = 0
+      const tokenOwnerMap = new Map(tokens.map(t => [t.id, t.user_id]))
+      let travelDelta = 0
 
-    for (const [tokenId, pos] of tokenMoves) {
-      const result = await moveToken(tokenId, pos.x, pos.y)
-      pendingMovesRef.current.delete(tokenId)
-      if (result?.error) {
-        errors.push(result.error)
-      } else {
-        const x = Math.max(0, Math.min(100, pos.x))
-        const y = Math.max(0, Math.min(100, pos.y))
-        broadcastRef.current('token_moved', { id: tokenId, x, y })
-        const cost = result?.cost ?? 0
-        if (!isAdmin && cost > 0 && tokenOwnerMap.get(tokenId) === currentUserId) {
-          travelDelta -= cost
+      for (const [tokenId, pos] of tokenMoves) {
+        const result = await moveToken(tokenId, pos.x, pos.y)
+        pendingMovesRef.current.delete(tokenId)
+        if (result?.error) {
+          errors.push(result.error)
+        } else {
+          const x = Math.max(0, Math.min(100, pos.x))
+          const y = Math.max(0, Math.min(100, pos.y))
+          broadcastRef.current('token_moved', { id: tokenId, x, y })
+          const cost = result?.cost ?? 0
+          if (!isAdmin && cost > 0 && tokenOwnerMap.get(tokenId) === currentUserId) {
+            travelDelta -= cost
+          }
         }
       }
-    }
-    for (const [churchId, pos] of churchMoves) {
-      const result = await moveChurch(churchId, pos.x, pos.y)
-      if (result?.error) errors.push(result.error)
-    }
-    for (const [rpId, pos] of restPointMoves) {
-      const result = await moveRestPointAction(rpId, pos.x, pos.y)
-      if (result?.error) errors.push(result.error)
-    }
+      for (const [churchId, pos] of churchMoves) {
+        const result = await moveChurch(churchId, pos.x, pos.y)
+        if (result?.error) errors.push(result.error)
+      }
+      for (const [rpId, pos] of restPointMoves) {
+        const result = await moveRestPointAction(rpId, pos.x, pos.y)
+        if (result?.error) errors.push(result.error)
+      }
 
-    if (travelDelta !== 0) {
-      setCurrentUser(prev => ({ ...prev, travel_points: Math.max(0, prev.travel_points + travelDelta) }))
-      broadcastRef.current('profile_travel_delta', { userId: currentUserId, delta: travelDelta })
-    }
+      if (travelDelta !== 0) {
+        setCurrentUser(prev => ({ ...prev, travel_points: Math.max(0, prev.travel_points + travelDelta) }))
+        broadcastRef.current('profile_travel_delta', { userId: currentUserId, delta: travelDelta })
+      }
 
-    if (errors.length > 0) {
-      setMoveNotif({ name: 'บันทึก', status: 'error', msg: errors.join(', ') })
-      setTimeout(() => setMoveNotif(null), 3000)
-    } else {
-      setMoveNotif({ name: 'บันทึก', status: 'success', msg: 'บันทึกตำแหน่งทั้งหมดสำเร็จ' })
-      setTimeout(() => setMoveNotif(null), 2000)
+      if (errors.length > 0) {
+        setMoveNotif({ name: 'บันทึก', status: 'error', msg: errors.join(', ') })
+        setTimeout(() => setMoveNotif(null), 3000)
+      } else {
+        setMoveNotif({ name: 'บันทึก', status: 'success', msg: 'บันทึกตำแหน่งทั้งหมดสำเร็จ' })
+        setTimeout(() => setMoveNotif(null), 2000)
+      }
+    } finally {
+      setIsSavingMoves(false)
     }
   }
 
@@ -1181,10 +1193,9 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   /* ════════════════════════════════════════════
      PLAYER: Confirm join with selected position
      ════════════════════════════════════════════ */
-  function confirmJoinMap() {
-    if (!joinPreviewPos) return
+  function submitJoinMap(pos: { x: number; y: number }) {
     startTransition(async () => {
-      const result = await addPlayerToMap(map.id, undefined, joinPreviewPos.x, joinPreviewPos.y)
+      const result = await addPlayerToMap(map.id, undefined, pos.x, pos.y)
       if (result?.error) {
         showToast(result.error, 'error')
       } else {
@@ -1196,6 +1207,11 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       setIsJoiningMap(false)
       setJoinPreviewPos(null)
     })
+  }
+
+  function confirmJoinMap() {
+    if (!joinPreviewPos) return
+    submitJoinMap(joinPreviewPos)
   }
   
   /* ════════════════════════════════════════════
@@ -1555,14 +1571,19 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                   {/* Save ALL / Select prompt */}
                   <button
                     onClick={() => startTransition(() => saveAllMoves())}
-                    disabled={isPending || batchMoveCount === 0}
+                    disabled={isPending || isSavingMoves || batchMoveCount === 0}
                     className={`w-full flex items-center justify-center gap-2 py-2.5 lg:py-3 px-4 rounded-sm font-display text-sm lg:text-base uppercase tracking-wider transition-all ${
-                      batchMoveCount > 0
+                      isSavingMoves || batchMoveCount > 0
                         ? 'bg-gradient-to-r from-green-500 to-emerald-400 hover:from-green-400 hover:to-emerald-300 text-white shadow-lg shadow-green-500/40'
                         : 'bg-amber-400 text-amber-900 hover:bg-amber-300 shadow-lg shadow-amber-400/30 animate-pulse'
-                    } disabled:opacity-50`}
+                    } ${(isPending || batchMoveCount === 0) && !isSavingMoves ? 'opacity-50' : ''}`}
                   >
-                    {batchMoveCount > 0 ? (
+                    {isSavingMoves ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                        กำลังบันทึก...
+                      </>
+                    ) : batchMoveCount > 0 ? (
                       <>
                         <Save className="w-5 h-5" />
                         💾 บันทึกตำแหน่ง ({batchMoveCount})

@@ -895,6 +895,204 @@ export async function rejectQuestSubmission(id: string, reason: string) {
   return { success: true }
 }
 
+export async function submitRoleplayLinks(urls: string[]) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const list = (urls || []).map(u => u.trim()).filter(Boolean)
+  if (list.length === 0) return { error: 'กรุณาแนบ URL อย่างน้อย 1 ลิงก์' }
+
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: existing } = await supabase
+    .from('roleplay_submissions')
+    .select('id')
+    .eq('player_id', user.id)
+    .eq('submitted_date', today)
+    .maybeSingle()
+
+  if (existing) return { error: 'วันนี้คุณส่งสวมบทบาทไปแล้ว' }
+
+  const { data: submission, error: subErr } = await supabase
+    .from('roleplay_submissions')
+    .insert({ player_id: user.id })
+    .select('id')
+    .single()
+
+  if (subErr || !submission) return { error: subErr?.message || 'ไม่สามารถบันทึกได้' }
+
+  const linkRows = list.map(url => ({ submission_id: submission.id, url }))
+  const { error: linkErr } = await supabase.from('roleplay_links').insert(linkRows)
+  if (linkErr) return { error: linkErr.message }
+
+  revalidatePath('/dashboard/action-quest')
+  return { success: true }
+}
+
+export async function getRoleplaySubmissions(page: number = 1) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { submissions: [], total: 0 }
+
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
+  const offset = (page - 1) * PAGE_SIZE
+
+  const selectFields = `
+    *,
+    player:player_id(id, display_name, avatar_url),
+    links:roleplay_links(
+      id, url, digest_level, digest_percent, digest_note, reviewed_at,
+      reviewer:reviewed_by(id, display_name, avatar_url)
+    )
+  `
+
+  let countQ = supabase.from('roleplay_submissions').select('*', { count: 'exact', head: true })
+  if (!isAdmin) countQ = countQ.eq('player_id', user.id)
+  const { count } = await countQ
+
+  let dataQ = supabase.from('roleplay_submissions').select(selectFields)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + PAGE_SIZE - 1)
+  if (!isAdmin) dataQ = dataQ.eq('player_id', user.id)
+  const { data, error } = await dataQ
+
+  if (error) return { submissions: [], total: 0 }
+  const rows = data || []
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const submissions = rows.map((r: any) => {
+    const player = r.player
+    const links = (r.links || []).map((l: any) => ({
+      id: l.id,
+      url: l.url,
+      digest_level: l.digest_level,
+      digest_percent: l.digest_percent || 0,
+      digest_note: l.digest_note || null,
+      reviewed_by_name: l.reviewer?.display_name || null,
+      reviewed_at: l.reviewed_at,
+    }))
+    return {
+      id: r.id,
+      player_id: r.player_id,
+      player_name: player?.display_name || 'ไม่ทราบชื่อ',
+      player_avatar: player?.avatar_url || null,
+      created_at: r.created_at,
+      links,
+    }
+  })
+
+  return { submissions, total: count || 0, page, totalPages: Math.ceil((count || 0) / PAGE_SIZE), isAdmin }
+}
+
+function getDigestPercent(level: string) {
+  if (level === 'low') return 2
+  if (level === 'medium') return 10
+  if (level === 'high') return 25
+  return 0
+}
+
+export async function reviewRoleplayLink(linkId: string, level: string, note: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+  if (!(await requireAdmin(supabase, user.id))) return { error: 'Admin/DM required' }
+  if (!note?.trim()) return { error: 'กรุณาระบุหมายเหตุ' }
+  if (!['none', 'low', 'medium', 'high'].includes(level)) return { error: 'ระดับไม่ถูกต้อง' }
+
+  const { data: link } = await supabase
+    .from('roleplay_links')
+    .select('id, digest_level, submission:submission_id(player_id)')
+    .eq('id', linkId)
+    .single()
+
+  if (!link) return { error: 'ไม่พบลิงก์' }
+  if (link.digest_level !== 'pending') return { error: 'ลิงก์นี้ถูกตรวจแล้ว' }
+
+  const percent = getDigestPercent(level)
+  const { error: updErr } = await supabase
+    .from('roleplay_links')
+    .update({
+      digest_level: level,
+      digest_percent: percent,
+      digest_note: note.trim(),
+      reviewed_by: user.id,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq('id', linkId)
+
+  if (updErr) return { error: updErr.message }
+
+  const playerId = link.submission?.player_id
+  if (playerId && percent > 0) {
+    const { data: prof } = await supabase.from('profiles').select('potion_digest_progress').eq('id', playerId).single()
+    const current = prof?.potion_digest_progress ?? 0
+    const next = Math.min(100, current + percent)
+    await supabase.from('profiles').update({ potion_digest_progress: next }).eq('id', playerId)
+  }
+
+  revalidatePath('/dashboard/action-quest')
+  revalidatePath('/dashboard')
+  return { success: true }
+}
+
+export async function getPotionDigestStatus() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { progress: 0 }
+  const { data: profile } = await supabase.from('profiles').select('potion_digest_progress').eq('id', user.id).single()
+  return { progress: profile?.potion_digest_progress ?? 0 }
+}
+
+export async function promotePotionDigest() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data: profile } = await supabase.from('profiles').select('potion_digest_progress').eq('id', user.id).single()
+  if (!profile || (profile.potion_digest_progress ?? 0) < 100) return { error: 'ความคืบหน้ายังไม่ครบ 100%' }
+
+  const { data: pathway } = await supabase
+    .from('player_pathways')
+    .select('id, pathway_id, sequence_id')
+    .eq('player_id', user.id)
+    .not('pathway_id', 'is', null)
+    .order('id', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (!pathway?.pathway_id) return { error: 'ยังไม่มีสายพลังเวทมนตร์' }
+
+  const { data: sequences } = await supabase
+    .from('skill_sequences')
+    .select('id, seq_number')
+    .eq('pathway_id', pathway.pathway_id)
+    .order('seq_number', { ascending: true })
+
+  if (!sequences || sequences.length === 0) return { error: 'ไม่พบลำดับขั้นในสายนี้' }
+
+  const currentIndex = pathway.sequence_id
+    ? sequences.findIndex(s => s.id === pathway.sequence_id)
+    : -1
+  const nextIndex = currentIndex + 1
+  const nextSequence = sequences[nextIndex] || (currentIndex === -1 ? sequences[0] : null)
+  if (!nextSequence) return { error: 'ถึงลำดับสูงสุดแล้ว' }
+
+  const { error: updErr } = await supabase
+    .from('player_pathways')
+    .update({ sequence_id: nextSequence.id })
+    .eq('id', pathway.id)
+
+  if (updErr) return { error: updErr.message }
+
+  await supabase.from('profiles').update({ potion_digest_progress: 0 }).eq('id', user.id)
+
+  revalidatePath('/dashboard')
+  revalidatePath('/dashboard/action-quest')
+  revalidatePath('/dashboard/players')
+  return { success: true }
+}
+
 
 /* ══════════════════════════════════════════════
    SLEEP REQUEST LOGS (for history tab)

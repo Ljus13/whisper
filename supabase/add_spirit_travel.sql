@@ -10,7 +10,8 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS spirituality   int NOT NULL DEFAULT 15,
   ADD COLUMN IF NOT EXISTS max_spirituality int NOT NULL DEFAULT 15,
   ADD COLUMN IF NOT EXISTS travel_points  int NOT NULL DEFAULT 9,
-  ADD COLUMN IF NOT EXISTS max_travel_points int NOT NULL DEFAULT 9;
+  ADD COLUMN IF NOT EXISTS max_travel_points int NOT NULL DEFAULT 9,
+  ADD COLUMN IF NOT EXISTS potion_digest_progress int NOT NULL DEFAULT 0;
 
 COMMENT ON COLUMN public.profiles.spirituality IS 'Current spirit energy (พลังวิญญาณ). Default 15.';
 COMMENT ON COLUMN public.profiles.max_spirituality IS 'Maximum spirit energy cap. Default 15.';
@@ -28,7 +29,7 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-  INSERT INTO public.profiles (id, display_name, avatar_url, role, spirituality, max_spirituality, travel_points, max_travel_points)
+  INSERT INTO public.profiles (id, display_name, avatar_url, role, spirituality, max_spirituality, travel_points, max_travel_points, potion_digest_progress)
   VALUES (
     NEW.id,
     COALESCE(
@@ -45,7 +46,8 @@ BEGIN
     15,  -- spirituality default
     15,  -- max_spirituality default
     9,   -- travel_points default
-    9    -- max_travel_points default
+    9,   -- max_travel_points default
+    0    -- potion_digest_progress default
   );
   RETURN NEW;
 END;
@@ -62,6 +64,10 @@ ALTER TABLE public.profiles
 ALTER TABLE public.profiles
   ADD CONSTRAINT chk_travel_points_range
     CHECK (travel_points >= 0 AND travel_points <= max_travel_points);
+
+ALTER TABLE public.profiles
+  ADD CONSTRAINT chk_potion_digest_progress_range
+    CHECK (potion_digest_progress >= 0 AND potion_digest_progress <= 100);
 
 
 -- ══════════════════════════════════════════════════════════════

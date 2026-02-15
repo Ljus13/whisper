@@ -1,6 +1,7 @@
 'use client'
 
 import { signOut, updateProfile } from '@/app/actions/auth'
+import { promotePotionDigest } from '@/app/actions/action-quest'
 import { applySanityDecay } from '@/app/actions/players'
 import AdminEditModal from '@/components/admin/admin-edit-modal'
 import DisplayNameSetup from '@/components/dashboard/display-name-setup'
@@ -30,6 +31,7 @@ interface Profile {
   max_spirituality: number
   travel_points: number
   max_travel_points: number
+  potion_digest_progress: number
   religion_id?: string | null
   religions?: {
     id: string
@@ -80,6 +82,8 @@ export default function DashboardContent({
   const [optimisticAvatar, setOptimisticAvatar] = useState<string | null>(null)
   const [optimisticBg, setOptimisticBg] = useState<string | null | undefined>(undefined)
   const [optimisticBio, setOptimisticBio] = useState<string | null | undefined>(undefined)
+  const [digestProgress, setDigestProgress] = useState(profile?.potion_digest_progress ?? 0)
+  const [isPromotingDigest, setIsPromotingDigest] = useState(false)
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
   
@@ -93,6 +97,10 @@ export default function DashboardContent({
   useEffect(() => {
     applySanityDecay().catch(() => {})
   }, [])
+
+  useEffect(() => {
+    setDigestProgress(profile?.potion_digest_progress ?? 0)
+  }, [profile?.potion_digest_progress])
 
   const displayName = profile?.display_name 
     || user.user_metadata?.full_name 
@@ -111,6 +119,20 @@ export default function DashboardContent({
   function handleSignOut() {
     startTransition(async () => {
       await signOut()
+    })
+  }
+
+  function handlePromoteDigest() {
+    setIsPromotingDigest(true)
+    startTransition(async () => {
+      const r = await promotePotionDigest()
+      if (r?.error) {
+        alert(r.error)
+      } else {
+        setDigestProgress(0)
+        router.refresh()
+      }
+      setIsPromotingDigest(false)
     })
   }
 
@@ -299,6 +321,41 @@ export default function DashboardContent({
                   }}
                 />
               </div>
+            </div>
+
+            <div className="p-3 md:p-6 bg-victorian-900/60 border border-amber-500/20 rounded-md flex flex-col justify-center">
+              <div className="flex items-center justify-between mb-2 md:mb-4">
+                <div className="flex items-center gap-2 md:gap-4">
+                  <div className="p-2 md:p-3 bg-amber-500/10 rounded-full">
+                    <Flame className="w-6 h-6 md:w-10 md:h-10 text-amber-400" />
+                  </div>
+                  <span className="text-amber-300 font-display text-xs md:text-xl tracking-wider uppercase">ย่อยโอสถ</span>
+                </div>
+                <span className="font-display text-lg md:text-4xl text-amber-200 tabular-nums">
+                  {Math.min(100, Math.max(0, digestProgress))}%
+                </span>
+              </div>
+              <div className="w-full h-2 md:h-4 bg-victorian-950 rounded-full overflow-hidden border border-amber-500/10">
+                <div
+                  className="h-full rounded-full transition-all duration-700 ease-out"
+                  style={{
+                    width: `${Math.min(100, Math.max(0, digestProgress))}%`,
+                    background: 'linear-gradient(90deg, #F59E0B, #FBBF24, #FDE68A)',
+                    boxShadow: '0 0 12px rgba(251, 191, 36, 0.6)'
+                  }}
+                />
+              </div>
+              {digestProgress >= 100 && (
+                <button
+                  type="button"
+                  onClick={handlePromoteDigest}
+                  disabled={isPromotingDigest}
+                  className="mt-3 w-full flex items-center justify-center gap-2 py-2 rounded-md text-xs md:text-sm font-bold bg-gradient-to-r from-amber-500 to-yellow-300 text-amber-950 shadow-lg shadow-amber-500/20 disabled:opacity-60"
+                >
+                  {isPromotingDigest && <div className="w-3.5 h-3.5 border-2 border-amber-900/40 border-t-amber-900 rounded-full animate-spin" />}
+                  เลื่อนลำดับขั้น
+                </button>
+              )}
             </div>
             </div>
             <div className="p-3 md:p-5 bg-victorian-900/60 border border-gold-400/20 rounded-md flex items-center gap-3 md:gap-4">

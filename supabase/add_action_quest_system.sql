@@ -215,3 +215,84 @@ CREATE INDEX IF NOT EXISTS idx_quest_sub_player ON public.quest_submissions(play
 CREATE INDEX IF NOT EXISTS idx_quest_sub_code ON public.quest_submissions(quest_code_id);
 CREATE INDEX IF NOT EXISTS idx_quest_sub_status ON public.quest_submissions(status);
 CREATE INDEX IF NOT EXISTS idx_quest_sub_created ON public.quest_submissions(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.roleplay_submissions (
+  id             uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id      uuid        NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  submitted_date date        NOT NULL DEFAULT (now()::date),
+  created_at     timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.roleplay_submissions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Players can view own roleplay submissions"
+  ON public.roleplay_submissions FOR SELECT
+  USING (auth.uid() = player_id);
+
+CREATE POLICY "Admin can view all roleplay submissions"
+  ON public.roleplay_submissions FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'dm')
+    )
+  );
+
+CREATE POLICY "Players can insert own roleplay submissions"
+  ON public.roleplay_submissions FOR INSERT
+  WITH CHECK (auth.uid() = player_id);
+
+CREATE INDEX IF NOT EXISTS idx_roleplay_sub_player ON public.roleplay_submissions(player_id);
+CREATE INDEX IF NOT EXISTS idx_roleplay_sub_created ON public.roleplay_submissions(created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_roleplay_sub_day ON public.roleplay_submissions(player_id, submitted_date);
+
+CREATE TABLE IF NOT EXISTS public.roleplay_links (
+  id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  submission_id uuid        NOT NULL REFERENCES public.roleplay_submissions(id) ON DELETE CASCADE,
+  url           text        NOT NULL,
+  digest_level  text        NOT NULL DEFAULT 'pending' CHECK (digest_level IN ('pending', 'none', 'low', 'medium', 'high')),
+  digest_percent int        NOT NULL DEFAULT 0,
+  digest_note   text,
+  reviewed_by   uuid        REFERENCES public.profiles(id) ON DELETE SET NULL,
+  reviewed_at   timestamptz,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.roleplay_links ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Players can view own roleplay links"
+  ON public.roleplay_links FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.roleplay_submissions rs
+      WHERE rs.id = submission_id AND rs.player_id = auth.uid()
+    )
+    OR EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'dm')
+    )
+  );
+
+CREATE POLICY "Players can insert own roleplay links"
+  ON public.roleplay_links FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.roleplay_submissions rs
+      WHERE rs.id = submission_id AND rs.player_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Admin can update roleplay links"
+  ON public.roleplay_links FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'dm')
+    )
+  );
+
+CREATE INDEX IF NOT EXISTS idx_roleplay_links_submission ON public.roleplay_links(submission_id);
+CREATE INDEX IF NOT EXISTS idx_roleplay_links_created ON public.roleplay_links(created_at DESC);
+
+ALTER PUBLICATION supabase_realtime ADD TABLE public.roleplay_submissions;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.roleplay_links;

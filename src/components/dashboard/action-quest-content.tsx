@@ -5,7 +5,7 @@ import {
   ArrowLeft, Moon, ScrollText, Swords, Target, Shield, Plus, Copy,
   X, ExternalLink, ChevronLeft, ChevronRight, Clock, CheckCircle,
   XCircle, Send, AlertTriangle, Trash2, Church, Skull, Users, CalendarClock,
-  Repeat, HandHeart, Pencil, Archive
+  Repeat, HandHeart, Pencil, Archive, Flame, Sparkles
 } from 'lucide-react'
 import {
   submitSleepRequest, getTodaySleepStatus,
@@ -20,6 +20,7 @@ import {
   getNpcsForQuestDropdown,
   getPlayersForDropdown,
   getAllActionAndQuestCodes,
+  submitRoleplayLinks, getRoleplaySubmissions, reviewRoleplayLink, getPotionDigestStatus, promotePotionDigest,
   createPunishment,
   getPunishments,
   requestMercy,
@@ -65,6 +66,14 @@ interface SleepLog {
   id: string; player_id: string; player_name: string; player_avatar: string | null
   meal_url: string; sleep_url: string; status: string
   reviewed_by_name: string | null; reviewed_at: string | null; created_at: string
+}
+interface RoleplayLink {
+  id: string; url: string; digest_level: string; digest_percent: number
+  digest_note: string | null; reviewed_by_name: string | null; reviewed_at: string | null
+}
+interface RoleplaySubmission {
+  id: string; player_id: string; player_name: string; player_avatar: string | null
+  created_at: string; links: RoleplayLink[]
 }
 
 interface PlayerOption { id: string; display_name: string; avatar_url: string | null }
@@ -270,6 +279,10 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   const [subUrls, setSubUrls] = useState<string[]>([''])
   const [subError, setSubError] = useState<string | null>(null)
   const [subSuccess, setSubSuccess] = useState<string | null>(null)
+  const [showRoleplayForm, setShowRoleplayForm] = useState(false)
+  const [roleplayUrls, setRoleplayUrls] = useState<string[]>([''])
+  const [roleplayError, setRoleplayError] = useState<string | null>(null)
+  const [roleplaySuccess, setRoleplaySuccess] = useState<string | null>(null)
 
   // ─── Reject modal ───
   const [rejectTarget, setRejectTarget] = useState<{ id: string; type: 'action' | 'quest' | 'sleep' } | null>(null)
@@ -301,6 +314,11 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   const [asTotalPages, setAsTotalPages] = useState(1)
   const [asTotal, setAsTotal] = useState(0)
   const [asLoading, setAsLoading] = useState(true)
+  const [roleplaySubs, setRoleplaySubs] = useState<RoleplaySubmission[]>([])
+  const [rpPage, setRpPage] = useState(1)
+  const [rpTotalPages, setRpTotalPages] = useState(1)
+  const [rpTotal, setRpTotal] = useState(0)
+  const [rpLoading, setRpLoading] = useState(true)
 
   // ─── Quest submissions ───
   const [questSubs, setQuestSubs] = useState<Submission[]>([])
@@ -315,6 +333,12 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   const [slTotalPages, setSlTotalPages] = useState(1)
   const [slTotal, setSlTotal] = useState(0)
   const [slLoading, setSlLoading] = useState(true)
+  const [digestProgress, setDigestProgress] = useState(0)
+  const [isPromotingDigest, setIsPromotingDigest] = useState(false)
+  const [digestReviewTarget, setDigestReviewTarget] = useState<{ submissionId: string; link: RoleplayLink } | null>(null)
+  const [digestLevel, setDigestLevel] = useState<'none' | 'low' | 'medium' | 'high'>('none')
+  const [digestNote, setDigestNote] = useState('')
+  const [digestError, setDigestError] = useState<string | null>(null)
 
   // ─── Prayer logs ───
   const [prayerLogs, setPrayerLogs] = useState<any[]>([])
@@ -445,6 +469,23 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
     setSlLoading(false)
   }, [])
 
+  const fetchRoleplaySubs = useCallback(async (p: number) => {
+    setRpLoading(true)
+    const r = await getRoleplaySubmissions(p)
+    setRoleplaySubs(r.submissions as RoleplaySubmission[])
+    setRpPage(r.page || 1)
+    setRpTotalPages(r.totalPages || 1)
+    setRpTotal(r.total || 0)
+    setRpLoading(false)
+  }, [])
+
+  const fetchDigestProgress = useCallback(async () => {
+    const r = await getPotionDigestStatus()
+    if (typeof r.progress === 'number') {
+      setDigestProgress(r.progress)
+    }
+  }, [])
+
   const fetchPrayerLogs = useCallback(async (p: number = 1) => {
     setPlLoading(true)
     let logs: any[] = []
@@ -510,10 +551,12 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
     fetchActionSubs(1)
     fetchQuestSubs(1)
     fetchSleepLogs(1)
+    fetchRoleplaySubs(1)
     fetchPrayerLogs(1)
     fetchPunishments(1)
     fetchPunishmentLogs(1)
-  }, [isAdmin, fetchActionCodes, fetchQuestCodes, fetchActionSubs, fetchQuestSubs, fetchSleepLogs, fetchPrayerLogs, fetchPunishments, fetchPunishmentLogs])
+    fetchDigestProgress()
+  }, [isAdmin, fetchActionCodes, fetchQuestCodes, fetchActionSubs, fetchQuestSubs, fetchSleepLogs, fetchRoleplaySubs, fetchPrayerLogs, fetchPunishments, fetchPunishmentLogs, fetchDigestProgress])
 
   // ─── Handlers ───
   function handleSleepSubmit() {
@@ -567,6 +610,50 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
         setSubSuccess(`ส่ง${type === 'action' ? 'แอคชั่น' : 'ภารกิจ'} "${rName}" สำเร็จ!`)
         if (type === 'action') fetchActionSubs(1); else fetchQuestSubs(1)
       }
+    })
+  }
+
+  function handleSubmitRoleplay() {
+    setRoleplayError(null); setRoleplaySuccess(null)
+    const urls = roleplayUrls.filter(u => u.trim())
+    if (urls.length === 0) { setRoleplayError('กรุณาแนบ URL อย่างน้อย 1 ลิงก์'); return }
+    startTransition(async () => {
+      const r = await submitRoleplayLinks(urls)
+      if (r.error) { setRoleplayError(r.error) }
+      else {
+        setRoleplaySuccess('ส่งลิงก์สวมบทบาทสำเร็จ!')
+        fetchRoleplaySubs(1)
+      }
+    })
+  }
+
+  function handleReviewDigest() {
+    if (!digestReviewTarget) return
+    setDigestError(null)
+    if (!digestNote.trim()) { setDigestError('กรุณาระบุหมายเหตุ'); return }
+    startTransition(async () => {
+      const r = await reviewRoleplayLink(digestReviewTarget.link.id, digestLevel, digestNote.trim())
+      if (r.error) { setDigestError(r.error) }
+      else {
+        setDigestReviewTarget(null)
+        setDigestNote('')
+        setDigestLevel('none')
+        fetchRoleplaySubs(rpPage)
+        fetchDigestProgress()
+      }
+    })
+  }
+
+  function handlePromoteDigest() {
+    setIsPromotingDigest(true)
+    startTransition(async () => {
+      const r = await promotePotionDigest()
+      if (r.error) toast('error', r.error)
+      else {
+        toast('success', 'เลื่อนลำดับขั้นสำเร็จ')
+        setDigestProgress(0)
+      }
+      setIsPromotingDigest(false)
     })
   }
 
@@ -875,6 +962,36 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
 
         <div className="ornament-divider" />
 
+        <Card className="p-5 md:p-8">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="heading-victorian text-xl md:text-2xl flex items-center gap-3">
+              <Flame className="w-5 h-5 text-amber-400" /> การย่อยโอสถเวทมนตร์
+            </h2>
+            <span className="text-amber-200 font-display text-sm md:text-lg tabular-nums">{Math.min(100, Math.max(0, digestProgress))}%</span>
+          </div>
+          <div className="w-full h-3 md:h-4 bg-victorian-900/80 rounded-full overflow-hidden border border-amber-500/20">
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{
+                width: `${Math.min(100, Math.max(0, digestProgress))}%`,
+                background: 'linear-gradient(90deg, #F59E0B, #FBBF24, #FDE68A)',
+                boxShadow: '0 0 14px rgba(251, 191, 36, 0.7)',
+              }}
+            />
+          </div>
+          {digestProgress >= 100 && (
+            <button
+              type="button"
+              onClick={handlePromoteDigest}
+              disabled={isPromotingDigest}
+              className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-300 text-amber-950 font-bold shadow-lg shadow-amber-500/30 disabled:opacity-60"
+            >
+              {isPromotingDigest && <div className="w-4 h-4 border-2 border-amber-900/40 border-t-amber-900 rounded-full animate-spin" />}
+              เลื่อนลำดับขั้น
+            </button>
+          )}
+        </Card>
+
         {/* ══════ ADMIN TOOLS ══════ */}
         {isAdmin && (
           <Card className="p-5 md:p-8">
@@ -933,7 +1050,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
           <h2 className="heading-victorian text-xl md:text-2xl flex items-center gap-3 mb-5">
             <Swords className="w-5 h-5 text-gold-400" /> การกระทำ
           </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {/* นอนหลับ */}
             <button type="button"
               onClick={() => { if (!sleepSubmitted) setShowSleepForm(true) }}
@@ -987,6 +1104,18 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                   : 'border-amber-500/30 bg-amber-500/5 text-amber-300 hover:border-amber-400/50 hover:bg-amber-500/10 cursor-pointer'}`}>
               <Send className={`w-8 h-8 ${isSleepPending ? 'text-victorian-600' : 'text-amber-400'}`} />
               <span>ส่งแอคชั่น</span>
+              {isSleepPending && <span className="text-[10px] text-indigo-400">💤 กำลังหลับ</span>}
+            </button>
+
+            <button type="button"
+              onClick={() => { if (!isSleepPending) { setShowRoleplayForm(true); setRoleplayUrls(['']); setRoleplayError(null); setRoleplaySuccess(null) } }}
+              disabled={isSleepPending}
+              className={`px-5 py-4 rounded-lg border-2 text-base font-bold flex flex-col items-center gap-2 transition-all
+                ${isSleepPending
+                  ? 'border-victorian-700/30 bg-victorian-900/40 text-victorian-500 cursor-not-allowed'
+                  : 'border-fuchsia-500/30 bg-fuchsia-500/5 text-fuchsia-300 hover:border-fuchsia-400/50 hover:bg-fuchsia-500/10 cursor-pointer'}`}>
+              <Sparkles className={`w-8 h-8 ${isSleepPending ? 'text-victorian-600' : 'text-fuchsia-400'}`} />
+              <span>สวมบทบาท</span>
               {isSleepPending && <span className="text-[10px] text-indigo-400">💤 กำลังหลับ</span>}
             </button>
           </div>
@@ -1131,6 +1260,73 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                     onReject={(id) => { setRejectTarget({ id, type: 'action' }); setRejectReason(''); setRejectError(null) }}
                     onViewRejection={(reason, name) => setViewRejection({ reason, name })} />
                   <Pagination page={asPage} totalPages={asTotalPages} onPage={fetchActionSubs} />
+                </>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="heading-victorian text-lg flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-fuchsia-400" /> ประวัติสวมบทบาท
+                <span className="text-victorian-500 text-xs font-normal ml-1">({rpTotal})</span>
+              </h3>
+              {rpLoading ? <SkeletonTable /> : roleplaySubs.length === 0 ? (
+                <div className="p-8 text-center border border-gold-400/10 rounded-sm" style={{ backgroundColor: 'rgba(26,22,18,0.6)' }}>
+                  <p className="text-victorian-400 heading-victorian">ยังไม่มีประวัติสวมบทบาท</p>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-4">
+                    {roleplaySubs.map(sub => (
+                      <div key={sub.id} className="p-4 rounded-sm border border-gold-400/10 bg-victorian-900/40">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-9 h-9 rounded-full overflow-hidden border border-gold-400/20 bg-victorian-900">
+                              {sub.player_avatar ? (
+                                <img src={sub.player_avatar} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-victorian-600 text-xs">—</div>
+                              )}
+                            </div>
+                            <div className="text-sm">
+                              <div className="text-victorian-200 font-semibold">{sub.player_name}</div>
+                              <div className="text-victorian-500 text-xs">{fmtDate(sub.created_at)}</div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {sub.links.map(link => (
+                            <div key={link.id} className="flex flex-col gap-2 rounded-sm border border-victorian-800/50 p-3 bg-victorian-950/40">
+                              <a href={link.url} target="_blank" rel="noreferrer" className="text-fuchsia-300 hover:text-fuchsia-200 break-all text-sm">
+                                {link.url}
+                              </a>
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <div className="text-xs text-victorian-400">
+                                  {link.digest_level === 'pending' ? 'รอตรวจสอบ' : 'ย่อยน้ำยาแล้ว'}
+                                </div>
+                                {link.digest_level === 'pending' && isAdmin ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => { setDigestReviewTarget({ submissionId: sub.id, link }); setDigestLevel('none'); setDigestNote(''); setDigestError(null) }}
+                                    className="px-3 py-1.5 rounded-sm border border-fuchsia-500/30 text-fuchsia-300 text-xs hover:bg-fuchsia-500/10"
+                                  >
+                                    ช่วยย่อยน้ำยา
+                                  </button>
+                                ) : (
+                                  <span className="text-xs text-amber-200">{link.reviewed_at ? fmtDate(link.reviewed_at) : ''}</span>
+                                )}
+                              </div>
+                              {link.digest_note && (
+                                <div className="text-xs text-amber-200">
+                                  หมายเหตุ: {link.digest_note}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <Pagination page={rpPage} totalPages={rpTotalPages} onPage={fetchRoleplaySubs} />
                 </>
               )}
             </div>
@@ -1303,7 +1499,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                           <td className="py-2.5 pr-3">
                             <div className="flex items-center gap-2">
                               {religion?.logo_url ? (
-                                <img src={religion.logo_url} className="w-6 h-6 rounded-full border border-gold-400/20" />
+                                <img src={religion.logo_url} alt="" className="w-6 h-6 rounded-full border border-gold-400/20" />
                               ) : (
                                 <Church className="w-4 h-4 text-gold-400/50" />
                               )}
@@ -1981,6 +2177,90 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
           isPending={isPending}
           onSubmit={() => handleSubmitActionQuest('quest')}
         />
+      )}
+
+      {showRoleplayForm && (
+        <Modal onClose={() => setShowRoleplayForm(false)}>
+          <div className="flex items-center justify-between">
+            <h3 className="heading-victorian text-2xl flex items-center gap-3"><Sparkles className="w-6 h-6 text-fuchsia-400" /> สวมบทบาท</h3>
+            <button type="button" onClick={() => setShowRoleplayForm(false)} className="text-victorian-400 hover:text-gold-400 cursor-pointer"><X className="w-5 h-5" /></button>
+          </div>
+
+          {!roleplaySuccess ? (
+            <>
+              <p className="text-victorian-400 text-sm">ส่งลิงก์ได้ไม่จำกัด แต่ส่งได้วันละครั้ง</p>
+              <div className="space-y-3 mt-4">
+                {roleplayUrls.map((url, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <label className="block text-xs text-victorian-400 mb-1">ลิงก์ที่ {i + 1} {i === 0 && <span className="text-nouveau-ruby">*</span>}</label>
+                      <input type="url" value={url}
+                        onChange={e => {
+                          const copy = [...roleplayUrls]
+                          copy[i] = e.target.value
+                          setRoleplayUrls(copy)
+                        }}
+                        className="input-victorian w-full !py-2 !text-sm" />
+                    </div>
+                    {roleplayUrls.length > 1 && (
+                      <button type="button" onClick={() => setRoleplayUrls(roleplayUrls.filter((_, idx) => idx !== i))}
+                        className="p-2 rounded-md border border-red-500/30 text-red-400 hover:bg-red-500/10 cursor-pointer">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={() => setRoleplayUrls([...roleplayUrls, ''])}
+                  className="text-xs text-fuchsia-300 hover:text-fuchsia-200 underline cursor-pointer">+ เพิ่มลิงก์</button>
+              </div>
+              {roleplayError && <div className="p-3 bg-red-900/40 border border-red-500/30 rounded-lg text-red-300 text-sm text-center mt-4">{roleplayError}</div>}
+              <div className="flex justify-end gap-3 mt-5">
+                <button type="button" onClick={() => setShowRoleplayForm(false)} className="btn-victorian px-4 py-2 text-sm cursor-pointer">ยกเลิก</button>
+                <button type="button" onClick={handleSubmitRoleplay} disabled={isPending}
+                  className="btn-gold !px-6 !py-2 !text-sm disabled:opacity-50">{isPending ? 'กำลังส่ง...' : 'ส่งสวมบทบาท'}</button>
+              </div>
+            </>
+          ) : (
+            <div className="text-center space-y-4">
+              <CheckCircle className="w-12 h-12 text-green-400 mx-auto" />
+              <p className="text-victorian-300">{roleplaySuccess}</p>
+              <button type="button" onClick={() => setShowRoleplayForm(false)} className="btn-victorian px-6 py-2 text-sm cursor-pointer">ปิด</button>
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {digestReviewTarget && (
+        <Modal onClose={() => setDigestReviewTarget(null)}>
+          <div className="flex items-center justify-between">
+            <h3 className="heading-victorian text-2xl flex items-center gap-3"><Sparkles className="w-6 h-6 text-fuchsia-400" /> ช่วยย่อยน้ำยา</h3>
+            <button type="button" onClick={() => setDigestReviewTarget(null)} className="text-victorian-400 hover:text-gold-400 cursor-pointer"><X className="w-5 h-5" /></button>
+          </div>
+          <div className="mt-4 space-y-4">
+            <div className="text-sm text-victorian-300 break-all">{digestReviewTarget.link.url}</div>
+            <div>
+              <label className="block text-xs text-victorian-400 mb-1">ระดับการย่อยโอสถ</label>
+              <select value={digestLevel} onChange={e => setDigestLevel(e.target.value as typeof digestLevel)}
+                className="input-victorian w-full !py-2 !text-sm">
+                <option value="none">ไม่มีการย่อยโอสถ</option>
+                <option value="low">การย่อยระดับต่ำ (+2%)</option>
+                <option value="medium">การย่อยระดับกลาง (+10%)</option>
+                <option value="high">การย่อยระดับสูง (+25%)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-victorian-400 mb-1">หมายเหตุ</label>
+              <textarea value={digestNote} onChange={e => setDigestNote(e.target.value)}
+                className="input-victorian w-full !py-2 !text-sm min-h-[90px]" />
+            </div>
+            {digestError && <div className="p-3 bg-red-900/40 border border-red-500/30 rounded-lg text-red-300 text-sm text-center">{digestError}</div>}
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setDigestReviewTarget(null)} className="btn-victorian px-4 py-2 text-sm cursor-pointer">ยกเลิก</button>
+              <button type="button" onClick={handleReviewDigest} disabled={isPending}
+                className="btn-gold !px-6 !py-2 !text-sm disabled:opacity-50">{isPending ? 'กำลังบันทึก...' : 'ยืนยันการย่อย'}</button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* --- Prayer modal --- */}

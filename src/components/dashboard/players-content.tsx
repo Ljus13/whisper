@@ -26,6 +26,7 @@ interface Profile {
   max_spirituality: number
   travel_points: number
   max_travel_points: number
+  potion_digest_progress: number
   religion_id: string | null
   religions?: {
     id: string
@@ -369,6 +370,25 @@ export default function PlayersContent({ userId }: { userId: string }) {
                     <p className="text-victorian-500 text-sm italic text-center py-2">
                       ยังไม่มีเส้นทาง
                     </p>
+                  )}
+
+                  {isAdmin && (
+                    <div className="mt-4">
+                      <div className="flex items-center justify-between text-xs text-amber-200 mb-1">
+                        <span className="font-display tracking-wider">ย่อยโอสถ</span>
+                        <span className="tabular-nums">{Math.min(100, Math.max(0, player.potion_digest_progress ?? 0))}%</span>
+                      </div>
+                      <div className="w-full h-2 bg-victorian-950 rounded-full overflow-hidden border border-amber-500/10">
+                        <div
+                          className="h-full rounded-full transition-all duration-700"
+                          style={{
+                            width: `${Math.min(100, Math.max(0, player.potion_digest_progress ?? 0))}%`,
+                            background: 'linear-gradient(90deg, #F59E0B, #FBBF24, #FDE68A)',
+                            boxShadow: '0 0 10px rgba(251, 191, 36, 0.5)'
+                          }}
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>

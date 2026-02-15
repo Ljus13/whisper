@@ -17,6 +17,7 @@ export interface Profile {
   max_spirituality: number
   travel_points: number
   max_travel_points: number
+  potion_digest_progress: number
   hp: number
   sanity: number
   max_sanity: number
@@ -330,6 +331,7 @@ export interface Database {
           max_spirituality?: number
           travel_points?: number
           max_travel_points?: number
+          potion_digest_progress?: number
           hp?: number
           sanity?: number
           max_sanity?: number
@@ -347,6 +349,7 @@ export interface Database {
           max_spirituality?: number
           travel_points?: number
           max_travel_points?: number
+          potion_digest_progress?: number
           hp?: number
           sanity?: number
           max_sanity?: number
