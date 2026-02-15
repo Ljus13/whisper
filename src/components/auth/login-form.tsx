@@ -1,7 +1,7 @@
 'use client'
 
 import { signInWithGoogle, signInWithDiscord } from '@/app/actions/auth'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 /* ── SVG Icons ── */
 function GoogleIcon() {
@@ -54,6 +54,16 @@ function CornerOrnament({ className }: { className?: string }) {
 export default function LoginForm() {
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [policyOpen, setPolicyOpen] = useState(true)
+  const [policyAccepted, setPolicyAccepted] = useState(false)
+
+  useEffect(() => {
+    const stored = localStorage.getItem('privacyConsentAccepted')
+    if (stored === 'true') {
+      setPolicyAccepted(true)
+      setPolicyOpen(false)
+    }
+  }, [])
 
   async function handleGoogleLogin() {
     setLoading('google')
@@ -81,7 +91,52 @@ export default function LoginForm() {
     }
   }
 
+  function handleAcceptPolicy() {
+    localStorage.setItem('privacyConsentAccepted', 'true')
+    setPolicyAccepted(true)
+    setPolicyOpen(false)
+  }
+
+  const canLogin = policyAccepted && !policyOpen
+
   return (
+    <>
+    {policyOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}>
+        <div className="w-full max-w-3xl rounded-xl border-2 border-gold-400/20 bg-victorian-950 p-5 md:p-8 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="text-center space-y-1">
+            <h2 className="heading-victorian text-xl md:text-2xl text-gold-300">ประกาศนโยบายความเป็นส่วนตัวและข้อตกลงการใช้งาน</h2>
+            <p className="text-victorian-400 text-xs md:text-sm">Privacy Notice & Terms of Service</p>
+          </div>
+          <div className="space-y-3 text-victorian-200 text-sm leading-relaxed">
+            <p>โปรดอ่านและยอมรับเงื่อนไขก่อนเข้าสู่ระบบกิจกรรม:</p>
+            <div className="space-y-2">
+              <p><span className="text-gold-300 font-semibold">1. มาตรฐานการยืนยันตัวตนและความปลอดภัย (Authentication Security)</span><br />
+                เว็บไซต์นี้ใช้โปรโตคอล OAuth 2.0 มาตรฐานสากลผ่าน Google และ Discord เท่านั้น กระบวนการยืนยันตัวตนจะเกิดขึ้นบนแพลตฟอร์มต้นทางโดยตรง ทางระบบจะไม่มีการรับรู้ เห็น หรือจัดเก็บรหัสผ่านของผู้ใช้งานในทุกกรณี (Zero-Password Access) ข้อมูลที่ได้รับจะมีเพียง Access Token ที่ถูกเข้ารหัสเพื่อใช้ยืนยันสถานะความเป็นเจ้าของบัญชีชั่วคราวเท่านั้น
+              </p>
+              <p><span className="text-gold-300 font-semibold">2. การคุ้มครองข้อมูลส่วนบุคคล (PDPA Compliance)</span><br />
+                ระบบยึดหลักการจัดเก็บข้อมูลน้อยที่สุด (Data Minimization) โดยไม่มีการจัดเก็บข้อมูลส่วนบุคคลใดๆ ลงในฐานข้อมูลถาวร ข้อมูลพื้นฐานที่จำเป็นจะถูกเรียกใช้แบบ Real-time เพื่อสร้าง Session ในการเล่นกิจกรรมและจะถูกทำลายทันทีเมื่อสิ้นสุดการใช้งาน
+              </p>
+              <p><span className="text-gold-300 font-semibold">3. การประมวลผลและการใช้คุกกี้ (Technical Processing)</span><br />
+                เว็บไซต์นี้ไม่มีการใช้คุกกี้ (No Cookies) เพื่อการติดตามหรือเก็บข้อมูลระบุตัวตน การทำงานทั้งหมดของระบบประมวลผลผ่าน JavaScript บนอุปกรณ์ของผู้ใช้งานโดยตรง (Client-Side Processing) เพื่อความปลอดภัยสูงสุดของข้อมูล
+              </p>
+              <p><span className="text-gold-300 font-semibold">4. สิทธิ์ในการควบคุมและตัดการเชื่อมต่อ (User Control & Revocation)</span><br />
+                ผู้ใช้งานมีสิทธิ์ในการควบคุมข้อมูลของตนเองอย่างสมบูรณ์ ท่านสามารถดำเนินการยกเลิกสิทธิ์การเข้าถึง (Revoke Access) และตัดการเชื่อมต่อกับแอปพลิเคชันนี้ได้ด้วยตนเองตลอดเวลา ผ่านหน้าการตั้งค่าความปลอดภัย (Security Settings) ของบัญชี Google หรือ Discord ของท่าน ซึ่งจะส่งผลให้ Token ทั้งหมดที่ใช้ในเซสชันนี้เป็นโมฆะทันที
+              </p>
+              <p><span className="text-gold-300 font-semibold">5. การให้ความยินยอม (Explicit Consent)</span><br />
+                การกด “ยอมรับ” และเข้าสู่ระบบ ถือว่าท่านได้รับทราบ เข้าใจ และยินยอมให้ระบบใช้ Token ในการยืนยันตัวตนตามขอบเขตที่ระบุไว้ข้างต้นอย่างชัดเจน
+              </p>
+              <p><span className="text-gold-300 font-semibold">6. การติดต่อสอบถาม (Contact)</span><br />
+                หากต้องการสอบถามหรือร้องเรียนเกี่ยวกับข้อมูลส่วนบุคคล สามารถติดต่อผู้ดูแลระบบผ่านช่องทางที่ทีมงานกำหนดในกิจกรรมนี้
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 justify-end pt-2">
+            <button type="button" onClick={handleAcceptPolicy} className="btn-gold !px-6 !py-2 !text-sm">ยอมรับและดำเนินการต่อ</button>
+          </div>
+        </div>
+      </div>
+    )}
     <div className="card-victorian max-w-md w-full mx-4 relative overflow-hidden">
       {/* Corner ornaments */}
       <CornerOrnament className="absolute top-0 left-0" />
@@ -121,7 +176,7 @@ export default function LoginForm() {
         <div className="space-y-4">
           <button
             onClick={handleGoogleLogin}
-            disabled={loading !== null}
+            disabled={loading !== null || !canLogin}
             className="btn-victorian w-full"
           >
             {loading === 'google' ? (
@@ -135,7 +190,7 @@ export default function LoginForm() {
 
           <button
             onClick={handleDiscordLogin}
-            disabled={loading !== null}
+            disabled={loading !== null || !canLogin}
             className="btn-victorian w-full"
           >
             {loading === 'discord' ? (
@@ -149,6 +204,9 @@ export default function LoginForm() {
         </div>
 
         <div className="ornament-divider !my-6" />
+        {!canLogin && (
+          <p className="text-center text-victorian-500 text-xs">กรุณายอมรับนโยบายความเป็นส่วนตัวก่อนเข้าสู่ระบบ</p>
+        )}
 
         {/* Footer text */}
         <p className="text-center text-victorian-500 text-sm font-body tracking-wide">
@@ -158,5 +216,6 @@ export default function LoginForm() {
         </p>
       </div>
     </div>
+    </>
   )
 }
