@@ -550,8 +550,9 @@ export async function getActionSubmissions(page: number = 1) {
       .in('player_id', playerIds)
     : { data: [] }
   const playerSequenceMap = new Map<string, { seq_number: number; name: string }[]>()
-  for (const row of (ppData || []) as Array<{ player_id: string; sequence: { seq_number: number; name: string }[] | null }>) {
-    const sequenceList = row.sequence || []
+  for (const row of (ppData || []) as Array<{ player_id: string; sequence: { seq_number: number; name: string }[] | { seq_number: number; name: string } | null }>) {
+    const rawSequence = row.sequence
+    const sequenceList = Array.isArray(rawSequence) ? rawSequence : rawSequence ? [rawSequence] : []
     if (sequenceList.length === 0) continue
     const list = playerSequenceMap.get(row.player_id) || []
     for (const seq of sequenceList) {
@@ -857,8 +858,9 @@ export async function getQuestSubmissions(page: number = 1) {
       .in('player_id', playerIds)
     : { data: [] }
   const playerSequenceMap = new Map<string, { seq_number: number; name: string }[]>()
-  for (const row of (ppData || []) as Array<{ player_id: string; sequence: { seq_number: number; name: string }[] | null }>) {
-    const sequenceList = row.sequence || []
+  for (const row of (ppData || []) as Array<{ player_id: string; sequence: { seq_number: number; name: string }[] | { seq_number: number; name: string } | null }>) {
+    const rawSequence = row.sequence
+    const sequenceList = Array.isArray(rawSequence) ? rawSequence : rawSequence ? [rawSequence] : []
     if (sequenceList.length === 0) continue
     const list = playerSequenceMap.get(row.player_id) || []
     for (const seq of sequenceList) {
@@ -1004,8 +1006,9 @@ export async function getRoleplaySubmissions(page: number = 1) {
       .in('player_id', playerIds)
     : { data: [] }
   const playerSequenceMap = new Map<string, { seq_number: number; name: string }[]>()
-  for (const row of (ppData || []) as Array<{ player_id: string; sequence: { seq_number: number; name: string }[] | null }>) {
-    const sequenceList = row.sequence || []
+  for (const row of (ppData || []) as Array<{ player_id: string; sequence: { seq_number: number; name: string }[] | { seq_number: number; name: string } | null }>) {
+    const rawSequence = row.sequence
+    const sequenceList = Array.isArray(rawSequence) ? rawSequence : rawSequence ? [rawSequence] : []
     if (sequenceList.length === 0) continue
     const list = playerSequenceMap.get(row.player_id) || []
     for (const seq of sequenceList) {
