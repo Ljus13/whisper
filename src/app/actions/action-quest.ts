@@ -1002,7 +1002,7 @@ export async function reviewRoleplayLink(linkId: string, level: string, note: st
 
   const { data: link } = await supabase
     .from('roleplay_links')
-    .select('id, digest_level, submission:submission_id(player_id)')
+    .select('id, digest_level, submission_id')
     .eq('id', linkId)
     .single()
 
@@ -1023,7 +1023,13 @@ export async function reviewRoleplayLink(linkId: string, level: string, note: st
 
   if (updErr) return { error: updErr.message }
 
-  const playerId = link.submission?.player_id
+  const { data: submission } = await supabase
+    .from('roleplay_submissions')
+    .select('player_id')
+    .eq('id', link.submission_id)
+    .maybeSingle()
+
+  const playerId = submission?.player_id
   if (playerId && percent > 0) {
     const { data: prof } = await supabase.from('profiles').select('potion_digest_progress').eq('id', playerId).single()
     const current = prof?.potion_digest_progress ?? 0
