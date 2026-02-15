@@ -22,10 +22,10 @@ export default async function SkillsCodexPage() {
   }
 
   const [typesRes, pathwaysRes, sequencesRes, skillsRes] = await Promise.all([
-    supabase.from('skill_types').select('id, name, description, overview').order('name'),
-    supabase.from('skill_pathways').select('id, name, description, overview, type_id, logo_url, bg_url').order('name'),
-    supabase.from('skill_sequences').select('id, name, seq_number, pathway_id, roleplay_keywords').order('seq_number', { ascending: true }),
-    supabase.from('skills').select('id, name, description, spirit_cost, pathway_id, sequence_id').order('name'),
+    supabase.from('skill_types').select('id, name, description, overview, sort_order, created_at, updated_at').order('name'),
+    supabase.from('skill_pathways').select('id, type_id, name, description, overview, bg_url, logo_url, sort_order, created_at, updated_at').order('name'),
+    supabase.from('skill_sequences').select('id, pathway_id, seq_number, name, roleplay_keywords, created_at, updated_at').order('seq_number', { ascending: true }),
+    supabase.from('skills').select('id, pathway_id, sequence_id, name, description, spirit_cost, icon_url, sort_order, created_at, updated_at').order('name'),
   ])
 
   const types = typesRes.data || []
