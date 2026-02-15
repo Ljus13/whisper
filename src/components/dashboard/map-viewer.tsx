@@ -660,6 +660,23 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     return token.token_type === 'player' && token.user_id === currentUserId
   }
 
+  function getLockedZoneMessage(x: number, y: number, token?: MapTokenWithProfile | null) {
+    if (isAdmin) return null
+    if (!token?.user_id) return null
+    for (const z of zones) {
+      const inZone =
+        x >= z.zone_x &&
+        x <= z.zone_x + z.zone_width &&
+        y >= z.zone_y &&
+        y <= z.zone_y + z.zone_height
+      if (inZone) {
+        const allowed = z.allowed_user_ids?.includes(token.user_id)
+        if (!allowed) return z.message || 'พื้นที่นี้ถูกล็อค'
+      }
+    }
+    return null
+  }
+
   // Toggle global move mode - all moveable tokens wiggle
   function toggleMoveMode() {
     if (isMoveModeActive) {
@@ -738,6 +755,17 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   function dropItemLocally(x: number, y: number) {
     if (movingTokenId) {
       const tokenId = movingTokenId
+      const token = tokens.find(t => t.id === tokenId)
+      const lockMsg = getLockedZoneMessage(x, y, token)
+      if (lockMsg) {
+        showToast(lockMsg, 'error')
+        if (moveOriginalPos) {
+          setMovePreview({ x: moveOriginalPos.x, y: moveOriginalPos.y })
+        } else if (token) {
+          setMovePreview({ x: token.position_x, y: token.position_y })
+        }
+        return
+      }
       setTokens(prev => prev.map(t => t.id === tokenId ? { ...t, position_x: x, position_y: y } : t))
       pendingMovesRef.current.set(tokenId, { x, y })
       batchMovesRef.current.tokens.set(tokenId, { x, y })
@@ -1530,7 +1558,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                     ✨ ย้ายตำแหน่ง
                   </button>
                   {!isAdmin && currentUser.travel_points <= 0 && (
-                    <p className="text-red-400/70 text-[10px] lg:text-xs text-center mt-1">🚫 แต้มเดินทางหมด</p>
+                    <p className="text-red-500 text-[10px] lg:text-xs text-center mt-1 font-semibold">🚫 แต้มเดินทางหมด</p>
                   )}
                 </>
               )}
@@ -1600,7 +1628,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
             </p>
             <div className="flex items-start gap-2 p-2 bg-amber-900/20 border border-amber-400/20 rounded-lg">
               <span className="text-lg">👆</span>
-              <span className="text-amber-200 text-xs lg:text-sm font-medium">คลิกตัวละครแล้วกด &quot;ย้าย&quot; เพื่อเดิน</span>
+              <span className="text-amber-200 text-xs lg:text-sm font-medium">⚠️ ระบบหักแต้มเดินทางเมื่อย้ายตัวละคร: ย้ายในแมพเดียว 1 แต้ม, ย้ายข้ามแมพ 3 แต้ม</span>
             </div>
             <div className="flex items-start gap-2 p-2 bg-blue-900/20 border border-blue-400/20 rounded-lg">
               <span className="text-lg">✋</span>
@@ -2159,7 +2187,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       {/* Toast */}
       {toast && (
         <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-sm border text-sm font-display
-          ${toast.type === 'error' ? 'bg-nouveau-ruby/20 border-nouveau-ruby/40 text-nouveau-ruby' : 'bg-gold-400/10 border-gold-400/30 text-gold-400'}`}>
+          ${toast.type === 'error' ? 'bg-red-600 border-red-500 text-white' : 'bg-gold-400/10 border-gold-400/30 text-gold-400'}`}>
           {toast.msg}
         </div>
       )}
