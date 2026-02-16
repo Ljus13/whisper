@@ -11,7 +11,7 @@ async function getAuthUser() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, travel_points, max_travel_points, display_name, avatar_url')
+    .select('role, travel_points, max_travel_points, spirituality, max_spirituality, display_name, avatar_url')
     .eq('id', user.id)
     .single()
 
@@ -19,6 +19,19 @@ async function getAuthUser() {
 
   const isAdmin = profile.role === 'admin' || profile.role === 'dm'
   return { supabase, user, profile, isAdmin }
+}
+
+const SPIRIT_PATHWAY_ID = '86a03977-a293-493a-9759-0150472e9afe'
+const SPIRIT_SEQUENCE_ID = '7fbdce6d-bc49-450c-983f-8e7afa419756'
+
+async function shouldUseSpirituality(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const { data } = await supabase
+    .from('player_pathways')
+    .select('sequence_id')
+    .eq('player_id', userId)
+    .eq('pathway_id', SPIRIT_PATHWAY_ID)
+    .maybeSingle()
+  return data?.sequence_id === SPIRIT_SEQUENCE_ID
 }
 
 /* ── Helper: require admin/dm ── */
@@ -135,14 +148,20 @@ export async function addPlayerToMap(mapId: string, targetUserId?: string, posit
 
     // Moving to different map — costs 3 travel points (unless admin/dm)
     if (isSelf && !isAdmin) {
-      if (profile.travel_points < 3) {
-        return { error: `แต้มเดินทางไม่พอ (ต้องการ 3 แต้ม, มี ${profile.travel_points} แต้ม)` }
+      const useSpirit = await shouldUseSpirituality(supabase, userId)
+      const currentPoints = useSpirit ? (profile.spirituality ?? 0) : (profile.travel_points ?? 0)
+      if (currentPoints < 3) {
+        const label = useSpirit ? 'พลังวิญญาณ' : 'แต้มเดินทาง'
+        return { error: `${label}ไม่พอ (ต้องการ 3 แต้ม, มี ${currentPoints} แต้ม)` }
       }
 
-      // Deduct travel points
+      const update = useSpirit
+        ? { spirituality: Math.max(0, currentPoints - 3) }
+        : { travel_points: Math.max(0, currentPoints - 3) }
+
       const { error: tpError } = await supabase
         .from('profiles')
-        .update({ travel_points: profile.travel_points - 3 })
+        .update(update)
         .eq('id', userId)
 
       if (tpError) return { error: tpError.message }
@@ -235,6 +254,8 @@ export async function moveToken(
   const moveCost = isCrossMap ? 3 : 1
   const useMapId = targetMapId ?? token.map_id
 
+  const useSpirit = !isAdmin ? await shouldUseSpirituality(supabase, user.id) : false
+
   // Check locked zones at destination (unless admin/dm)
   if (!isAdmin) {
     const { data: zones } = await supabase
@@ -262,16 +283,21 @@ export async function moveToken(
 
     // Check travel points (only for player's own token)
     if (isOwnToken) {
-      if (profile.travel_points < moveCost) {
+      const currentPoints = useSpirit ? (profile.spirituality ?? 0) : (profile.travel_points ?? 0)
+      if (currentPoints < moveCost) {
+        const label = useSpirit ? 'พลังวิญญาณ' : 'แต้มเดินทาง'
         return {
-          error: `แต้มเดินทางไม่พอ (ต้องการ ${moveCost} แต้ม, มี ${profile.travel_points} แต้ม)`,
+          error: `${label}ไม่พอ (ต้องการ ${moveCost} แต้ม, มี ${currentPoints} แต้ม)`,
         }
       }
 
-      // Deduct travel points
+      const update = useSpirit
+        ? { spirituality: Math.max(0, currentPoints - moveCost) }
+        : { travel_points: Math.max(0, currentPoints - moveCost) }
+
       const { error: tpErr } = await supabase
         .from('profiles')
-        .update({ travel_points: profile.travel_points - moveCost })
+        .update(update)
         .eq('id', user.id)
 
       if (tpErr) return { error: tpErr.message }
@@ -299,7 +325,7 @@ export async function moveToken(
   if (updateErr) return { error: updateErr.message }
 
   revalidatePath('/dashboard/maps', 'layout')
-  return { success: true, cost: isAdmin ? 0 : moveCost }
+  return { success: true, cost: isAdmin ? 0 : moveCost, resource: isAdmin ? 'free' : (useSpirit ? 'spirit' : 'travel') }
 }
 
 /* ══════════════════════════════════════════════

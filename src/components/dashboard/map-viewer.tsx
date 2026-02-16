@@ -24,6 +24,9 @@ import SanityLockOverlay from '@/components/sanity-lock-overlay'
 import { createClient } from '@/lib/supabase/client'
 import { getCached, setCache } from '@/lib/client-cache'
 
+const SPIRIT_PATHWAY_ID = '86a03977-a293-493a-9759-0150472e9afe'
+const SPIRIT_SEQUENCE_ID = '7fbdce6d-bc49-450c-983f-8e7afa419756'
+
 /* ══════════════════════════════════════════════
    TYPES
    ══════════════════════════════════════════════ */
@@ -123,6 +126,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const [currentUser, setCurrentUser] = useState<Profile>(getCached(`mv:${mapId}:me`) ?? {} as Profile)
   const [isAdmin, setIsAdmin] = useState<boolean>(getCached(`mv:${mapId}:admin`) ?? false)
   const [allPlayers, setAllPlayers] = useState<AllPlayer[]>(getCached(`mv:${mapId}:players`) ?? [])
+  const [useSpiritForTravel, setUseSpiritForTravel] = useState<boolean>(getCached(`mv:${mapId}:useSpirit`) ?? false)
   const [loaded, setLoaded] = useState(!!getCached(`mv:${mapId}:map`))
 
   // ── Transform state ──
@@ -152,13 +156,20 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         supabase.from('map_locked_zones').select('*').eq('map_id', mapId),
         supabase.from('map_churches').select('*, religions(name_th, logo_url)').eq('map_id', mapId),
         supabase.from('map_rest_points').select('*').eq('map_id', mapId),
-      ]).then(async ([mapRes, profileRes, rawTokensRes, zonesRes, churchesRes, restPointsRes]) => {
+        supabase
+          .from('player_pathways')
+          .select('sequence_id')
+          .eq('player_id', userId)
+          .eq('pathway_id', SPIRIT_PATHWAY_ID)
+          .maybeSingle(),
+      ]).then(async ([mapRes, profileRes, rawTokensRes, zonesRes, churchesRes, restPointsRes, pathwayRes]) => {
         if (mapRes.error || !mapRes.data || !profileRes.data) {
           if (mapRes.error) console.error('Map fetch error:', mapRes.error)
           return
         }
         const mapData = mapRes.data as GameMap
         const profile = profileRes.data as Profile
+        const useSpirit = pathwayRes.data?.sequence_id === SPIRIT_SEQUENCE_ID
         const rawTokens = rawTokensRes.data ?? []
         const zoneData = (zonesRes.data ?? []) as MapLockedZone[]
         const admin = profile.role === 'admin' || profile.role === 'dm'
@@ -195,7 +206,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         }
 
         const ap = (adminPlayers.data ?? []) as AllPlayer[]
-        setMap(mapData); setCurrentUser(profile); setIsAdmin(admin); setAllPlayers(ap)
+        setMap(mapData); setCurrentUser(profile); setIsAdmin(admin); setAllPlayers(ap); setUseSpiritForTravel(useSpirit)
         setTokens(builtTokens); setZones(zoneData)
 
         // Build church data with religion join
@@ -224,6 +235,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
         setCache(`mv:${mapId}:map`, mapData); setCache(`mv:${mapId}:me`, profile)
         setCache(`mv:${mapId}:admin`, admin); setCache(`mv:${mapId}:players`, ap)
+        setCache(`mv:${mapId}:useSpirit`, useSpirit)
         setCache(`mv:${mapId}:tokens`, builtTokens); setCache(`mv:${mapId}:zones`, zoneData)
         setCache(`mv:${mapId}:churches`, builtChurches); setCache(`mv:${mapId}:restpoints`, rpData)
         setLoaded(true)
@@ -272,6 +284,13 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         if (userIdPayload !== currentUserId) return
         setCurrentUser(prev => ({ ...prev, travel_points: Math.max(0, prev.travel_points + delta) }))
       })
+      .on('broadcast', { event: 'profile_spirit_delta' }, ({ payload }) => {
+        const userIdPayload = payload?.userId as string | undefined
+        const delta = payload?.delta as number | undefined
+        if (!userIdPayload || typeof delta !== 'number') return
+        if (userIdPayload !== currentUserId) return
+        setCurrentUser(prev => ({ ...prev, spirituality: Math.max(0, (prev.spirituality ?? 0) + delta) }))
+      })
       .on('broadcast', { event: 'token_added' }, () => {
         fetchMapDataRef.current?.()
       })
@@ -281,6 +300,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'map_rest_points', filter: `map_id=eq.${mapId}` }, fetchMapData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'maps', filter: `id=eq.${mapId}` }, fetchMapData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, fetchProfile)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'player_pathways', filter: `player_id=eq.${userId}` }, fetchMapData)
       .subscribe()
 
     broadcastRef.current = (event, payload) => {
@@ -387,6 +407,10 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   
   // ── Sanity Lock ──
   const isSanityLocked = (currentUser?.sanity ?? 10) === 0
+  const travelLabel = useSpiritForTravel ? 'พลังวิญญาณ' : 'แต้มเดินทาง'
+  const travelPoints = useSpiritForTravel ? (currentUser.spirituality ?? 0) : (currentUser.travel_points ?? 0)
+  const travelMax = useSpiritForTravel ? (currentUser.max_spirituality ?? 0) : (currentUser.max_travel_points ?? 0)
+  const travelPct = travelMax > 0 ? (travelPoints / travelMax) * 100 : 0
 
   // ── Toast helper ──
   function showToast(msg: string, type: 'error' | 'info' = 'info') {
@@ -716,8 +740,8 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         showToast('💤 กำลังนอนหลับ — ไม่สามารถย้ายตัวละครได้', 'error')
         return
       }
-      if (!isAdmin && currentUser.travel_points <= 0) {
-        showToast('🚫 แต้มเดินทางหมดแล้ว!', 'error')
+      if (!isAdmin && travelPoints <= 0) {
+        showToast(`🚫 ${travelLabel}หมดแล้ว!`, 'error')
         return
       }
       // Snapshot all positions for cancel/rollback
@@ -845,6 +869,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
       const tokenOwnerMap = new Map(tokens.map(t => [t.id, t.user_id]))
       let travelDelta = 0
+      let spiritDelta = 0
 
       for (const [tokenId, pos] of tokenMoves) {
         const result = await moveToken(tokenId, pos.x, pos.y)
@@ -857,7 +882,8 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
           broadcastRef.current('token_moved', { id: tokenId, x, y })
           const cost = result?.cost ?? 0
           if (!isAdmin && cost > 0 && tokenOwnerMap.get(tokenId) === currentUserId) {
-            travelDelta -= cost
+            if (useSpiritForTravel) spiritDelta -= cost
+            else travelDelta -= cost
           }
         }
       }
@@ -873,6 +899,10 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       if (travelDelta !== 0) {
         setCurrentUser(prev => ({ ...prev, travel_points: Math.max(0, prev.travel_points + travelDelta) }))
         broadcastRef.current('profile_travel_delta', { userId: currentUserId, delta: travelDelta })
+      }
+      if (spiritDelta !== 0) {
+        setCurrentUser(prev => ({ ...prev, spirituality: Math.max(0, (prev.spirituality ?? 0) + spiritDelta) }))
+        broadcastRef.current('profile_spirit_delta', { userId: currentUserId, delta: spiritDelta })
       }
 
       if (errors.length > 0) {
@@ -895,8 +925,8 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       showToast('💤 กำลังนอนหลับ — ไม่สามารถย้ายตัวละครได้', 'error')
       return
     }
-    if (!isAdmin && isOwnToken && currentUser.travel_points <= 0) {
-      showToast('🚫 แต้มเดินทางหมดแล้ว!', 'error')
+    if (!isAdmin && isOwnToken && travelPoints <= 0) {
+      showToast(`🚫 ${travelLabel}หมดแล้ว!`, 'error')
       return
     }
     // If not already in move mode, snapshot positions first
@@ -967,7 +997,11 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
     /* ── Optimistic update: travel points (own token, non-admin) ── */
     if (!isAdmin && isOwnToken) {
-      setCurrentUser(prev => ({ ...prev, travel_points: Math.max(0, prev.travel_points - 1) }))
+      if (useSpiritForTravel) {
+        setCurrentUser(prev => ({ ...prev, spirituality: Math.max(0, (prev.spirituality ?? 0) - 1) }))
+      } else {
+        setCurrentUser(prev => ({ ...prev, travel_points: Math.max(0, prev.travel_points - 1) }))
+      }
     }
 
     /* ── Track pending move so realtime won't overwrite ── */
@@ -992,7 +1026,11 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         setTokens(prev => prev.map(t => t.id === tokenId ? { ...t, position_x: origX, position_y: origY } : t))
         // Rollback travel points
         if (!isAdmin && isOwnToken) {
-          setCurrentUser(prev => ({ ...prev, travel_points: prev.travel_points + 1 }))
+          if (useSpiritForTravel) {
+            setCurrentUser(prev => ({ ...prev, spirituality: (prev.spirituality ?? 0) + 1 }))
+          } else {
+            setCurrentUser(prev => ({ ...prev, travel_points: prev.travel_points + 1 }))
+          }
         }
         setMoveNotif({ name: tokenName, status: 'error', msg: result.error })
         setTimeout(() => setMoveNotif(null), 3000)
@@ -1001,13 +1039,18 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         const y = Math.max(0, Math.min(100, newY))
         broadcastRef.current('token_moved', { id: tokenId, x, y })
         const cost = result?.cost ?? 0
+        const resource = result?.resource ?? (useSpiritForTravel ? 'spirit' : 'travel')
         if (!isAdmin && isOwnToken && cost > 0) {
-          broadcastRef.current('profile_travel_delta', { userId: currentUserId, delta: -cost })
+          if (resource === 'spirit') {
+            broadcastRef.current('profile_spirit_delta', { userId: currentUserId, delta: -cost })
+          } else if (resource === 'travel') {
+            broadcastRef.current('profile_travel_delta', { userId: currentUserId, delta: -cost })
+          }
         }
         setMoveNotif({
           name: tokenName,
           status: 'success',
-          msg: cost > 0 ? `−${cost} แต้มเดินทาง` : 'สำเร็จ',
+          msg: cost > 0 ? `−${cost} ${resource === 'spirit' ? 'พลังวิญญาณ' : 'แต้มเดินทาง'}` : 'สำเร็จ',
         })
         setTimeout(() => setMoveNotif(null), 2000)
       }
@@ -1477,13 +1520,13 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
           {/* ── Travel Points (visible on ALL screen sizes) ── */}
           <div className="px-4 py-2 lg:py-3 border-b border-gold-400/10">
             <div className="flex justify-between items-center mb-1">
-              <span className="text-gold-400 font-display text-[10px] lg:text-xs uppercase tracking-wider">แต้มเดินทาง</span>
-              <span className="tabular-nums font-bold text-nouveau-cream text-xs lg:text-sm">{currentUser.travel_points}/{currentUser.max_travel_points}</span>
+              <span className="text-gold-400 font-display text-[10px] lg:text-xs uppercase tracking-wider">{travelLabel}</span>
+              <span className="tabular-nums font-bold text-nouveau-cream text-xs lg:text-sm">{travelPoints}/{travelMax}</span>
             </div>
             <div className="w-full h-1.5 lg:h-2 bg-victorian-800 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-gold-400 to-gold-300 transition-all duration-300"
-                style={{ width: `${(currentUser.travel_points / currentUser.max_travel_points) * 100}%` }}
+                style={{ width: `${travelPct}%` }}
               />
             </div>
           </div>
@@ -1541,7 +1584,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                     {isSleepPending ? '💤 กำลังหลับ — ย้ายแมพไม่ได้' : myToken ? `ย้ายมาแมพนี้ (−3 แต้ม)` : 'เข้าร่วมแมพนี้'}
                   </button>
                   {myToken && (
-                    <p className="text-victorian-500 text-[10px] lg:text-xs text-center mt-1">แต้มเดินทาง: {currentUser.travel_points}</p>
+                    <p className="text-victorian-500 text-[10px] lg:text-xs text-center mt-1">{travelLabel}: {travelPoints}</p>
                   )}
                 </>
               )}
@@ -1609,14 +1652,14 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                 <>
                   <button
                     onClick={toggleMoveMode}
-                    disabled={!isAdmin && currentUser.travel_points <= 0}
+                    disabled={!isAdmin && travelPoints <= 0}
                     className="w-full flex items-center justify-center gap-2 py-2.5 lg:py-3 px-4 rounded-sm font-display text-sm lg:text-base uppercase tracking-wider transition-all bg-gradient-to-r from-amber-500 to-yellow-400 text-amber-900 hover:from-amber-400 hover:to-yellow-300 shadow-md hover:shadow-lg hover:shadow-amber-400/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Move className="w-5 h-5" />
                     ✨ ย้ายตำแหน่ง
                   </button>
-                  {!isAdmin && currentUser.travel_points <= 0 && (
-                    <p className="text-red-500 text-[10px] lg:text-xs text-center mt-1 font-semibold">🚫 แต้มเดินทางหมด</p>
+                  {!isAdmin && travelPoints <= 0 && (
+                    <p className="text-red-500 text-[10px] lg:text-xs text-center mt-1 font-semibold">🚫 {travelLabel}หมด</p>
                   )}
                 </>
               )}
@@ -1686,7 +1729,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
             </p>
             <div className="flex items-start gap-2 p-2 bg-amber-900/20 border border-amber-400/20 rounded-lg">
               <span className="text-lg">👆</span>
-              <span className="text-amber-200 text-xs lg:text-sm font-medium">⚠️ ระบบหักแต้มเดินทางเมื่อย้ายตัวละคร: ย้ายในแมพเดียว 1 แต้ม, ย้ายข้ามแมพ 3 แต้ม</span>
+              <span className="text-amber-200 text-xs lg:text-sm font-medium">⚠️ ระบบหัก{travelLabel}เมื่อย้ายตัวละคร: ย้ายในแมพเดียว 1 แต้ม, ย้ายข้ามแมพ 3 แต้ม</span>
             </div>
             <div className="flex items-start gap-2 p-2 bg-blue-900/20 border border-blue-400/20 rounded-lg">
               <span className="text-lg">✋</span>
