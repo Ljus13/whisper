@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useTransition, useCallback } from 'react'
+import { useState, useEffect, useTransition, useCallback, useRef } from 'react'
 import {
   ArrowLeft, Moon, ScrollText, Swords, Target, Shield, Plus, Copy,
   X, ExternalLink, ChevronLeft, ChevronRight, Clock, CheckCircle,
@@ -269,6 +269,15 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   const [isPending, startTransition] = useTransition()
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>('actions')
+  const [loadTimes, setLoadTimes] = useState<Partial<Record<TabKey, number>>>({})
+  const loadedRef = useRef<Record<TabKey, boolean>>({
+    actions: false,
+    quests: false,
+    sleep: false,
+    prayer: false,
+    punishments: false,
+    roleplay: false,
+  })
 
   // ─── Sleep state ───
   const [showSleepForm, setShowSleepForm] = useState(false)
@@ -482,6 +491,12 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
     setGenQuestMaxRepeats('')
     setGenQuestNoExpiry(true)
     setGenQuestUnlimitedRepeats(true)
+    if (isAdmin && mapOptions.length === 0) {
+      getMapsForQuestDropdown().then(m => setMapOptions(m))
+    }
+    if (isAdmin && npcOptions.length === 0) {
+      getNpcsForQuestDropdown().then(n => setNpcOptions(n))
+    }
     setShowGenQuest(true)
   }
 
@@ -543,6 +558,12 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
 
   function openCreatePunishmentModal() {
     resetPunishmentForm()
+    if (isAdmin && playerOptions.length === 0) {
+      getPlayersForDropdown().then(p => setPlayerOptions(p))
+    }
+    if (isAdmin && taskOptions.length === 0) {
+      getAllActionAndQuestCodes().then(r => setTaskOptions([...r.actions, ...r.quests]))
+    }
     setShowCreatePunishment(true)
   }
 
@@ -657,28 +678,39 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
     setPunLogLoading(false)
   }, [])
 
-  // ─── Init ───
+  const loadTab = useCallback(async (key: TabKey) => {
+    if (loadedRef.current[key]) return
+    const start = performance.now()
+    if (key === 'actions') {
+      await Promise.all([fetchActionCodes(1), fetchActionSubs(1)])
+    } else if (key === 'quests') {
+      await Promise.all([fetchQuestCodes(1), fetchQuestSubs(1)])
+    } else if (key === 'sleep') {
+      await fetchSleepLogs(1)
+    } else if (key === 'prayer') {
+      await fetchPrayerLogs(1)
+    } else if (key === 'punishments') {
+      await Promise.all([fetchPunishments(1), fetchPunishmentLogs(1)])
+    } else if (key === 'roleplay') {
+      await fetchRoleplaySubs(1)
+    }
+    loadedRef.current[key] = true
+    setLoadTimes(prev => ({ ...prev, [key]: Math.round(performance.now() - start) }))
+  }, [fetchActionCodes, fetchActionSubs, fetchQuestCodes, fetchQuestSubs, fetchSleepLogs, fetchPrayerLogs, fetchPunishments, fetchPunishmentLogs, fetchRoleplaySubs])
+
   useEffect(() => {
     getTodaySleepStatus().then(r => { setSleepSubmitted(r.submitted); setSleepStatus(r.status || null) })
     if (isAdmin) {
       autoApproveExpiredRequests()
       autoApplyExpiredPunishments()
-      getMapsForQuestDropdown().then(m => setMapOptions(m))
-      getNpcsForQuestDropdown().then(n => setNpcOptions(n))
-      getPlayersForDropdown().then(p => setPlayerOptions(p))
-      getAllActionAndQuestCodes().then(r => setTaskOptions([...r.actions, ...r.quests]))
     }
-    fetchActionCodes(1)
-    fetchQuestCodes(1)
-    fetchActionSubs(1)
-    fetchQuestSubs(1)
-    fetchSleepLogs(1)
-    fetchRoleplaySubs(1)
-    fetchPrayerLogs(1)
-    fetchPunishments(1)
-    fetchPunishmentLogs(1)
     fetchDigestProgress()
-  }, [isAdmin, fetchActionCodes, fetchQuestCodes, fetchActionSubs, fetchQuestSubs, fetchSleepLogs, fetchRoleplaySubs, fetchPrayerLogs, fetchPunishments, fetchPunishmentLogs, fetchDigestProgress])
+    loadTab('actions')
+  }, [isAdmin, fetchDigestProgress, loadTab])
+
+  useEffect(() => {
+    loadTab(activeTab)
+  }, [activeTab, loadTab])
 
   // ─── Handlers ───
   function handleSleepSubmit() {
@@ -1066,6 +1098,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
     { key: 'punishments', label: 'เหตุการณ์', icon: <Skull className="w-4 h-4" /> },
     { key: 'roleplay', label: 'สวมบทบาท', icon: <Sparkles className="w-4 h-4" /> },
   ]
+  const activeLoadTime = loadTimes[activeTab]
 
   return (
     <div className="min-h-screen bg-victorian-950 text-victorian-100">
@@ -1269,6 +1302,9 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
               {t.icon} {t.label}
             </button>
           ))}
+        </div>
+        <div className="text-victorian-500 text-xs">
+          เวลาโหลดแท็บ: {typeof activeLoadTime === 'number' ? `${activeLoadTime} ms` : 'กำลังวัดเวลา...'}
         </div>
 
         {/* ═══════════════════════════════════════ */}

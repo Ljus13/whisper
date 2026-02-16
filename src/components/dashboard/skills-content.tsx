@@ -10,7 +10,7 @@ import {
   createSkillType, updateSkillType, deleteSkillType,
   createSkillPathway, deleteSkillPathway, updateSkillPathway,
   createSkillSequence, deleteSkillSequence, updateSkillSequence,
-  createSkill, deleteSkill,
+  createSkill, updateSkill, deleteSkill,
   castSkill
 } from '@/app/actions/skills'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
@@ -46,6 +46,11 @@ function AdminPanel({
   const [editTypeId, setEditTypeId] = useState<string | null>(null)
   const [editPathwayId, setEditPathwayId] = useState<string | null>(null)
   const [editSequenceId, setEditSequenceId] = useState<string | null>(null)
+  const [editSkillId, setEditSkillId] = useState<string | null>(null)
+  const [editSkillName, setEditSkillName] = useState('')
+  const [editSkillDesc, setEditSkillDesc] = useState('')
+  const [editSkillCost, setEditSkillCost] = useState('0')
+  const [editSkillSequenceId, setEditSkillSequenceId] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   function handleAction(action: () => Promise<{ error?: string; success?: boolean }>) {
@@ -371,21 +376,73 @@ function AdminPanel({
                               {pathSkills.map(skill => {
                                 const seq = sequences.find(s => s.id === skill.sequence_id)
                                 return (
-                                  <div key={skill.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-victorian-800/20 text-sm">
-                                    <div className="flex items-center gap-2">
-                                      <Sparkles className="w-3.5 h-3.5 text-gold-400" />
-                                      <span className="text-victorian-200">{skill.name}</span>
-                                      {seq && <span className="text-victorian-500 text-xs">(ลำดับ {seq.seq_number})</span>}
-                                      <span className="text-blue-400/60 text-xs flex items-center gap-0.5">
-                                        <Zap className="w-3 h-3" />{skill.spirit_cost}
-                                      </span>
+                                  <div key={skill.id} className="py-2 px-2 rounded hover:bg-victorian-800/20 text-sm">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="flex items-start gap-2">
+                                        <Sparkles className="w-3.5 h-3.5 text-gold-400 mt-0.5" />
+                                        <div>
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <span className="text-victorian-200">{skill.name}</span>
+                                            {seq && <span className="text-victorian-500 text-xs">(ลำดับ {seq.seq_number})</span>}
+                                            <span className="text-blue-400/60 text-xs flex items-center gap-0.5">
+                                              <Zap className="w-3 h-3" />{skill.spirit_cost}
+                                            </span>
+                                          </div>
+                                          <div className="text-victorian-400 text-xs mt-1 whitespace-pre-line">
+                                            {skill.description || '—'}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          onClick={() => {
+                                            setEditSkillId(skill.id)
+                                            setEditSkillName(skill.name)
+                                            setEditSkillDesc(skill.description || '')
+                                            setEditSkillCost(String(skill.spirit_cost ?? 0))
+                                            setEditSkillSequenceId(skill.sequence_id || '')
+                                          }}
+                                          className="p-1 text-gold-400/50 hover:text-gold-400 rounded transition-colors"
+                                          title="แก้ไขสกิล"
+                                        >
+                                          <Pencil className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleAction(() => deleteSkill(skill.id))}
+                                          className="p-1 text-red-400/40 hover:text-red-400 rounded transition-colors"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      </div>
                                     </div>
-                                    <button
-                                      onClick={() => handleAction(() => deleteSkill(skill.id))}
-                                      className="p-1 text-red-400/40 hover:text-red-400 rounded transition-colors"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
+                                    {editSkillId === skill.id && (
+                                      <form
+                                        className="mt-3 p-3 bg-victorian-900/40 border border-gold-400/10 rounded space-y-2"
+                                        action={(fd) => { handleAction(() => updateSkill(skill.id, fd)); setEditSkillId(null) }}
+                                      >
+                                        <input name="name" value={editSkillName} onChange={e => setEditSkillName(e.target.value)} required className="input-victorian w-full text-sm" />
+                                        <textarea name="description" value={editSkillDesc} onChange={e => setEditSkillDesc(e.target.value)} className="input-victorian w-full text-sm" rows={2} />
+                                        <div className="flex gap-2">
+                                          <div className="flex-1">
+                                            <label className="text-victorian-400 text-xs block mb-1">ต้นทุนพลังวิญญาณ</label>
+                                            <input name="spirit_cost" type="number" min="0" value={editSkillCost} onChange={e => setEditSkillCost(e.target.value)} className="input-victorian w-full text-sm" />
+                                          </div>
+                                          <div className="flex-1">
+                                            <label className="text-victorian-400 text-xs block mb-1">ลำดับที่จำเป็น</label>
+                                            <select name="sequence_id" value={editSkillSequenceId} onChange={e => setEditSkillSequenceId(e.target.value)} required className="input-victorian w-full text-sm">
+                                              <option value="">เลือกลำดับ</option>
+                                              {pathSeqs.map(seq => (
+                                                <option key={seq.id} value={seq.id}>#{seq.seq_number} {seq.name}</option>
+                                              ))}
+                                            </select>
+                                          </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                          <button type="submit" disabled={isPending} className="btn-gold px-3 py-1 text-xs">บันทึก</button>
+                                          <button type="button" onClick={() => setEditSkillId(null)} className="btn-victorian px-3 py-1 text-xs">ยกเลิก</button>
+                                        </div>
+                                      </form>
+                                    )}
                                   </div>
                                 )
                               })}

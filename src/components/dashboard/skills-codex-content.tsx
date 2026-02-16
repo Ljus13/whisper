@@ -230,9 +230,9 @@ export default function SkillsCodexContent({ types, pathways, sequences, skills 
                           <div className="absolute inset-0 bg-gradient-to-r from-victorian-950/90 via-victorian-900/70 to-victorian-950/90" />
                           <div className="relative flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 rounded-full border border-gold-400/20 bg-victorian-900/80 overflow-hidden flex items-center justify-center">
+                              <div className="w-12 h-12 rounded-full aspect-square shrink-0 border border-gold-400/20 bg-victorian-900/80 overflow-hidden flex items-center justify-center">
                                 {pathway.logo_url ? (
-                                  <img src={pathway.logo_url} alt="" className="w-full h-full object-cover" />
+                                  <img src={pathway.logo_url} alt="" className="w-full h-full object-cover rounded-full" />
                                 ) : (
                                   <span className="text-gold-300 text-sm">⛧</span>
                                 )}
@@ -255,43 +255,71 @@ export default function SkillsCodexContent({ types, pathways, sequences, skills 
                           </div>
                         </div>
                         {isExpanded && (
-                          <div className="p-4 md:p-5 overflow-x-auto">
-                            <table className="w-full text-base">
-                              <thead>
-                                <tr className="text-victorian-500 text-left border-b border-gold-400/10">
-                                  <th className="pb-2 pr-3">สกิล</th>
-                                  <th className="pb-2 pr-3">ลำดับ</th>
-                                  <th className="pb-2 pr-3">พลังวิญญาณ</th>
-                                  <th className="pb-2">คำอธิบาย</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {block.sequenceGroups.length === 0 && (
-                                  <tr>
-                                    <td colSpan={4} className="py-3 text-victorian-500 text-sm">ยังไม่มีสกิลในเส้นทางนี้</td>
+                          <div className="p-4 md:p-5">
+                            <div className="md:hidden space-y-4">
+                              {block.sequenceGroups.length === 0 && (
+                                <div className="text-victorian-500 text-sm">ยังไม่มีสกิลในเส้นทางนี้</div>
+                              )}
+                              {block.sequenceGroups.map(group => (
+                                <Fragment key={group.sequenceId}>
+                                  <div className="text-gold-200 text-sm font-semibold bg-victorian-900/60 rounded px-3 py-2">
+                                    {group.seq ? `ลำดับ #${group.seq.seq_number} ${group.seq.name}` : 'ลำดับไม่ระบุ'}
+                                  </div>
+                                  {group.skills.map(skill => (
+                                    <div key={skill.id} className="border border-gold-400/10 rounded-md p-3 bg-victorian-900/30">
+                                      <div className="flex items-baseline justify-between gap-3">
+                                        <div className="text-victorian-100 font-semibold">{skill.name}</div>
+                                        <div className="text-amber-200 text-sm">{skill.spirit_cost ?? 0}</div>
+                                      </div>
+                                      <div className="text-victorian-400 text-xs mt-1">
+                                        {group.seq ? `#${group.seq.seq_number} ${group.seq.name}` : '—'}
+                                      </div>
+                                      <div className="text-victorian-300 text-sm mt-2 whitespace-pre-line leading-6">
+                                        {skill.description || '—'}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </Fragment>
+                              ))}
+                            </div>
+                            <div className="hidden md:block overflow-x-auto">
+                              <table className="w-full text-base">
+                                <thead>
+                                  <tr className="text-victorian-500 text-left border-b border-gold-400/10">
+                                    <th className="pb-2 pr-3">สกิล</th>
+                                    <th className="pb-2 pr-3">ลำดับ</th>
+                                    <th className="pb-2 pr-3">พลังวิญญาณ</th>
+                                    <th className="pb-2">คำอธิบาย</th>
                                   </tr>
-                                )}
-                                {block.sequenceGroups.map(group => (
-                                  <Fragment key={group.sequenceId}>
-                                    <tr className="bg-victorian-900/60">
-                                      <td colSpan={4} className="py-3 px-3 text-gold-200 text-sm font-semibold">
-                                        {group.seq ? `ลำดับ #${group.seq.seq_number} ${group.seq.name}` : 'ลำดับไม่ระบุ'}
-                                      </td>
+                                </thead>
+                                <tbody>
+                                  {block.sequenceGroups.length === 0 && (
+                                    <tr>
+                                      <td colSpan={4} className="py-3 text-victorian-500 text-sm">ยังไม่มีสกิลในเส้นทางนี้</td>
                                     </tr>
-                                    {group.skills.map(skill => (
-                                      <tr key={skill.id} className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
-                                        <td className="py-3 pr-3 text-victorian-100 text-sm">{skill.name}</td>
-                                        <td className="py-3 pr-3 text-victorian-400 text-sm">
-                                          {group.seq ? `#${group.seq.seq_number} ${group.seq.name}` : '—'}
+                                  )}
+                                  {block.sequenceGroups.map(group => (
+                                    <Fragment key={group.sequenceId}>
+                                      <tr className="bg-victorian-900/60">
+                                        <td colSpan={4} className="py-3 px-3 text-gold-200 text-sm font-semibold">
+                                          {group.seq ? `ลำดับ #${group.seq.seq_number} ${group.seq.name}` : 'ลำดับไม่ระบุ'}
                                         </td>
-                                        <td className="py-3 pr-3 text-amber-200 text-sm">{skill.spirit_cost ?? 0}</td>
-                                        <td className="py-3 text-victorian-300 text-sm">{skill.description || '—'}</td>
                                       </tr>
-                                    ))}
-                                  </Fragment>
-                                ))}
-                              </tbody>
-                            </table>
+                                      {group.skills.map(skill => (
+                                        <tr key={skill.id} className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
+                                          <td className="py-3 pr-3 text-victorian-100 text-sm">{skill.name}</td>
+                                          <td className="py-3 pr-3 text-victorian-400 text-sm">
+                                            {group.seq ? `#${group.seq.seq_number} ${group.seq.name}` : '—'}
+                                          </td>
+                                          <td className="py-3 pr-3 text-amber-200 text-sm">{skill.spirit_cost ?? 0}</td>
+                                          <td className="py-3 text-victorian-300 text-sm">{skill.description || '—'}</td>
+                                        </tr>
+                                      ))}
+                                    </Fragment>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
                         )}
                       </div>

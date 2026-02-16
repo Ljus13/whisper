@@ -520,20 +520,12 @@ export async function getActionSubmissions(page: number = 1) {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
   const offset = (page - 1) * PAGE_SIZE
-
-  // Use foreign key joins to get all related data in one query
-  const selectFields = `
-    *,
-    player:player_id(id, display_name, avatar_url),
-    reviewer:reviewed_by(id, display_name, avatar_url),
-    action_code:action_code_id(id, name, code, reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality)
-  `
-
-  let countQ = supabase.from('action_submissions').select('*', { count: 'exact', head: true })
+  let countQ = supabase.from('action_submissions').select('id', { count: 'exact', head: true })
   if (!isAdmin) countQ = countQ.eq('player_id', user.id)
   const { count } = await countQ
 
-  let dataQ = supabase.from('action_submissions').select(selectFields)
+  let dataQ = supabase.from('action_submissions')
+    .select('id, player_id, action_code_id, evidence_urls, status, rejection_reason, reviewed_by, reviewed_at, created_at')
     .order('created_at', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1)
   if (!isAdmin) dataQ = dataQ.eq('player_id', user.id)
@@ -542,30 +534,29 @@ export async function getActionSubmissions(page: number = 1) {
   if (error) return { submissions: [], total: 0 }
   const rows = data || []
 
-  const playerIds = [...new Set(rows.map(r => r.player_id))]
-  const { data: ppData } = playerIds.length > 0
-    ? await supabase
-      .from('player_pathways')
-      .select('player_id, sequence:skill_sequences(id, name, seq_number)')
-      .in('player_id', playerIds)
+  const playerIds = [...new Set(rows.map(r => r.player_id).filter(Boolean))]
+  const reviewerIds = [...new Set(rows.map(r => r.reviewed_by).filter(Boolean))]
+  const actionCodeIds = [...new Set(rows.map(r => r.action_code_id).filter(Boolean))]
+  const profileIds = [...new Set([...playerIds, ...reviewerIds])]
+
+  const { data: profiles } = profileIds.length > 0
+    ? await supabase.from('profiles').select('id, display_name, avatar_url').in('id', profileIds)
     : { data: [] }
-  const playerSequenceMap = new Map<string, { seq_number: number; name: string }[]>()
-  for (const row of (ppData || []) as Array<{ player_id: string; sequence: { seq_number: number; name: string }[] | { seq_number: number; name: string } | null }>) {
-    const rawSequence = row.sequence
-    const sequenceList = Array.isArray(rawSequence) ? rawSequence : rawSequence ? [rawSequence] : []
-    if (sequenceList.length === 0) continue
-    const list = playerSequenceMap.get(row.player_id) || []
-    for (const seq of sequenceList) {
-      list.push({ seq_number: seq.seq_number, name: seq.name })
-    }
-    playerSequenceMap.set(row.player_id, list)
-  }
+  const { data: actionCodes } = actionCodeIds.length > 0
+    ? await supabase
+      .from('action_codes')
+      .select('id, name, code, reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality')
+      .in('id', actionCodeIds)
+    : { data: [] }
+
+  const profileMap = new Map((profiles || []).map(p => [p.id, p]))
+  const actionCodeMap = new Map((actionCodes || []).map(c => [c.id, c]))
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const submissions = rows.map((r: any) => {
-    const player = r.player
-    const reviewer = r.reviewer
-    const code = r.action_code
+    const player = profileMap.get(r.player_id)
+    const reviewer = r.reviewed_by ? profileMap.get(r.reviewed_by) : null
+    const code = actionCodeMap.get(r.action_code_id)
     return {
       id: r.id,
       player_id: r.player_id,
@@ -828,20 +819,12 @@ export async function getQuestSubmissions(page: number = 1) {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
   const offset = (page - 1) * PAGE_SIZE
-
-  // Use foreign key joins to get all related data in one query
-  const selectFields = `
-    *,
-    player:player_id(id, display_name, avatar_url),
-    reviewer:reviewed_by(id, display_name, avatar_url),
-    quest_code:quest_code_id(id, name, code)
-  `
-
-  let countQ = supabase.from('quest_submissions').select('*', { count: 'exact', head: true })
+  let countQ = supabase.from('quest_submissions').select('id', { count: 'exact', head: true })
   if (!isAdmin) countQ = countQ.eq('player_id', user.id)
   const { count } = await countQ
 
-  let dataQ = supabase.from('quest_submissions').select(selectFields)
+  let dataQ = supabase.from('quest_submissions')
+    .select('id, player_id, quest_code_id, evidence_urls, status, rejection_reason, reviewed_by, reviewed_at, created_at')
     .order('created_at', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1)
   if (!isAdmin) dataQ = dataQ.eq('player_id', user.id)
@@ -850,30 +833,26 @@ export async function getQuestSubmissions(page: number = 1) {
   if (error) return { submissions: [], total: 0 }
   const rows = data || []
 
-  const playerIds = [...new Set(rows.map(r => r.player_id))]
-  const { data: ppData } = playerIds.length > 0
-    ? await supabase
-      .from('player_pathways')
-      .select('player_id, sequence:skill_sequences(id, name, seq_number)')
-      .in('player_id', playerIds)
+  const playerIds = [...new Set(rows.map(r => r.player_id).filter(Boolean))]
+  const reviewerIds = [...new Set(rows.map(r => r.reviewed_by).filter(Boolean))]
+  const questCodeIds = [...new Set(rows.map(r => r.quest_code_id).filter(Boolean))]
+  const profileIds = [...new Set([...playerIds, ...reviewerIds])]
+
+  const { data: profiles } = profileIds.length > 0
+    ? await supabase.from('profiles').select('id, display_name, avatar_url').in('id', profileIds)
     : { data: [] }
-  const playerSequenceMap = new Map<string, { seq_number: number; name: string }[]>()
-  for (const row of (ppData || []) as Array<{ player_id: string; sequence: { seq_number: number; name: string }[] | { seq_number: number; name: string } | null }>) {
-    const rawSequence = row.sequence
-    const sequenceList = Array.isArray(rawSequence) ? rawSequence : rawSequence ? [rawSequence] : []
-    if (sequenceList.length === 0) continue
-    const list = playerSequenceMap.get(row.player_id) || []
-    for (const seq of sequenceList) {
-      list.push({ seq_number: seq.seq_number, name: seq.name })
-    }
-    playerSequenceMap.set(row.player_id, list)
-  }
+  const { data: questCodes } = questCodeIds.length > 0
+    ? await supabase.from('quest_codes').select('id, name, code').in('id', questCodeIds)
+    : { data: [] }
+
+  const profileMap = new Map((profiles || []).map(p => [p.id, p]))
+  const questCodeMap = new Map((questCodes || []).map(c => [c.id, c]))
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const submissions = rows.map((r: any) => {
-    const player = r.player
-    const reviewer = r.reviewer
-    const code = r.quest_code
+    const player = profileMap.get(r.player_id)
+    const reviewer = r.reviewed_by ? profileMap.get(r.reviewed_by) : null
+    const code = questCodeMap.get(r.quest_code_id)
     return {
       id: r.id,
       player_id: r.player_id,
@@ -975,21 +954,12 @@ export async function getRoleplaySubmissions(page: number = 1) {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
   const offset = (page - 1) * PAGE_SIZE
-
-  const selectFields = `
-    *,
-    player:player_id(id, display_name, avatar_url),
-    links:roleplay_links(
-      id, url, digest_level, digest_percent, digest_note, reviewed_at,
-      reviewer:reviewed_by(id, display_name, avatar_url)
-    )
-  `
-
-  let countQ = supabase.from('roleplay_submissions').select('*', { count: 'exact', head: true })
+  let countQ = supabase.from('roleplay_submissions').select('id', { count: 'exact', head: true })
   if (!isAdmin) countQ = countQ.eq('player_id', user.id)
   const { count } = await countQ
 
-  let dataQ = supabase.from('roleplay_submissions').select(selectFields)
+  let dataQ = supabase.from('roleplay_submissions')
+    .select('id, player_id, created_at')
     .order('created_at', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1)
   if (!isAdmin) dataQ = dataQ.eq('player_id', user.id)
@@ -998,7 +968,7 @@ export async function getRoleplaySubmissions(page: number = 1) {
   if (error) return { submissions: [], total: 0 }
   const rows = data || []
 
-  const playerIds = [...new Set(rows.map(r => r.player_id))]
+  const playerIds = [...new Set(rows.map(r => r.player_id).filter(Boolean))]
   const { data: ppData } = playerIds.length > 0
     ? await supabase
       .from('player_pathways')
@@ -1017,18 +987,41 @@ export async function getRoleplaySubmissions(page: number = 1) {
     playerSequenceMap.set(row.player_id, list)
   }
 
+  const submissionIds = rows.map(r => r.id)
+  const { data: linkRows } = submissionIds.length > 0
+    ? await supabase
+      .from('roleplay_links')
+      .select('id, submission_id, url, digest_level, digest_percent, digest_note, reviewed_at, reviewed_by')
+      .in('submission_id', submissionIds)
+    : { data: [] }
+
+  const reviewerIds = [...new Set((linkRows || []).map(l => l.reviewed_by).filter(Boolean))]
+  const profileIds = [...new Set([...playerIds, ...reviewerIds])]
+  const { data: profiles } = profileIds.length > 0
+    ? await supabase.from('profiles').select('id, display_name, avatar_url').in('id', profileIds)
+    : { data: [] }
+  const profileMap = new Map((profiles || []).map(p => [p.id, p]))
+
+  const linksBySubmission = new Map<string, Array<{ id: string; url: string; digest_level: string; digest_percent: number; digest_note: string | null; reviewed_at: string | null; reviewed_by_name: string | null }>>()
+  for (const link of (linkRows || []) as Array<{ id: string; submission_id: string; url: string; digest_level: string; digest_percent: number | null; digest_note: string | null; reviewed_at: string | null; reviewed_by: string | null }>) {
+    const reviewer = link.reviewed_by ? profileMap.get(link.reviewed_by) : null
+    const list = linksBySubmission.get(link.submission_id) || []
+    list.push({
+      id: link.id,
+      url: link.url,
+      digest_level: link.digest_level,
+      digest_percent: link.digest_percent || 0,
+      digest_note: link.digest_note || null,
+      reviewed_by_name: reviewer?.display_name || null,
+      reviewed_at: link.reviewed_at,
+    })
+    linksBySubmission.set(link.submission_id, list)
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const submissions = rows.map((r: any) => {
-    const player = r.player
-    const links = (r.links || []).map((l: any) => ({
-      id: l.id,
-      url: l.url,
-      digest_level: l.digest_level,
-      digest_percent: l.digest_percent || 0,
-      digest_note: l.digest_note || null,
-      reviewed_by_name: l.reviewer?.display_name || null,
-      reviewed_at: l.reviewed_at,
-    }))
+    const player = profileMap.get(r.player_id)
+    const links = linksBySubmission.get(r.id) || []
     return {
       id: r.id,
       player_id: r.player_id,

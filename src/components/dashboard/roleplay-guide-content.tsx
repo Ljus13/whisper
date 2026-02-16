@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import type { SkillPathway, SkillSequence, SkillType } from '@/lib/types/database'
-import { Search, ScrollText, ChevronDown, ChevronRight } from 'lucide-react'
+import { Search, ScrollText, ChevronDown, ChevronRight, Copy, CheckCircle } from 'lucide-react'
 
 interface RoleplayGuideContentProps {
   types: SkillType[]
@@ -14,6 +14,28 @@ export default function RoleplayGuideContent({ types, pathways, sequences }: Rol
   const [query, setQuery] = useState('')
   const [openType, setOpenType] = useState<string | null>(null)
   const [openPathway, setOpenPathway] = useState<string | null>(null)
+  const [promptCopied, setPromptCopied] = useState(false)
+  const [keywordCopiedId, setKeywordCopiedId] = useState<string | null>(null)
+  const promptText = `Role: Roleplay Content Auditor
+Objective: ประเมินความสอดคล้องระหว่างเนื้อหาและคีย์เวิร์ด พร้อมสรุปผลตามเกณฑ์ของกิจกรรม
+
+Input:
+Target Keywords: [ใส่คีย์เวิร์ดที่นี่]
+Roleplay Text: [ใส่เนื้อหาที่นี่]
+
+Instructions:
+Alignment Scoring: คำนวณคะแนน 0-100% โดยอิงจากความสอดคล้องกับคีย์เวิร์ด
+
+Classification: จัดกลุ่มผลลัพธ์ตามเกณฑ์:
+0-25%: ไม่สอดคล้อง
+26-50%: สอดคล้องน้อย
+51-75%: ปานกลาง
+76-100%: สอดคล้องสูง
+
+Output Format:
+คะแนนสุทธิ: [X]%
+ระดับความสอดคล้อง: [ระบุระดับตามเกณฑ์ด้านบน]
+สรุปวิเคราะห์: (อธิบายว่าทำไมถึงได้ระดับนี้ และจุดไหนที่ตรง/ไม่ตรงกับคีย์เวิร์ด)`
 
   const normalizedQuery = query.trim().toLowerCase()
   const hasQuery = normalizedQuery.length > 0
@@ -80,6 +102,34 @@ export default function RoleplayGuideContent({ types, pathways, sequences }: Rol
           </div>
         </div>
 
+        <div className="rounded-xl border border-gold-400/20 bg-victorian-900/60 p-4 md:p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <div className="text-gold-300 font-semibold">Prompt แนะนำสำหรับ Gemini</div>
+              <div className="text-victorian-400 text-sm mt-1">ทีมงานใช้เป็นมาตรฐานในการประเมินความสอดคล้อง</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(promptText)
+                setPromptCopied(true)
+                setTimeout(() => setPromptCopied(false), 2000)
+              }}
+              className="btn-victorian px-4 py-2 text-sm inline-flex items-center gap-2 cursor-pointer"
+              aria-label="คัดลอก Prompt"
+            >
+              {promptCopied ? <CheckCircle className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+              {promptCopied ? 'คัดลอกแล้ว' : 'คัดลอก Prompt'}
+            </button>
+          </div>
+          <pre className="mt-4 text-sm md:text-base whitespace-pre-wrap leading-relaxed text-victorian-100 bg-victorian-950/70 border border-gold-400/10 rounded-lg p-4">
+            {promptText}
+          </pre>
+          <div className="mt-3 text-victorian-400 text-sm">
+            เกณฑ์สุดท้ายให้ทีมงานมนุษย์พิจารณา อย่าให้การประเมินอัตโนมัติตัดสินแทนทั้งหมด
+          </div>
+        </div>
+
         <div className="relative w-full md:max-w-lg">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-victorian-500" />
           <input
@@ -141,8 +191,26 @@ export default function RoleplayGuideContent({ types, pathways, sequences }: Rol
                               {pathBlock.sequences.map(seq => (
                                 <div key={seq.id} className="py-2 border-b border-victorian-800/40 last:border-b-0">
                                   <div className="text-amber-200 text-sm font-semibold">ลำดับ #{seq.seq_number} {seq.name}</div>
-                                  <div className="text-victorian-300 text-sm mt-1">
-                                    คีย์เวิร์ด/คอนเซปต์การสวมบทบาท: {seq.roleplay_keywords || '—'}
+                                  <div className="mt-2 rounded-lg border border-gold-400/10 bg-victorian-900/60 p-3">
+                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                                      <div className="text-victorian-400 text-xs">คีย์เวิร์ด/คอนเซปต์การสวมบทบาท</div>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(seq.roleplay_keywords || '')
+                                          setKeywordCopiedId(seq.id)
+                                          setTimeout(() => setKeywordCopiedId(null), 2000)
+                                        }}
+                                        className="inline-flex items-center gap-2 text-xs text-gold-300 hover:text-gold-200 cursor-pointer"
+                                        aria-label="คัดลอกคีย์เวิร์ด"
+                                      >
+                                        {keywordCopiedId === seq.id ? <CheckCircle className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                                        {keywordCopiedId === seq.id ? 'คัดลอกแล้ว' : 'คัดลอกคีย์เวิร์ด'}
+                                      </button>
+                                    </div>
+                                    <div className="mt-2 text-victorian-100 text-sm md:text-base leading-relaxed whitespace-pre-wrap">
+                                      {seq.roleplay_keywords || '—'}
+                                    </div>
                                   </div>
                                 </div>
                               ))}
