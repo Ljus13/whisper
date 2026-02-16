@@ -23,9 +23,7 @@ import { useState, useRef, useCallback, useEffect, useTransition } from 'react'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
 import { createClient } from '@/lib/supabase/client'
 import { getCached, setCache } from '@/lib/client-cache'
-
-const SPIRIT_PATHWAY_NAME = 'ลูกศิษย์'
-const SPIRIT_SEQ_NUMBER = 5
+import { DEFAULT_TRAVEL_RULE, normalizePathwayRows, resolveTravelRule, type TravelRule } from '@/lib/travel-rules'
 
 /* ══════════════════════════════════════════════
    TYPES
@@ -126,7 +124,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const [currentUser, setCurrentUser] = useState<Profile>(getCached(`mv:${mapId}:me`) ?? {} as Profile)
   const [isAdmin, setIsAdmin] = useState<boolean>(getCached(`mv:${mapId}:admin`) ?? false)
   const [allPlayers, setAllPlayers] = useState<AllPlayer[]>(getCached(`mv:${mapId}:players`) ?? [])
-  const [useSpiritForTravel, setUseSpiritForTravel] = useState<boolean>(getCached(`mv:${mapId}:useSpirit`) ?? false)
+  const [travelRule, setTravelRule] = useState<TravelRule>(getCached(`mv:${mapId}:travelRule`) ?? DEFAULT_TRAVEL_RULE)
   const [loaded, setLoaded] = useState(!!getCached(`mv:${mapId}:map`))
 
   // ── Transform state ──
@@ -168,12 +166,8 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         }
         const mapData = mapRes.data as GameMap
         const profile = profileRes.data as Profile
-        const rows = pathwayRes.data ?? []
-        const useSpirit = rows.some(row => {
-          const pathway = Array.isArray(row.pathway) ? row.pathway[0] : row.pathway
-          const sequence = Array.isArray(row.sequence) ? row.sequence[0] : row.sequence
-          return pathway?.name === SPIRIT_PATHWAY_NAME && typeof sequence?.seq_number === 'number' && sequence.seq_number <= SPIRIT_SEQ_NUMBER && sequence.seq_number >= 0
-        })
+        const entries = normalizePathwayRows(pathwayRes.data ?? [])
+        const rule = resolveTravelRule(entries)
         const rawTokens = rawTokensRes.data ?? []
         const zoneData = (zonesRes.data ?? []) as MapLockedZone[]
         const admin = profile.role === 'admin' || profile.role === 'dm'
@@ -210,7 +204,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         }
 
         const ap = (adminPlayers.data ?? []) as AllPlayer[]
-        setMap(mapData); setCurrentUser(profile); setIsAdmin(admin); setAllPlayers(ap); setUseSpiritForTravel(useSpirit)
+        setMap(mapData); setCurrentUser(profile); setIsAdmin(admin); setAllPlayers(ap); setTravelRule(rule)
         setTokens(builtTokens); setZones(zoneData)
 
         // Build church data with religion join
@@ -239,7 +233,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
         setCache(`mv:${mapId}:map`, mapData); setCache(`mv:${mapId}:me`, profile)
         setCache(`mv:${mapId}:admin`, admin); setCache(`mv:${mapId}:players`, ap)
-        setCache(`mv:${mapId}:useSpirit`, useSpirit)
+        setCache(`mv:${mapId}:travelRule`, rule)
         setCache(`mv:${mapId}:tokens`, builtTokens); setCache(`mv:${mapId}:zones`, zoneData)
         setCache(`mv:${mapId}:churches`, builtChurches); setCache(`mv:${mapId}:restpoints`, rpData)
         setLoaded(true)
@@ -411,6 +405,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   
   // ── Sanity Lock ──
   const isSanityLocked = (currentUser?.sanity ?? 10) === 0
+  const useSpiritForTravel = travelRule.resource === 'spirit'
   const travelLabel = useSpiritForTravel ? 'พลังวิญญาณ' : 'แต้มเดินทาง'
   const travelPoints = useSpiritForTravel ? (currentUser.spirituality ?? 0) : (currentUser.travel_points ?? 0)
   const travelMax = useSpiritForTravel ? (currentUser.max_spirituality ?? 0) : (currentUser.max_travel_points ?? 0)
@@ -1735,8 +1730,8 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
               <span className="text-lg">👆</span>
               <span className="text-amber-200 text-xs lg:text-sm font-medium">
                 {useSpiritForTravel
-                  ? '⚠️ ใช้ 1 พลังวิญญาณทุกการย้าย (ใน/ข้ามแมพ)'
-                  : `⚠️ ระบบหัก${travelLabel}เมื่อย้ายตัวละคร: ย้ายในแมพเดียว 1 แต้ม, ย้ายข้ามแมพ 3 แต้ม`}
+                  ? `⚠️ ใช้ ${travelRule.moveCost} พลังวิญญาณเมื่อย้ายในแมพ, ${travelRule.crossMapCost} เมื่อข้ามแมพ`
+                  : `⚠️ ระบบหัก${travelLabel}เมื่อย้ายตัวละคร: ย้ายในแมพเดียว ${travelRule.moveCost} แต้ม, ย้ายข้ามแมพ ${travelRule.crossMapCost} แต้ม`}
               </span>
             </div>
             <div className="flex items-start gap-2 p-2 bg-blue-900/20 border border-blue-400/20 rounded-lg">

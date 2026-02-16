@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { normalizePathwayRows, resolveTravelRule } from '@/lib/travel-rules'
 import { revalidatePath } from 'next/cache'
 
 /* ── Helper: get user + role ── */
@@ -21,21 +22,13 @@ async function getAuthUser() {
   return { supabase, user, profile, isAdmin }
 }
 
-const SPIRIT_PATHWAY_NAME = 'ลูกศิษย์'
-const SPIRIT_SEQ_NUMBER = 5
-
-async function shouldUseSpirituality(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+async function getTravelRuleForUser(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
   const { data } = await supabase
     .from('player_pathways')
     .select('pathway:skill_pathways(name), sequence:skill_sequences(seq_number)')
     .eq('player_id', userId)
-
-  const rows = data ?? []
-  return rows.some(row => {
-    const pathway = Array.isArray(row.pathway) ? row.pathway[0] : row.pathway
-    const sequence = Array.isArray(row.sequence) ? row.sequence[0] : row.sequence
-    return pathway?.name === SPIRIT_PATHWAY_NAME && typeof sequence?.seq_number === 'number' && sequence.seq_number <= SPIRIT_SEQ_NUMBER && sequence.seq_number >= 0
-  })
+  const entries = normalizePathwayRows(data ?? [])
+  return resolveTravelRule(entries)
 }
 
 /* ── Helper: require admin/dm ── */
@@ -152,8 +145,9 @@ export async function addPlayerToMap(mapId: string, targetUserId?: string, posit
 
     // Moving to different map — costs 3 travel points (unless admin/dm)
     if (isSelf && !isAdmin) {
-      const useSpirit = await shouldUseSpirituality(supabase, userId)
-      const moveCost = useSpirit ? 1 : 3
+      const rule = await getTravelRuleForUser(supabase, userId)
+      const useSpirit = rule.resource === 'spirit'
+      const moveCost = rule.crossMapCost
       const currentPoints = useSpirit ? (profile.spirituality ?? 0) : (profile.travel_points ?? 0)
       if (currentPoints < moveCost) {
         const label = useSpirit ? 'พลังวิญญาณ' : 'แต้มเดินทาง'
@@ -256,8 +250,9 @@ export async function moveToken(
   }
 
   const isCrossMap = targetMapId && targetMapId !== token.map_id
-  const useSpirit = !isAdmin ? await shouldUseSpirituality(supabase, user.id) : false
-  const moveCost = useSpirit ? 1 : (isCrossMap ? 3 : 1)
+  const rule = !isAdmin ? await getTravelRuleForUser(supabase, user.id) : null
+  const useSpirit = rule?.resource === 'spirit'
+  const moveCost = rule ? (isCrossMap ? rule.crossMapCost : rule.moveCost) : (isCrossMap ? 3 : 1)
   const useMapId = targetMapId ?? token.map_id
 
   // Check locked zones at destination (unless admin/dm)
