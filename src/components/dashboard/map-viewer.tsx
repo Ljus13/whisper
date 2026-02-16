@@ -24,8 +24,8 @@ import SanityLockOverlay from '@/components/sanity-lock-overlay'
 import { createClient } from '@/lib/supabase/client'
 import { getCached, setCache } from '@/lib/client-cache'
 
-const SPIRIT_PATHWAY_ID = '86a03977-a293-493a-9759-0150472e9afe'
-const SPIRIT_SEQUENCE_ID = '7fbdce6d-bc49-450c-983f-8e7afa419756'
+const SPIRIT_PATHWAY_NAME = 'ลูกศิษย์'
+const SPIRIT_SEQ_NUMBER = 5
 
 /* ══════════════════════════════════════════════
    TYPES
@@ -158,10 +158,9 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         supabase.from('map_rest_points').select('*').eq('map_id', mapId),
         supabase
           .from('player_pathways')
-          .select('sequence_id')
+          .select('pathway:skill_pathways(name), sequence:skill_sequences(seq_number)')
           .eq('player_id', userId)
-          .eq('pathway_id', SPIRIT_PATHWAY_ID)
-          .maybeSingle(),
+          ,
       ]).then(async ([mapRes, profileRes, rawTokensRes, zonesRes, churchesRes, restPointsRes, pathwayRes]) => {
         if (mapRes.error || !mapRes.data || !profileRes.data) {
           if (mapRes.error) console.error('Map fetch error:', mapRes.error)
@@ -169,7 +168,12 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         }
         const mapData = mapRes.data as GameMap
         const profile = profileRes.data as Profile
-        const useSpirit = pathwayRes.data?.sequence_id === SPIRIT_SEQUENCE_ID
+        const rows = pathwayRes.data ?? []
+        const useSpirit = rows.some(row => {
+          const pathway = Array.isArray(row.pathway) ? row.pathway[0] : row.pathway
+          const sequence = Array.isArray(row.sequence) ? row.sequence[0] : row.sequence
+          return pathway?.name === SPIRIT_PATHWAY_NAME && typeof sequence?.seq_number === 'number' && sequence.seq_number <= SPIRIT_SEQ_NUMBER && sequence.seq_number >= 0
+        })
         const rawTokens = rawTokensRes.data ?? []
         const zoneData = (zonesRes.data ?? []) as MapLockedZone[]
         const admin = profile.role === 'admin' || profile.role === 'dm'
@@ -1729,7 +1733,11 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
             </p>
             <div className="flex items-start gap-2 p-2 bg-amber-900/20 border border-amber-400/20 rounded-lg">
               <span className="text-lg">👆</span>
-              <span className="text-amber-200 text-xs lg:text-sm font-medium">⚠️ ระบบหัก{travelLabel}เมื่อย้ายตัวละคร: ย้ายในแมพเดียว 1 แต้ม, ย้ายข้ามแมพ 3 แต้ม</span>
+              <span className="text-amber-200 text-xs lg:text-sm font-medium">
+                {useSpiritForTravel
+                  ? '⚠️ ใช้ 1 พลังวิญญาณทุกการย้าย (ใน/ข้ามแมพ)'
+                  : `⚠️ ระบบหัก${travelLabel}เมื่อย้ายตัวละคร: ย้ายในแมพเดียว 1 แต้ม, ย้ายข้ามแมพ 3 แต้ม`}
+              </span>
             </div>
             <div className="flex items-start gap-2 p-2 bg-blue-900/20 border border-blue-400/20 rounded-lg">
               <span className="text-lg">✋</span>

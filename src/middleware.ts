@@ -25,6 +25,37 @@ export async function middleware(request: NextRequest) {
     }
   )
 
+  const code = request.nextUrl.searchParams.get('code')
+  const next = request.nextUrl.searchParams.get('next') ?? '/dashboard'
+
+  if (code) {
+    response = NextResponse.redirect(new URL(next, request.url))
+    const authSupabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
+            cookiesToSet.forEach(({ name, value }) => {
+              request.cookies.set(name, value)
+            })
+            response = NextResponse.redirect(new URL(next, request.url))
+            cookiesToSet.forEach(({ name, value, options }) => {
+              response.cookies.set(name, value, options)
+            })
+          },
+        },
+      }
+    )
+    const { error } = await authSupabase.auth.exchangeCodeForSession(code)
+    if (!error) {
+      return response
+    }
+  }
+
   // Refresh session — getSession() reads from cookie (fast, no network call)
   // getUser() makes a network call to Supabase Auth (~200-400ms) — avoid in middleware
   const { data: { session } } = await supabase.auth.getSession()

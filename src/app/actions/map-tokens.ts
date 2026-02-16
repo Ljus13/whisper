@@ -21,17 +21,21 @@ async function getAuthUser() {
   return { supabase, user, profile, isAdmin }
 }
 
-const SPIRIT_PATHWAY_ID = '86a03977-a293-493a-9759-0150472e9afe'
-const SPIRIT_SEQUENCE_ID = '7fbdce6d-bc49-450c-983f-8e7afa419756'
+const SPIRIT_PATHWAY_NAME = 'ลูกศิษย์'
+const SPIRIT_SEQ_NUMBER = 5
 
 async function shouldUseSpirituality(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
   const { data } = await supabase
     .from('player_pathways')
-    .select('sequence_id')
+    .select('pathway:skill_pathways(name), sequence:skill_sequences(seq_number)')
     .eq('player_id', userId)
-    .eq('pathway_id', SPIRIT_PATHWAY_ID)
-    .maybeSingle()
-  return data?.sequence_id === SPIRIT_SEQUENCE_ID
+
+  const rows = data ?? []
+  return rows.some(row => {
+    const pathway = Array.isArray(row.pathway) ? row.pathway[0] : row.pathway
+    const sequence = Array.isArray(row.sequence) ? row.sequence[0] : row.sequence
+    return pathway?.name === SPIRIT_PATHWAY_NAME && typeof sequence?.seq_number === 'number' && sequence.seq_number <= SPIRIT_SEQ_NUMBER && sequence.seq_number >= 0
+  })
 }
 
 /* ── Helper: require admin/dm ── */
@@ -149,15 +153,16 @@ export async function addPlayerToMap(mapId: string, targetUserId?: string, posit
     // Moving to different map — costs 3 travel points (unless admin/dm)
     if (isSelf && !isAdmin) {
       const useSpirit = await shouldUseSpirituality(supabase, userId)
+      const moveCost = useSpirit ? 1 : 3
       const currentPoints = useSpirit ? (profile.spirituality ?? 0) : (profile.travel_points ?? 0)
-      if (currentPoints < 3) {
+      if (currentPoints < moveCost) {
         const label = useSpirit ? 'พลังวิญญาณ' : 'แต้มเดินทาง'
-        return { error: `${label}ไม่พอ (ต้องการ 3 แต้ม, มี ${currentPoints} แต้ม)` }
+        return { error: `${label}ไม่พอ (ต้องการ ${moveCost} แต้ม, มี ${currentPoints} แต้ม)` }
       }
 
       const update = useSpirit
-        ? { spirituality: Math.max(0, currentPoints - 3) }
-        : { travel_points: Math.max(0, currentPoints - 3) }
+        ? { spirituality: Math.max(0, currentPoints - moveCost) }
+        : { travel_points: Math.max(0, currentPoints - moveCost) }
 
       const { error: tpError } = await supabase
         .from('profiles')
@@ -251,10 +256,9 @@ export async function moveToken(
   }
 
   const isCrossMap = targetMapId && targetMapId !== token.map_id
-  const moveCost = isCrossMap ? 3 : 1
-  const useMapId = targetMapId ?? token.map_id
-
   const useSpirit = !isAdmin ? await shouldUseSpirituality(supabase, user.id) : false
+  const moveCost = useSpirit ? 1 : (isCrossMap ? 3 : 1)
+  const useMapId = targetMapId ?? token.map_id
 
   // Check locked zones at destination (unless admin/dm)
   if (!isAdmin) {
