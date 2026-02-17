@@ -29,6 +29,15 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>, 
   return data?.role === 'admin' || data?.role === 'dm'
 }
 
+function revalidateActionQuestPaths() {
+  revalidatePath('/dashboard/action-quest/actions')
+  revalidatePath('/dashboard/action-quest/quests')
+  revalidatePath('/dashboard/action-quest/sleep')
+  revalidatePath('/dashboard/action-quest/prayer')
+  revalidatePath('/dashboard/action-quest/punishments')
+  revalidatePath('/dashboard/action-quest/roleplay')
+}
+
 /* ══════════════════════════════════════════════
    SLEEP REQUESTS — นอนหลับ (Rest)
    ══════════════════════════════════════════════ */
@@ -129,7 +138,7 @@ export async function submitSleepRequest(mealUrl: string, sleepUrl: string) {
     .insert({ player_id: user.id, meal_url: mealUrl.trim(), sleep_url: sleepUrl.trim() })
 
   if (error) return { error: error.message }
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true }
 }
 
@@ -187,7 +196,7 @@ export async function approveSleepRequest(requestId: string) {
     .update({ spirituality: playerProfile.max_spirituality })
     .eq('id', request.player_id)
 
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true }
 }
 
@@ -207,7 +216,7 @@ export async function rejectSleepRequest(requestId: string) {
     .eq('id', requestId)
 
   if (error) return { error: error.message }
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true }
 }
 
@@ -246,7 +255,7 @@ export async function autoApproveExpiredRequests() {
       .update({ spirituality: pp.max_spirituality })
       .eq('id', req.player_id)
   }
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
 }
 
 
@@ -312,7 +321,7 @@ export async function generateActionCode(name: string, rewards?: ActionRewards, 
     .single()
 
   if (error) return { error: error.message }
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true, code: data.code, name: data.name }
 }
 
@@ -406,7 +415,7 @@ export async function generateQuestCode(name: string, mapId?: string | null, npc
     .single()
 
   if (error) return { error: error.message }
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true, code: data.code, name: data.name }
 }
 
@@ -508,7 +517,7 @@ export async function submitAction(codeStr: string, evidenceUrls: string[]) {
     })
 
   if (error) return { error: error.message }
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true, actionName: codeRow.name }
 }
 
@@ -671,7 +680,7 @@ export async function approveActionSubmission(id: string) {
     }
   }
 
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true }
 }
 
@@ -694,7 +703,7 @@ export async function rejectActionSubmission(id: string, reason: string) {
     .eq('status', 'pending')
 
   if (error) return { error: error.message }
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true }
 }
 
@@ -807,7 +816,7 @@ export async function submitQuest(codeStr: string, evidenceUrls: string[]) {
     })
 
   if (error) return { error: error.message }
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true, questName: codeRow.name }
 }
 
@@ -885,7 +894,7 @@ export async function approveQuestSubmission(id: string) {
     .eq('status', 'pending')
 
   if (error) return { error: error.message }
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true }
 }
 
@@ -908,7 +917,7 @@ export async function rejectQuestSubmission(id: string, reason: string) {
     .eq('status', 'pending')
 
   if (error) return { error: error.message }
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true }
 }
 
@@ -942,7 +951,7 @@ export async function submitRoleplayLinks(urls: string[]) {
   const { error: linkErr } = await supabase.from('roleplay_links').insert(linkRows)
   if (linkErr) return { error: linkErr.message }
 
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true }
 }
 
@@ -1092,7 +1101,7 @@ export async function reviewRoleplayLink(linkId: string, level: string, note: st
     }
   }
 
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   revalidatePath('/dashboard')
   return { success: true }
 }
@@ -1153,7 +1162,7 @@ export async function promotePotionDigest() {
   await supabase.from('profiles').update({ potion_digest_progress: 0 }).eq('id', user.id)
 
   revalidatePath('/dashboard')
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   revalidatePath('/dashboard/players')
   return { success: true, newSeqNumber: nextSequence.seq_number, newSeqName: nextSequence.name }
 }
@@ -1334,7 +1343,7 @@ export async function createPunishment(input: PunishmentInput) {
     })
   }
 
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true, punishmentId: punishment.id }
 }
 
@@ -1512,7 +1521,7 @@ export async function requestMercy(punishmentId: string) {
     created_by: user.id,
   })
 
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true }
 }
 
@@ -1618,7 +1627,7 @@ export async function applyPenalty(punishmentId: string, playerId: string) {
     created_by: user.id,
   })
 
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true }
 }
 
@@ -1743,7 +1752,7 @@ export async function updateActionCode(
     .eq('id', id)
 
   if (error) return { error: error.message }
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true }
 }
 
@@ -1793,7 +1802,7 @@ export async function updateQuestCode(
     .eq('id', id)
 
   if (error) return { error: error.message }
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true }
 }
 
@@ -1904,7 +1913,7 @@ export async function updatePunishment(id: string, input: PunishmentUpdateInput)
     }
   }
 
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true }
 }
 
@@ -2037,7 +2046,7 @@ export async function autoApplyExpiredPunishments() {
     await supabase.from('punishments').update({ is_active: false }).eq('id', punishment.id)
   }
 
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
 }
 
 
@@ -2068,7 +2077,7 @@ export async function archiveActionCode(id: string) {
     .eq('id', id)
 
   if (error) return { error: error.message }
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true }
 }
 
@@ -2084,7 +2093,7 @@ export async function archiveQuestCode(id: string) {
     .eq('id', id)
 
   if (error) return { error: error.message }
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true }
 }
 
@@ -2100,7 +2109,7 @@ export async function archivePunishment(id: string) {
     .eq('id', id)
 
   if (error) return { error: error.message }
-  revalidatePath('/dashboard/action-quest')
+  revalidateActionQuestPaths()
   return { success: true }
 }
 

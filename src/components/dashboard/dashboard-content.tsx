@@ -537,7 +537,7 @@ export default function DashboardContent({
           </a>
 
           <a 
-            href={isSanityLocked ? "#" : "/dashboard/action-quest"} 
+            href={isSanityLocked ? "#" : "/dashboard/action-quest/actions"} 
             className={`group relative overflow-hidden card-victorian p-6 md:p-12 lg:p-16 flex flex-col items-center justify-center gap-4 md:gap-8 
                         hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[180px] md:min-h-[350px]
                         ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}

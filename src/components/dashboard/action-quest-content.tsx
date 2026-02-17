@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useTransition, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import {
   ArrowLeft, Moon, ScrollText, Swords, Target, Shield, Plus, Copy,
   X, ExternalLink, ChevronLeft, ChevronRight, Clock, CheckCircle,
@@ -265,10 +266,10 @@ function DateTimeInput({ dateVal, timeVal, onDateChange, onTimeChange }: {
 
 /* ═══════════════════ Main Component ═══════════════════ */
 
-export default function ActionQuestContent({ userId: _userId, isAdmin }: { userId: string; isAdmin: boolean }) {
+export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTab = 'actions', usePageTabs = false }: { userId: string; isAdmin: boolean; defaultTab?: TabKey; usePageTabs?: boolean }) {
   const [isPending, startTransition] = useTransition()
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const [activeTab, setActiveTab] = useState<TabKey>('actions')
+  const [activeTab, setActiveTab] = useState<TabKey>(defaultTab)
   const [loadTimes, setLoadTimes] = useState<Partial<Record<TabKey, number>>>({})
   const loadedRef = useRef<Record<TabKey, boolean>>({
     actions: false,
@@ -712,6 +713,10 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
     loadTab(activeTab)
   }, [activeTab, loadTab])
 
+  useEffect(() => {
+    setActiveTab(defaultTab)
+  }, [defaultTab])
+
   // ─── Handlers ───
   function handleSleepSubmit() {
     setSleepError(null)
@@ -1090,13 +1095,13 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
   }
 
   /* ═══════════════════ RENDER ═══════════════════ */
-  const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
-    { key: 'actions', label: 'แอคชั่น', icon: <Swords className="w-4 h-4" /> },
-    { key: 'quests', label: 'ภารกิจ', icon: <Target className="w-4 h-4" /> },
-    { key: 'prayer', label: 'ภาวนา', icon: <Church className="w-4 h-4" /> },
-    { key: 'sleep', label: 'นอนหลับ', icon: <Moon className="w-4 h-4" /> },
-    { key: 'punishments', label: 'เหตุการณ์', icon: <Skull className="w-4 h-4" /> },
-    { key: 'roleplay', label: 'สวมบทบาท', icon: <Sparkles className="w-4 h-4" /> },
+  const tabs: { key: TabKey; label: string; icon: React.ReactNode; href: string }[] = [
+    { key: 'actions', label: 'แอคชั่น', icon: <Swords className="w-4 h-4" />, href: '/dashboard/action-quest/actions' },
+    { key: 'quests', label: 'ภารกิจ', icon: <Target className="w-4 h-4" />, href: '/dashboard/action-quest/quests' },
+    { key: 'prayer', label: 'ภาวนา', icon: <Church className="w-4 h-4" />, href: '/dashboard/action-quest/prayer' },
+    { key: 'sleep', label: 'นอนหลับ', icon: <Moon className="w-4 h-4" />, href: '/dashboard/action-quest/sleep' },
+    { key: 'punishments', label: 'เหตุการณ์', icon: <Skull className="w-4 h-4" />, href: '/dashboard/action-quest/punishments' },
+    { key: 'roleplay', label: 'สวมบทบาท', icon: <Sparkles className="w-4 h-4" />, href: '/dashboard/action-quest/roleplay' },
   ]
   const activeLoadTime = loadTimes[activeTab]
 
@@ -1169,12 +1174,12 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
                 className="btn-gold !px-5 !py-4 !text-sm flex items-center justify-center gap-2 cursor-pointer">
                 <Target className="w-5 h-5" /> สร้างโค้ดภารกิจ
               </button>
-              <a
+              <Link
                 href="/dashboard/action-quest/roleplay-guide"
                 className="btn-victorian !px-5 !py-4 !text-sm flex items-center justify-center gap-2 cursor-pointer"
               >
                 <ScrollText className="w-5 h-5" /> แนวทางการสวมบทบาท
-              </a>
+              </Link>
               <button type="button"
                 onClick={openCreatePunishmentModal}
                 className="px-5 py-4 rounded-lg border-2 border-red-500/30 bg-red-500/5 text-red-300 hover:border-red-400/50 hover:bg-red-500/10 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all">
@@ -1293,14 +1298,27 @@ export default function ActionQuestContent({ userId: _userId, isAdmin }: { userI
         {/* ══════ TABS ══════ */}
         <div className="flex gap-1 border-b border-gold-400/10 overflow-x-auto">
           {tabs.map(t => (
-            <button key={t.key} type="button"
-              onClick={() => setActiveTab(t.key)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors whitespace-nowrap cursor-pointer
-                ${activeTab === t.key
-                  ? 'text-gold-400 border-b-2 border-gold-400'
-                  : 'text-victorian-500 hover:text-victorian-300'}`}>
-              {t.icon} {t.label}
-            </button>
+            usePageTabs ? (
+              <Link
+                key={t.key}
+                href={t.href}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors whitespace-nowrap cursor-pointer
+                  ${activeTab === t.key
+                    ? 'text-gold-400 border-b-2 border-gold-400'
+                    : 'text-victorian-500 hover:text-victorian-300'}`}
+              >
+                {t.icon} {t.label}
+              </Link>
+            ) : (
+              <button key={t.key} type="button"
+                onClick={() => setActiveTab(t.key)}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors whitespace-nowrap cursor-pointer
+                  ${activeTab === t.key
+                    ? 'text-gold-400 border-b-2 border-gold-400'
+                    : 'text-victorian-500 hover:text-victorian-300'}`}>
+                {t.icon} {t.label}
+              </button>
+            )
           ))}
         </div>
         <div className="text-victorian-500 text-xs">
