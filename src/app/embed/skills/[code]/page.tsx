@@ -26,9 +26,7 @@ export default async function SkillEmbedPage({ params }: { params: Promise<{ cod
   const supabase = await createClient()
 
   const { data: log } = await supabase
-    .from('skill_usage_logs')
-    .select('player_id, skill_id, used_at, reference_code, note, outcome, roll, success_rate')
-    .eq('reference_code', referenceCode)
+    .rpc('get_skill_embed_log', { p_reference_code: referenceCode })
     .single()
 
   if (!log) notFound()

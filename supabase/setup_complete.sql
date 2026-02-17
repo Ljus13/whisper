@@ -1166,6 +1166,37 @@ CREATE POLICY "Players can log own usage"
 CREATE INDEX IF NOT EXISTS idx_skill_usage_player ON public.skill_usage_logs(player_id);
 CREATE INDEX IF NOT EXISTS idx_skill_usage_skill  ON public.skill_usage_logs(skill_id);
 
+CREATE OR REPLACE FUNCTION public.get_skill_embed_log(p_reference_code text)
+RETURNS TABLE (
+  player_id uuid,
+  skill_id uuid,
+  used_at timestamptz,
+  reference_code text,
+  note text,
+  outcome text,
+  roll integer,
+  success_rate integer
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT
+    l.player_id,
+    l.skill_id,
+    l.used_at,
+    l.reference_code,
+    l.note,
+    l.outcome,
+    l.roll,
+    l.success_rate
+  FROM public.skill_usage_logs l
+  WHERE l.reference_code = p_reference_code
+  LIMIT 1
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_skill_embed_log(text) TO anon, authenticated;
+
 
 -- END OF FILE: add_pathway_images.sql
 
