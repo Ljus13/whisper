@@ -1133,6 +1133,11 @@ CREATE TABLE IF NOT EXISTS public.skill_usage_logs (
   player_id   uuid        NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   skill_id    uuid        NOT NULL REFERENCES public.skills(id) ON DELETE CASCADE,
   spirit_cost integer     NOT NULL DEFAULT 0,
+  reference_code text,
+  note        text,
+  success_rate integer,
+  roll        integer,
+  outcome     text,
   used_at     timestamptz NOT NULL DEFAULT now()
 );
 

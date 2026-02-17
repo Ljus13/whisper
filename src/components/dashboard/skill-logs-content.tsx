@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ArrowLeft, ChevronLeft, ChevronRight, Copy, Check } from 'lucide-react'
 import { getSkillUsageLogs } from '@/app/actions/skills'
+import { getCached, setCache } from '@/lib/client-cache'
 
 interface LogEntry {
   id: string
@@ -10,6 +11,7 @@ interface LogEntry {
   skill_id: string
   spirit_cost: number
   reference_code: string
+  note: string | null
   used_at: string
   player_name: string
   player_avatar: string | null
@@ -27,8 +29,25 @@ export default function SkillLogsContent() {
   const [error, setError] = useState<string | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [origin, setOrigin] = useState('')
 
   const fetchLogs = useCallback(async (p: number, query: string = searchQuery) => {
+    const cacheKey = `skill-logs:${p}:${query || 'all'}`
+    const cached = getCached<{
+      logs: LogEntry[]
+      totalPages: number
+      total: number
+      isAdmin: boolean
+    }>(cacheKey)
+    if (cached) {
+      setLogs(cached.logs)
+      setTotalPages(cached.totalPages || 1)
+      setTotal(cached.total || 0)
+      setIsAdmin(cached.isAdmin || false)
+      setPage(p)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -41,6 +60,12 @@ export default function SkillLogsContent() {
         setTotal(result.total || 0)
         setIsAdmin(result.isAdmin || false)
         setPage(p)
+        setCache(cacheKey, {
+          logs: result.logs as LogEntry[],
+          totalPages: result.totalPages || 1,
+          total: result.total || 0,
+          isAdmin: result.isAdmin || false
+        }, 60 * 1000)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'เกิดข้อผิดพลาด')
@@ -52,11 +77,28 @@ export default function SkillLogsContent() {
     fetchLogs(1, '')
   }, [fetchLogs])
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setOrigin(window.location.origin)
+    }
+  }, [])
+
   function handleCopy(code: string, id: string) {
     navigator.clipboard.writeText(code).then(() => {
       setCopiedId(id)
       setTimeout(() => setCopiedId(null), 2000)
     })
+  }
+
+  function getEmbedUrl(referenceCode: string) {
+    if (!origin) return ''
+    return `${origin}/embed/skills/${referenceCode}`
+  }
+
+  function getEmbedIframe(referenceCode: string) {
+    const url = getEmbedUrl(referenceCode)
+    if (!url) return ''
+    return `<iframe src="${url}" width="500" height="45" style="border:0"></iframe>`
   }
 
   function formatDate(dateStr: string) {
@@ -145,7 +187,9 @@ export default function SkillLogsContent() {
                   {isAdmin && <th className="text-left px-4 py-2 font-medium">ผู้ใช้</th>}
                   <th className="text-left px-4 py-2 font-medium">สกิล</th>
                   <th className="text-left px-4 py-2 font-medium">ค่า Spirit</th>
+                  <th className="text-left px-4 py-2 font-medium">หมายเหตุ</th>
                   <th className="text-left px-4 py-2 font-medium">โค้ดอ้างอิง</th>
+                  <th className="text-left px-4 py-2 font-medium">Embed</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gold-400/10">
@@ -154,6 +198,8 @@ export default function SkillLogsContent() {
                     <td className="px-4 py-3"><div className="h-4 w-28 rounded bg-[#2A2520] animate-pulse" /></td>
                     {isAdmin && <td className="px-4 py-3"><div className="h-4 w-24 rounded bg-[#2A2520] animate-pulse" /></td>}
                     <td className="px-4 py-3"><div className="h-4 w-32 rounded bg-[#2A2520] animate-pulse" /></td>
+                    <td className="px-4 py-3"><div className="h-4 w-20 rounded bg-[#2A2520] animate-pulse" /></td>
+                    <td className="px-4 py-3"><div className="h-4 w-36 rounded bg-[#2A2520] animate-pulse" /></td>
                     <td className="px-4 py-3"><div className="h-4 w-14 rounded bg-[#2A2520] animate-pulse" /></td>
                     <td className="px-4 py-3"><div className="h-4 w-32 rounded bg-[#2A2520] animate-pulse" /></td>
                   </tr>
@@ -180,7 +226,9 @@ export default function SkillLogsContent() {
                   {isAdmin && <th className="text-left px-4 py-2 font-medium">ผู้ใช้</th>}
                   <th className="text-left px-4 py-2 font-medium">สกิล</th>
                   <th className="text-left px-4 py-2 font-medium">ค่า Spirit</th>
+                  <th className="text-left px-4 py-2 font-medium">หมายเหตุ</th>
                   <th className="text-left px-4 py-2 font-medium">โค้ดอ้างอิง</th>
+                  <th className="text-left px-4 py-2 font-medium">Embed</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gold-400/10">
@@ -192,6 +240,11 @@ export default function SkillLogsContent() {
                     )}
                     <td className="px-4 py-2">{log.skill_name}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{log.spirit_cost}</td>
+                    <td className="px-4 py-2">
+                      <div className="text-xs text-victorian-300 max-w-[220px] truncate">
+                        {log.note || '—'}
+                      </div>
+                    </td>
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-2">
                         <code className="text-gold-300/80 text-xs md:text-sm font-mono tracking-wider bg-victorian-900/60 px-2 py-1 rounded border border-gold-400/10">
@@ -210,6 +263,30 @@ export default function SkillLogsContent() {
                           )}
                         </button>
                       </div>
+                    </td>
+                    <td className="px-4 py-2">
+                      {origin ? (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                          onClick={() => handleCopy(getEmbedIframe(log.reference_code) || getEmbedUrl(log.reference_code), `embed-${log.id}`)}
+                            className="px-2.5 py-1.5 rounded border border-gold-400/10 text-gold-300/80 hover:text-gold-300 hover:bg-gold-400/10 transition-colors cursor-pointer text-xs"
+                            title="คัดลอก Embed"
+                          >
+                            {copiedId === `embed-${log.id}` ? 'คัดลอกแล้ว' : 'คัดลอก Embed'}
+                          </button>
+                          <a
+                            href={getEmbedUrl(log.reference_code)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1.5 rounded border border-gold-400/10 text-gold-300/80 hover:text-gold-300 hover:bg-gold-400/10 transition-colors cursor-pointer text-xs"
+                          >
+                            เปิด
+                          </a>
+                        </div>
+                      ) : (
+                        <span className="text-victorian-500 text-xs">กำลังโหลด...</span>
+                      )}
                     </td>
                   </tr>
                 ))}

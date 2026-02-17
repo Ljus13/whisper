@@ -478,16 +478,28 @@ function PlayerSkillView({
   playerPathways: PlayerPathway[]
 }) {
   const [isPending, startTransition] = useTransition()
-  const [usedSkill, setUsedSkill] = useState<{
+  const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null)
+  const [rollPhase, setRollPhase] = useState<'input' | 'rolling' | 'result'>('input')
+  const [successRate, setSuccessRate] = useState('')
+  const [rollNote, setRollNote] = useState('')
+  const [rollingValue, setRollingValue] = useState(1)
+  const [skillResult, setSkillResult] = useState<{
     name: string
     description: string | null
     remaining: number
     referenceCode: string
+    successRate: number
+    roll: number
+    outcome: 'success' | 'fail'
+    pathwayName: string
+    sequenceName: string
+    note: string | null
   } | null>(null)
   const [skillError, setSkillError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   // Optimistic spirituality for instant UI feedback
   const [optimisticSpirit, setOptimisticSpirit] = useState<number | null>(null)
+  const [origin, setOrigin] = useState('')
   const displaySpirit = optimisticSpirit ?? profile?.spirituality ?? 0
 
   // Determine which skills the player can access
@@ -502,37 +514,21 @@ function PlayerSkillView({
 
   function handleUseSkill(skillId: string) {
     setSkillError(null)
-    setUsedSkill(null)
     setCopied(false)
+    setSkillResult(null)
+    setRollPhase('input')
+    setSuccessRate('')
+    setRollNote('')
+    setRollingValue(1)
 
-    // Find skill for optimistic update
     const skill = skills.find(s => s.id === skillId)
     if (skill) {
-      setOptimisticSpirit(displaySpirit - skill.spirit_cost)
+      setSelectedSkill(skill)
     }
-
-    startTransition(async () => {
-      const result = await castSkill(skillId)
-      if (result.error) {
-        // Rollback optimistic update
-        setOptimisticSpirit(null)
-        setSkillError(result.error)
-        setTimeout(() => setSkillError(null), 4000)
-      } else if (result.success) {
-        setOptimisticSpirit(result.remaining!)
-        setUsedSkill({
-          name: result.skillName!,
-          description: result.skillDescription ?? null,
-          remaining: result.remaining!,
-          referenceCode: result.referenceCode!
-        })
-      }
-    })
   }
 
-  function handleCopyCode() {
-    if (!usedSkill) return
-    navigator.clipboard.writeText(usedSkill.referenceCode).then(() => {
+  function handleCopyCode(code: string) {
+    navigator.clipboard.writeText(code).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
@@ -544,6 +540,84 @@ function PlayerSkillView({
       setOptimisticSpirit(null)
     }
   }, [profile?.spirituality])
+  
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setOrigin(window.location.origin)
+    }
+  }, [])
+
+  async function runRollAnimation() {
+    return new Promise<number>((resolve) => {
+      const delays = [40, 60, 80, 100, 120, 160, 200, 260, 340, 420]
+      let index = 0
+      const tick = () => {
+        const value = Math.floor(Math.random() * 20) + 1
+        setRollingValue(value)
+        if (index >= delays.length - 1) {
+          resolve(value)
+          return
+        }
+        index += 1
+        setTimeout(tick, delays[index])
+      }
+      setTimeout(tick, delays[0])
+    })
+  }
+
+  function closeSkillModal() {
+    setSelectedSkill(null)
+    setSkillResult(null)
+    setRollPhase('input')
+  }
+
+  function getSkillMeta(skill: Skill) {
+    const pathway = pathways.find(p => p.id === skill.pathway_id)
+    const sequence = sequences.find(s => s.id === skill.sequence_id)
+    return {
+      pathwayName: pathway?.name || 'ไม่ทราบเส้นทาง',
+      sequenceName: sequence ? `#${sequence.seq_number} ${sequence.name}` : 'ไม่ทราบลำดับ'
+    }
+  }
+
+  async function handleConfirmRoll() {
+    if (!selectedSkill) return
+    const rate = parseInt(successRate, 10)
+    if (!rate || rate < 1 || rate > 20) {
+      setSkillError('กรุณาระบุอัตราสำเร็จระหว่าง 1-20')
+      return
+    }
+    setSkillError(null)
+    setRollPhase('rolling')
+    setOptimisticSpirit(displaySpirit - selectedSkill.spirit_cost)
+    const rollValue = await runRollAnimation()
+    const { pathwayName, sequenceName } = getSkillMeta(selectedSkill)
+    startTransition(async () => {
+      const result = await castSkill(selectedSkill.id, rate, rollValue, rollNote)
+      if (result.error) {
+        setOptimisticSpirit(null)
+        setSkillError(result.error)
+        setRollPhase('input')
+        return
+      }
+      if (result.success) {
+        setOptimisticSpirit(result.remaining!)
+        setSkillResult({
+          name: result.skillName!,
+          description: result.skillDescription ?? null,
+          remaining: result.remaining!,
+          referenceCode: result.referenceCode!,
+          successRate: result.successRate!,
+          roll: result.roll!,
+          outcome: result.outcome!,
+          pathwayName,
+          sequenceName,
+          note: result.note ?? (rollNote.trim() ? rollNote.trim() : null)
+        })
+        setRollPhase('result')
+      }
+    })
+  }
 
   // Get player's accessible pathways
   const accessiblePathways = pathways.filter(p =>
@@ -588,78 +662,165 @@ function PlayerSkillView({
       )}
 
       {/* ═══ Success Modal with Reference Code ═══ */}
-      {usedSkill && (
+      {selectedSkill && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => setUsedSkill(null)}
+          onClick={closeSkillModal}
           style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
         >
           <div
-            className="w-full max-w-md rounded-xl border-2 border-gold-400/30 p-6 md:p-8 space-y-5 animate-in fade-in zoom-in duration-300"
+            className="w-full max-w-2xl rounded-xl border-2 border-gold-400/30 p-6 md:p-8 space-y-5 animate-in fade-in zoom-in duration-300"
             style={{ backgroundColor: '#1A1612' }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Close */}
             <div className="flex justify-end">
               <button
                 type="button"
-                onClick={() => setUsedSkill(null)}
+                onClick={closeSkillModal}
                 className="text-victorian-400 hover:text-gold-400 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Success icon */}
-            <div className="flex justify-center">
-              <div className="w-20 h-20 rounded-full bg-gold-400/10 border-2 border-gold-400/30 flex items-center justify-center">
-                <Sparkles className="w-10 h-10 text-gold-400" />
+            {rollPhase === 'input' && (
+              <div className="space-y-5">
+                <div className="text-center space-y-2">
+                  <div className="flex items-center justify-center gap-2 text-gold-300 text-lg font-semibold">
+                    <Sparkles className="w-5 h-5" /> ใช้สกิล
+                  </div>
+                  <h3 className="heading-victorian text-3xl">{selectedSkill.name}</h3>
+                  {selectedSkill.description && (
+                    <p className="text-victorian-300 text-sm">{selectedSkill.description}</p>
+                  )}
+                </div>
+                <div className="rounded-xl border border-gold-400/20 bg-victorian-900/60 p-4 text-victorian-200 text-sm space-y-1">
+                  <p className="text-gold-300 font-semibold">คำแนะนำสำคัญ</p>
+                  <p>โปรดระบุอัตราสำเร็จตามที่ได้รับแจ้งจากทีมงาน แล้วกดยืนยันเพื่อสุ่มผลลัพธ์</p>
+                  <p>ระบบจะตัดแต้มทุกครั้ง ไม่ว่าจะสำเร็จหรือไม่</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-victorian-300 mb-1.5">อัตราสำเร็จ (1-20) <span className="text-nouveau-ruby">*</span></label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={successRate}
+                      onChange={(e) => setSuccessRate(e.target.value)}
+                      className="input-victorian w-full !py-2 !text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-victorian-300 mb-1.5">หมายเหตุ (ถ้ามี)</label>
+                    <input
+                      type="text"
+                      value={rollNote}
+                      onChange={(e) => setRollNote(e.target.value)}
+                      className="input-victorian w-full !py-2 !text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-victorian-400 text-sm">
+                  <span>ค่าใช้สกิล: <span className="text-gold-300 font-semibold">{selectedSkill.spirit_cost}</span> Spirit</span>
+                  <span>พลังวิญญาณคงเหลือหลังใช้โดยประมาณ: <span className="text-gold-300 font-semibold">{displaySpirit - selectedSkill.spirit_cost}</span></span>
+                </div>
+                <div className="flex justify-end gap-3">
+                  <button type="button" onClick={closeSkillModal} className="btn-victorian px-5 py-2 text-sm">ยกเลิก</button>
+                  <button type="button" onClick={handleConfirmRoll} disabled={isPending} className="btn-gold px-6 py-2 text-sm">
+                    {isPending ? 'กำลังดำเนินการ...' : 'ยืนยันการใช้สกิล'}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Skill name */}
-            <div className="text-center">
-              <p className="text-victorian-400 text-sm">ใช้สกิลสำเร็จ</p>
-              <h3 className="heading-victorian text-3xl mt-1">{usedSkill.name}</h3>
-              {usedSkill.description && (
-                <p className="text-victorian-300 text-base mt-2">{usedSkill.description}</p>
-              )}
-            </div>
-
-            {/* Reference Code */}
-            <div className="bg-victorian-900/80 border border-gold-400/20 rounded-lg p-4 space-y-2">
-              <p className="text-victorian-400 text-xs uppercase tracking-wider text-center">รหัสอ้างอิง</p>
-              <div className="flex items-center justify-center gap-3">
-                <code className="text-gold-300 text-2xl md:text-3xl font-mono tracking-widest select-all">
-                  {usedSkill.referenceCode}
-                </code>
-                <button
-                  type="button"
-                  onClick={handleCopyCode}
-                  className="p-2 rounded-lg border border-gold-400/20 text-gold-400 hover:bg-gold-400/10 transition-colors cursor-pointer"
-                  title="คัดลอก"
-                >
-                  {copied ? <Check className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5" />}
-                </button>
+            {rollPhase === 'rolling' && (
+              <div className="space-y-5 text-center">
+                <div className="text-gold-300 text-lg font-semibold">กำลังสุ่มผลลัพธ์</div>
+                <div className="text-6xl md:text-7xl font-mono text-gold-200 animate-pulse">
+                  {rollingValue}
+                </div>
+                <div className="text-victorian-400 text-sm">ระบบกำลังประมวลผล…</div>
               </div>
-              <p className="text-victorian-500 text-xs text-center mt-2">
-                📋 คัดลอกโค้ดนี้ไปอ้างอิงในการโรเพลย์
-              </p>
-            </div>
+            )}
 
-            {/* Remaining spirit */}
-            <div className="text-center text-victorian-400 text-sm">
-              พลังวิญญาณคงเหลือ: <span className="text-gold-300 font-bold text-lg">{usedSkill.remaining}</span>
-            </div>
+            {rollPhase === 'result' && skillResult && (() => {
+              const isSuccess = skillResult.outcome === 'success'
+              const embedUrl = origin ? `${origin}/embed/skills/${skillResult.referenceCode}` : ''
+              return (
+                <div className="space-y-5">
+                  <div className="flex justify-center">
+                    <div className={`w-20 h-20 rounded-full border-2 flex items-center justify-center ${isSuccess ? 'bg-green-500/10 border-green-400/30' : 'bg-red-500/10 border-red-400/30'}`}>
+                      <Sparkles className={`w-10 h-10 ${isSuccess ? 'text-green-400' : 'text-red-400'}`} />
+                    </div>
+                  </div>
+                  <div className="text-center space-y-2">
+                    <p className={`text-sm ${isSuccess ? 'text-green-300' : 'text-red-300'}`}>{isSuccess ? 'ใช้สกิลสำเร็จ' : 'ใช้สกิลไม่สำเร็จ'}</p>
+                    <h3 className="heading-victorian text-3xl mt-1">{skillResult.name}</h3>
+                    {skillResult.description && (
+                      <p className="text-victorian-300 text-base mt-2">{skillResult.description}</p>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-victorian-200">
+                    <div className="rounded-lg border border-gold-400/20 bg-victorian-900/70 p-3 text-center">
+                      ผลสุ่ม: <span className="text-gold-300 font-bold">{skillResult.roll}</span>
+                    </div>
+                    <div className="rounded-lg border border-gold-400/20 bg-victorian-900/70 p-3 text-center">
+                      อัตราสำเร็จ: <span className="text-gold-300 font-bold">{skillResult.successRate}</span>
+                    </div>
+                  </div>
+                  {skillResult.note && (
+                    <div className="rounded-lg border border-gold-400/10 bg-victorian-900/60 p-3 text-victorian-300 text-sm">
+                      หมายเหตุ: {skillResult.note}
+                    </div>
+                  )}
+                  <div className="bg-victorian-900/80 border border-gold-400/20 rounded-lg p-4 space-y-2">
+                    <p className="text-victorian-400 text-xs uppercase tracking-wider text-center">โค้ด Iframe</p>
+                    <div className="flex items-center justify-center gap-3">
+                      <code className="text-gold-300 text-xs md:text-sm font-mono tracking-wider select-all break-all text-center">
+                        {embedUrl ? `<iframe src="${embedUrl}" width="500" height="45" style="border:0"></iframe>` : skillResult.referenceCode}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyCode(embedUrl ? `<iframe src="${embedUrl}" width="500" height="45" style="border:0"></iframe>` : skillResult.referenceCode)}
+                        className="p-2 rounded-lg border border-gold-400/20 text-gold-400 hover:bg-gold-400/10 transition-colors cursor-pointer"
+                        title="คัดลอก"
+                      >
+                        {copied ? <Check className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5" />}
+                      </button>
+                    </div>
+                    <p className="text-victorian-500 text-xs text-center mt-2">
+                      คัดลอกโค้ดนี้ไปวางในโพสต์โรลเพลย์เพื่อแสดงกล่อง Embed
+                    </p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <a
+                      href={embedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-victorian w-full py-3 text-base flex items-center justify-center gap-2"
+                    >
+                      <Copy className="w-4 h-4" />
+                      เปิด Embed
+                    </a>
+                    <button
+                      type="button"
+                      onClick={closeSkillModal}
+                      className="btn-gold w-full py-3 text-base"
+                    >
+                      ปิด
+                    </button>
+                  </div>
+                  <div className="text-center text-victorian-400 text-sm">
+                    พลังวิญญาณคงเหลือ: <span className="text-gold-300 font-bold text-lg">{skillResult.remaining}</span>
+                  </div>
+                  <div className="text-center text-xs text-victorian-500">
+                    {skillResult.pathwayName} • {skillResult.sequenceName}
+                  </div>
+                </div>
+              )
+            })()}
 
-            {/* Close button */}
-            <button
-              type="button"
-              onClick={() => setUsedSkill(null)}
-              className="w-full btn-victorian py-3 text-base cursor-pointer"
-            >
-              ปิด
-            </button>
           </div>
         </div>
       )}

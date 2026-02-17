@@ -96,6 +96,10 @@ export interface SkillUsageLog {
   skill_id: string
   spirit_cost: number
   reference_code: string
+  note: string | null
+  success_rate: number | null
+  roll: number | null
+  outcome: string | null
   used_at: string
 }
 

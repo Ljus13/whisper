@@ -43,8 +43,8 @@ export async function getSkillUsageLogs(page: number = 1, search?: string) {
   if (!profile) return { error: 'Profile not found', logs: [], total: 0 }
 
   const isAdmin = profile.role === 'admin' || profile.role === 'dm'
-  const offset = (page - 1) * LOGS_PER_PAGE
   const query = search?.trim() || ''
+  const offset = (page - 1) * LOGS_PER_PAGE
   const hasQuery = query.length > 0
 
   let matchingPlayerIds: string[] = []
@@ -56,7 +56,6 @@ export async function getSkillUsageLogs(page: number = 1, search?: string) {
     matchingPlayerIds = (playersRes || []).map(p => p.id)
   }
 
-  // Build query — admin sees all, player sees only own logs
   let countQuery = supabase
     .from('skill_usage_logs')
     .select('*', { count: 'exact', head: true })
@@ -75,7 +74,6 @@ export async function getSkillUsageLogs(page: number = 1, search?: string) {
   const countResult = await countQuery
   const totalCount = countResult.count || 0
 
-  // Fetch logs (simple query without joins to avoid FK naming issues)
   let dataQuery = supabase
     .from('skill_usage_logs')
     .select('*')
@@ -94,15 +92,11 @@ export async function getSkillUsageLogs(page: number = 1, search?: string) {
   }
 
   const dataResult = await dataQuery
-
   if (dataResult.error) {
-    console.error('skill_usage_logs query error:', dataResult.error)
     return { error: dataResult.error.message, logs: [], total: 0 }
   }
 
   const rawLogs = dataResult.data || []
-
-  // Fetch related player names and skill names in batch
   const playerIds = [...new Set(rawLogs.map(l => l.player_id))]
   const skillIds = [...new Set(rawLogs.map(l => l.skill_id))]
 
@@ -118,7 +112,6 @@ export async function getSkillUsageLogs(page: number = 1, search?: string) {
   const playerMap = new Map((playersRes.data || []).map(p => [p.id, p]))
   const skillMap = new Map((skillsRes.data || []).map(s => [s.id, s]))
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const logs = rawLogs.map((row: any) => {
     const player = playerMap.get(row.player_id)
     const skill = skillMap.get(row.skill_id)
@@ -128,10 +121,14 @@ export async function getSkillUsageLogs(page: number = 1, search?: string) {
       skill_id: row.skill_id,
       spirit_cost: row.spirit_cost,
       reference_code: row.reference_code || '—',
+      note: row.note || null,
       used_at: row.used_at,
       player_name: player?.display_name || 'ไม่ทราบชื่อ',
       player_avatar: player?.avatar_url || null,
       skill_name: skill?.name || 'ไม่ทราบสกิล',
+      success_rate: row.success_rate ?? null,
+      roll: row.roll ?? null,
+      outcome: row.outcome ?? null,
     }
   })
 
@@ -477,10 +474,19 @@ export async function removePlayerPathway(playerId: string, pathwayId: string) {
    USE SKILL (ผู้เล่นใช้สกิล — หักแต้ม Spirituality)
    ══════════════════════════════════════════════ */
 
-export async function castSkill(skillId: string) {
+export async function castSkill(skillId: string, successRate: number, roll: number, note?: string | null) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
+  const normalizedRate = Math.floor(successRate)
+  const normalizedRoll = Math.floor(roll)
+  const normalizedNote = note?.trim() ? note.trim() : null
+  if (!Number.isFinite(normalizedRate) || normalizedRate < 1 || normalizedRate > 20) {
+    return { error: 'กรุณาระบุอัตราสำเร็จระหว่าง 1-20' }
+  }
+  if (!Number.isFinite(normalizedRoll) || normalizedRoll < 1 || normalizedRoll > 20) {
+    return { error: 'ผลลัพธ์สุ่มไม่ถูกต้อง' }
+  }
 
   // 1) Fetch skill info
   const { data: skill } = await supabase
@@ -549,7 +555,9 @@ export async function castSkill(skillId: string) {
   const mm = String(now.getMonth() + 1).padStart(2, '0')
   const yyyy = String(now.getFullYear())
   const uidSuffix = user.id.replace(/-/g, '').slice(-4).toUpperCase()
-  const referenceCode = `${uidSuffix}${dd}${mm}${yyyy}`
+  const outcome = normalizedRoll >= normalizedRate ? 'S' : 'F'
+  const outcomeLabel: 'success' | 'fail' = outcome === 'S' ? 'success' : 'fail'
+  const referenceCode = `SKL-${uidSuffix}${dd}${mm}${yyyy}-T${normalizedRate}-R${normalizedRoll}-${outcome}`
 
   // 8) Log usage with reference code
   await supabase
@@ -558,7 +566,11 @@ export async function castSkill(skillId: string) {
       player_id: user.id,
       skill_id: skillId,
       spirit_cost: skill.spirit_cost,
-      reference_code: referenceCode
+      reference_code: referenceCode,
+      note: normalizedNote,
+      success_rate: normalizedRate,
+      roll: normalizedRoll,
+      outcome: outcomeLabel
     })
 
   revalidatePath('/dashboard/skills')
@@ -567,6 +579,10 @@ export async function castSkill(skillId: string) {
     remaining: profile.spirituality - skill.spirit_cost,
     skillName: skill.name,
     skillDescription: skill.description || null,
-    referenceCode
+    referenceCode,
+    successRate: normalizedRate,
+    roll: normalizedRoll,
+    outcome: outcomeLabel,
+    note: normalizedNote
   }
 }
