@@ -819,17 +819,6 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     loadTab(activeTab)
   }, [activeTab, loadTab])
 
-  // Prefetch all tabs to ensure instant switching (Client-side caching handles the data)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const tabs: TabKey[] = ['actions', 'quests', 'sleep', 'prayer', 'punishments', 'roleplay']
-      tabs.forEach(key => {
-        if (key !== activeTab) loadTab(key)
-      })
-    }, 1000)
-    return () => clearTimeout(timer)
-  }, [loadTab, activeTab])
-
   useEffect(() => {
     setActiveTab(defaultTab)
   }, [defaultTab])
