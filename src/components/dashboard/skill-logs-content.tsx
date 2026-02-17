@@ -98,7 +98,7 @@ export default function SkillLogsContent() {
   function getEmbedIframe(referenceCode: string) {
     const url = getEmbedUrl(referenceCode)
     if (!url) return ''
-    return `<iframe src="${url}" width="500" height="45" style="border:0"></iframe>`
+    return `<iframe src="${url}" width="560" height="60" style="border:0"></iframe>`
   }
 
   function formatDate(dateStr: string) {

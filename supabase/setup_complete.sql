@@ -1169,7 +1169,10 @@ CREATE INDEX IF NOT EXISTS idx_skill_usage_skill  ON public.skill_usage_logs(ski
 CREATE OR REPLACE FUNCTION public.get_skill_embed_log(p_reference_code text)
 RETURNS TABLE (
   player_id uuid,
+  player_name text,
+  player_avatar text,
   skill_id uuid,
+  skill_name text,
   used_at timestamptz,
   reference_code text,
   note text,
@@ -1183,7 +1186,10 @@ SET search_path = ''
 AS $$
   SELECT
     l.player_id,
+    p.display_name AS player_name,
+    p.avatar_url AS player_avatar,
     l.skill_id,
+    s.name AS skill_name,
     l.used_at,
     l.reference_code,
     l.note,
@@ -1191,6 +1197,8 @@ AS $$
     l.roll,
     l.success_rate
   FROM public.skill_usage_logs l
+  LEFT JOIN public.profiles p ON p.id = l.player_id
+  LEFT JOIN public.skills s ON s.id = l.skill_id
   WHERE l.reference_code = p_reference_code
   LIMIT 1
 $$;

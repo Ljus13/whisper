@@ -778,11 +778,11 @@ function PlayerSkillView({
                     <p className="text-victorian-400 text-xs uppercase tracking-wider text-center">โค้ด Iframe</p>
                     <div className="flex items-center justify-center gap-3">
                       <code className="text-gold-300 text-xs md:text-sm font-mono tracking-wider select-all break-all text-center">
-                        {embedUrl ? `<iframe src="${embedUrl}" width="500" height="45" style="border:0"></iframe>` : skillResult.referenceCode}
+                        {embedUrl ? `<iframe src="${embedUrl}" width="560" height="60" style="border:0"></iframe>` : skillResult.referenceCode}
                       </code>
                       <button
                         type="button"
-                        onClick={() => handleCopyCode(embedUrl ? `<iframe src="${embedUrl}" width="500" height="45" style="border:0"></iframe>` : skillResult.referenceCode)}
+                        onClick={() => handleCopyCode(embedUrl ? `<iframe src="${embedUrl}" width="560" height="60" style="border:0"></iframe>` : skillResult.referenceCode)}
                         className="p-2 rounded-lg border border-gold-400/20 text-gold-400 hover:bg-gold-400/10 transition-colors cursor-pointer"
                         title="คัดลอก"
                       >
