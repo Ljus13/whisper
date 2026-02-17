@@ -4,25 +4,29 @@ export type TravelRule = {
   resource: TravelResource
   moveCost: number
   crossMapCost: number
+  canBypassLockedZones: boolean
 }
 
 export const DEFAULT_TRAVEL_RULE: TravelRule = {
   resource: 'travel',
   moveCost: 1,
   crossMapCost: 3,
+  canBypassLockedZones: false,
 }
 
 type TravelRuleConfig = {
   pathwayName: string
   minSeq: number
   maxSeq: number
-  resource: TravelResource
-  moveCost: number
-  crossMapCost: number
+  resource?: TravelResource
+  moveCost?: number
+  crossMapCost?: number
+  canBypassLockedZones?: boolean
 }
 
 const SPECIAL_TRAVEL_RULES: TravelRuleConfig[] = [
   { pathwayName: 'ลูกศิษย์', minSeq: 0, maxSeq: 5, resource: 'spirit', moveCost: 1, crossMapCost: 1 },
+  { pathwayName: 'ลูกศิษย์', minSeq: 0, maxSeq: 9, canBypassLockedZones: true },
 ]
 
 export type PathwayRow = {
@@ -42,6 +46,7 @@ export function normalizePathwayRows(rows: PathwayRow[]) {
 }
 
 export function resolveTravelRule(entries: { pathwayName?: string | null; seqNumber?: number | null }[]): TravelRule {
+  let merged: TravelRule = { ...DEFAULT_TRAVEL_RULE }
   for (const rule of SPECIAL_TRAVEL_RULES) {
     const matched = entries.some(e =>
       e.pathwayName === rule.pathwayName &&
@@ -50,12 +55,13 @@ export function resolveTravelRule(entries: { pathwayName?: string | null; seqNum
       e.seqNumber <= rule.maxSeq
     )
     if (matched) {
-      return {
-        resource: rule.resource,
-        moveCost: rule.moveCost,
-        crossMapCost: rule.crossMapCost,
+      merged = {
+        resource: rule.resource ?? merged.resource,
+        moveCost: rule.moveCost ?? merged.moveCost,
+        crossMapCost: rule.crossMapCost ?? merged.crossMapCost,
+        canBypassLockedZones: rule.canBypassLockedZones ?? merged.canBypassLockedZones,
       }
     }
   }
-  return DEFAULT_TRAVEL_RULE
+  return merged
 }

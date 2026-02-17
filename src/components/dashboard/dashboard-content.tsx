@@ -150,6 +150,12 @@ export default function DashboardContent({
 
   return (
     <div className="min-h-screen">
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes flowEnergy {
+          0% { background-position: 200% 0; }
+          100% { background-position: 0% 0; }
+        }
+      `}} />
       {/* Top nav bar */}
       <header className="border-b border-gold-400/10 bg-victorian-950/80 backdrop-blur-sm">
         <div className="max-w-screen-2xl mx-auto px-4 py-4 md:px-8 md:py-8 flex items-center justify-between">
@@ -385,7 +391,9 @@ export default function DashboardContent({
                   className="h-full rounded-full transition-all duration-700 ease-out"
                   style={{
                     width: `${Math.min(100, Math.max(0, digestProgress))}%`,
-                    background: 'linear-gradient(90deg, #F59E0B, #FBBF24, #FDE68A)',
+                    background: 'linear-gradient(90deg, #F59E0B, #FBBF24, #FFFBEB, #FBBF24, #F59E0B)',
+                    backgroundSize: '200% 100%',
+                    animation: 'flowEnergy 2s linear infinite',
                     boxShadow: '0 0 12px rgba(251, 191, 36, 0.6)'
                   }}
                 />

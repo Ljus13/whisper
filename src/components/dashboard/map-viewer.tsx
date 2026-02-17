@@ -2,7 +2,7 @@
 
 import type { GameMap, MapTokenWithProfile, MapLockedZone, Profile, MapChurchWithReligion, Religion, MapRestPoint } from '@/lib/types/database'
 import {
-  addPlayerToMap, addNpcToMap, moveToken, removeTokenFromMap,
+  addPlayerToMap, addPlayerToMapWithRoleplay, addNpcToMap, moveToken, moveTokenWithRoleplay, removeTokenFromMap,
   createLockedZone, updateLockedZone, deleteLockedZone, toggleMapEmbed,
   updateNpcRadius,
 } from '@/app/actions/map-tokens'
@@ -16,7 +16,7 @@ import {
 import {
   ArrowLeft, ZoomIn, ZoomOut, Maximize, Move, Trash2, Lock,
   Users, X, Save, Code, MapPin, UserPlus, Ghost, Shield, Crown, Footprints,
-  Info, Church, Tent, Moon,
+  Info, Church, Tent, Moon, ScrollText,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useState, useRef, useCallback, useEffect, useTransition } from 'react'
@@ -356,6 +356,15 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const [isPending, startTransition] = useTransition()
   const [isSavingMoves, setIsSavingMoves] = useState(false)
   const isDragActiveRef = useRef(false)
+  const [showRoleplayMoveModal, setShowRoleplayMoveModal] = useState(false)
+  const [showRoleplayJoinModal, setShowRoleplayJoinModal] = useState(false)
+  const [roleplayMoveOriginUrl, setRoleplayMoveOriginUrl] = useState('')
+  const [roleplayMoveDestinationUrl, setRoleplayMoveDestinationUrl] = useState('')
+  const [roleplayJoinOriginUrl, setRoleplayJoinOriginUrl] = useState('')
+  const [roleplayJoinDestinationUrl, setRoleplayJoinDestinationUrl] = useState('')
+  const [isRoleplayMoveMode, setIsRoleplayMoveMode] = useState(false)
+  const [isRoleplayJoinMode, setIsRoleplayJoinMode] = useState(false)
+  const [isRoleplayLoading, setIsRoleplayLoading] = useState(false)
 
   /* ── Church UI state ── */
   const [showChurchModal, setShowChurchModal] = useState(false)
@@ -731,28 +740,31 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   }
 
   // Toggle global move mode - all moveable tokens wiggle
+  function startMoveMode(skipCostCheck?: boolean) {
+    if (!isAdmin && isSleepPending) {
+      showToast('💤 กำลังนอนหลับ — ไม่สามารถย้ายตัวละครได้', 'error')
+      return
+    }
+    if (!skipCostCheck && !isAdmin && travelPoints <= 0) {
+      showToast(`🚫 ${travelLabel}หมดแล้ว!`, 'error')
+      return
+    }
+    positionSnapshotRef.current = {
+      tokens: tokens.map(t => ({ id: t.id, x: t.position_x, y: t.position_y })),
+      churches: churches.map(c => ({ id: c.id, x: c.position_x, y: c.position_y })),
+      restPoints: restPoints.map(r => ({ id: r.id, x: r.position_x, y: r.position_y })),
+    }
+    batchMovesRef.current = { tokens: new Map(), churches: new Map(), restPoints: new Map() }
+    setBatchMoveCount(0)
+    setIsMoveModeActive(true)
+    if (navigator.vibrate) navigator.vibrate([30, 20, 30])
+  }
+
   function toggleMoveMode() {
     if (isMoveModeActive) {
       cancelMoveMode()
     } else {
-      if (!isAdmin && isSleepPending) {
-        showToast('💤 กำลังนอนหลับ — ไม่สามารถย้ายตัวละครได้', 'error')
-        return
-      }
-      if (!isAdmin && travelPoints <= 0) {
-        showToast(`🚫 ${travelLabel}หมดแล้ว!`, 'error')
-        return
-      }
-      // Snapshot all positions for cancel/rollback
-      positionSnapshotRef.current = {
-        tokens: tokens.map(t => ({ id: t.id, x: t.position_x, y: t.position_y })),
-        churches: churches.map(c => ({ id: c.id, x: c.position_x, y: c.position_y })),
-        restPoints: restPoints.map(r => ({ id: r.id, x: r.position_x, y: r.position_y })),
-      }
-      batchMovesRef.current = { tokens: new Map(), churches: new Map(), restPoints: new Map() }
-      setBatchMoveCount(0)
-      setIsMoveModeActive(true)
-      if (navigator.vibrate) navigator.vibrate([30, 20, 30])
+      startMoveMode(false)
     }
   }
 
@@ -801,7 +813,54 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     setChurchMovePreview(null)
     setMovingRestPointId(null)
     setRestPointMovePreview(null)
+    setIsRoleplayMoveMode(false)
     setIsMoveModeActive(false)
+  }
+
+  function openRoleplayMoveModal() {
+    if (!isAdmin && isSleepPending) {
+      showToast('💤 กำลังนอนหลับ — ไม่สามารถย้ายตัวละครได้', 'error')
+      return
+    }
+    setRoleplayMoveOriginUrl('')
+    setRoleplayMoveDestinationUrl('')
+    setShowRoleplayMoveModal(true)
+  }
+
+  function confirmRoleplayMoveLinks() {
+    if (!roleplayMoveOriginUrl.trim() || !roleplayMoveDestinationUrl.trim()) {
+      showToast('กรุณากรอกลิงก์ต้นทางและปลายทาง', 'error')
+      return
+    }
+    setShowRoleplayMoveModal(false)
+    setIsRoleplayMoveMode(true)
+    startMoveMode(true)
+  }
+
+  function openRoleplayJoinModal() {
+    if (!isAdmin && isSleepPending) {
+      showToast('กำลังนอนหลับ — ไม่สามารถย้ายแมพได้', 'error')
+      return
+    }
+    setRoleplayJoinOriginUrl('')
+    setRoleplayJoinDestinationUrl('')
+    setShowRoleplayJoinModal(true)
+  }
+
+  function confirmRoleplayJoinLinks() {
+    if (!roleplayJoinOriginUrl.trim() || !roleplayJoinDestinationUrl.trim()) {
+      showToast('กรุณากรอกลิงก์ต้นทางและปลายทาง', 'error')
+      return
+    }
+    setShowRoleplayJoinModal(false)
+    setIsRoleplayJoinMode(true)
+    setIsJoiningMap(true)
+    setJoinPreviewPos({ x: 50, y: 50 })
+    showToast('📍 คลิกบนแมพเพื่อเลือกจุดเกิด', 'info')
+  }
+
+  async function waitRoleplayDelay() {
+    await new Promise(resolve => setTimeout(resolve, 4000))
   }
 
   // Drop the currently-moving item at the given position (LOCAL ONLY — no server call)
@@ -912,6 +971,77 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         setTimeout(() => setMoveNotif(null), 2000)
       }
     } finally {
+      setIsSavingMoves(false)
+    }
+  }
+
+  async function saveRoleplayMoves() {
+    if (!roleplayMoveOriginUrl.trim() || !roleplayMoveDestinationUrl.trim()) {
+      showToast('กรุณากรอกลิงก์ต้นทางและปลายทาง', 'error')
+      return
+    }
+    setIsSavingMoves(true)
+    let shouldCleanup = false
+    try {
+      const tokenMoves = new Map(batchMovesRef.current.tokens)
+      const churchMoves = new Map(batchMovesRef.current.churches)
+      const restPointMoves = new Map(batchMovesRef.current.restPoints)
+
+      if (churchMoves.size > 0 || restPointMoves.size > 0) {
+        showToast('โหมดโรลเพลย์ใช้ได้เฉพาะตัวละครเท่านั้น', 'error')
+        return
+      }
+      if (tokenMoves.size === 0) {
+        showToast('กรุณาเลือก Token ที่จะย้าย', 'error')
+        return
+      }
+
+      setIsRoleplayLoading(true)
+      await waitRoleplayDelay()
+
+      shouldCleanup = true
+      const errors: string[] = []
+      for (const [tokenId, pos] of tokenMoves) {
+        const result = await moveTokenWithRoleplay(
+          tokenId,
+          pos.x,
+          pos.y,
+          roleplayMoveOriginUrl,
+          roleplayMoveDestinationUrl
+        )
+        pendingMovesRef.current.delete(tokenId)
+        if (result?.error) {
+          errors.push(result.error)
+        } else {
+          const x = Math.max(0, Math.min(100, pos.x))
+          const y = Math.max(0, Math.min(100, pos.y))
+          broadcastRef.current('token_moved', { id: tokenId, x, y })
+        }
+      }
+
+      if (errors.length > 0) {
+        setMoveNotif({ name: 'บันทึก', status: 'error', msg: errors.join(', ') })
+        setTimeout(() => setMoveNotif(null), 3000)
+      } else {
+        setMoveNotif({ name: 'บันทึก', status: 'success', msg: 'บันทึกตำแหน่งทั้งหมดสำเร็จ' })
+        setTimeout(() => setMoveNotif(null), 2000)
+      }
+    } finally {
+      setIsRoleplayLoading(false)
+      if (shouldCleanup) {
+        batchMovesRef.current = { tokens: new Map(), churches: new Map(), restPoints: new Map() }
+        setBatchMoveCount(0)
+        positionSnapshotRef.current = null
+        setIsMoveModeActive(false)
+        setMovingTokenId(null)
+        setMovePreview(null)
+        setMoveOriginalPos(null)
+        setMovingChurchId(null)
+        setChurchMovePreview(null)
+        setMovingRestPointId(null)
+        setRestPointMovePreview(null)
+      }
+      setIsRoleplayMoveMode(false)
       setIsSavingMoves(false)
     }
   }
@@ -1060,6 +1190,10 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
      CHURCH: move mode
      ════════════════════════════════════════════ */
   function startChurchMoveMode(church: MapChurchWithReligion) {
+    if (isRoleplayMoveMode) {
+      showToast('โหมดโรลเพลย์ใช้ได้เฉพาะตัวละครเท่านั้น', 'error')
+      return
+    }
     if (!isMoveModeActive) {
       positionSnapshotRef.current = {
         tokens: tokens.map(t => ({ id: t.id, x: t.position_x, y: t.position_y })),
@@ -1141,6 +1275,10 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
      REST POINT: move mode
      ════════════════════════════════════════════ */
   function startRestPointMoveMode(rp: MapRestPoint) {
+    if (isRoleplayMoveMode) {
+      showToast('โหมดโรลเพลย์ใช้ได้เฉพาะตัวละครเท่านั้น', 'error')
+      return
+    }
     if (!isMoveModeActive) {
       positionSnapshotRef.current = {
         tokens: tokens.map(t => ({ id: t.id, x: t.position_x, y: t.position_y })),
@@ -1251,9 +1389,40 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     })
   }
 
+  function submitJoinMapRoleplay(pos: { x: number; y: number }) {
+    startTransition(async () => {
+      if (!roleplayJoinOriginUrl.trim() || !roleplayJoinDestinationUrl.trim()) {
+        showToast('กรุณากรอกลิงก์ต้นทางและปลายทาง', 'error')
+        return
+      }
+      setIsRoleplayLoading(true)
+      await waitRoleplayDelay()
+      const result = await addPlayerToMapWithRoleplay(
+        map.id,
+        roleplayJoinOriginUrl,
+        roleplayJoinDestinationUrl,
+        undefined,
+        pos.x,
+        pos.y
+      )
+      if (result?.error) {
+        showToast(result.error, 'error')
+      } else {
+        showToast('เข้าร่วมแมพสำเร็จ!', 'info')
+        fetchMapDataRef.current?.()
+        broadcastRef.current('token_added', { mapId: map.id })
+      }
+      setIsRoleplayLoading(false)
+      setIsRoleplayJoinMode(false)
+      setIsJoiningMap(false)
+      setJoinPreviewPos(null)
+    })
+  }
+
   function confirmJoinMap() {
     if (!joinPreviewPos) return
-    submitJoinMap(joinPreviewPos)
+    if (isRoleplayJoinMode) submitJoinMapRoleplay(joinPreviewPos)
+    else submitJoinMap(joinPreviewPos)
   }
   
   /* ════════════════════════════════════════════
@@ -1262,6 +1431,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   function cancelJoinMode() {
     setIsJoiningMap(false)
     setJoinPreviewPos(null)
+    setIsRoleplayJoinMode(false)
   }
 
   /* ════════════════════════════════════════════
@@ -1582,6 +1752,29 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                     <MapPin className="w-4 h-4" />
                     {isSleepPending ? '💤 กำลังหลับ — ย้ายแมพไม่ได้' : myToken ? `ย้ายมาแมพนี้ (−3 แต้ม)` : 'เข้าร่วมแมพนี้'}
                   </button>
+                  <button onClick={openRoleplayJoinModal} disabled={isPending || isSleepPending}
+                    className="w-full flex items-center justify-center gap-2 py-2 lg:py-2.5 px-4 rounded-sm font-display text-xs lg:text-sm uppercase tracking-wider transition-all bg-victorian-900/70 border border-emerald-400/30 text-emerald-300 hover:bg-victorian-800/80 disabled:opacity-50">
+                    <Footprints className="w-4 h-4" />
+                    เข้าร่วมแมพนี้ (โรลเพลย์)
+                  </button>
+                  {isRoleplayLoading && (
+                    <div className="flex items-center justify-center gap-2 rounded-sm border border-emerald-400/30 bg-victorian-900/70 px-3 py-2 text-emerald-200 text-[10px] font-display">
+                      <div className="relative w-24 h-5 rounded-full border border-emerald-400/40 bg-victorian-900/60 overflow-hidden">
+                        <div
+                          className="absolute inset-0"
+                          style={{
+                            background: 'linear-gradient(90deg, rgba(16,185,129,0.05), rgba(16,185,129,0.35), rgba(16,185,129,0.05))',
+                            backgroundSize: '200% 100%',
+                            animation: 'roadFlow 1.2s linear infinite',
+                          }}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center" style={{ animation: 'travelerMove 1s ease-in-out infinite alternate' }}>
+                          <span className="text-xs" style={{ animation: 'walkBob .6s ease-in-out infinite' }}>🚶‍♂️</span>
+                        </div>
+                      </div>
+                      <span style={{ animation: 'travelGlow 1.2s ease-in-out infinite' }}>กำลังเดินทาง...</span>
+                    </div>
+                  )}
                   {myToken && (
                     <p className="text-victorian-500 text-[10px] lg:text-xs text-center mt-1">{travelLabel}: {travelPoints}</p>
                   )}
@@ -1609,10 +1802,39 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                       🔄 เปลี่ยนตำแหน่งแล้ว {batchMoveCount} รายการ
                     </div>
                   )}
+                  {isRoleplayMoveMode && (
+                    <div className="text-center text-emerald-300/90 text-xs font-display">
+                      🛤️ โหมดโรลเพลย์ — ไม่เสียแต้มเดินทาง
+                    </div>
+                  )}
+                  {isRoleplayLoading && (
+                    <div className="flex items-center justify-center gap-2 rounded-sm border border-emerald-400/30 bg-victorian-900/70 px-3 py-2 text-emerald-200 text-xs font-display">
+                      <style dangerouslySetInnerHTML={{ __html: `
+                        @keyframes travelGlow { 0% { opacity: .35 } 50% { opacity: 1 } 100% { opacity: .35 } }
+                        @keyframes walkBob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-4px) } }
+                        @keyframes roadFlow { 0% { background-position: 0% 50% } 100% { background-position: 200% 50% } }
+                        @keyframes travelerMove { 0% { transform: translateX(-10px) } 100% { transform: translateX(10px) } }
+                      `}} />
+                      <div className="relative w-28 h-6 rounded-full border border-emerald-400/40 bg-victorian-900/60 overflow-hidden">
+                        <div
+                          className="absolute inset-0"
+                          style={{
+                            background: 'linear-gradient(90deg, rgba(16,185,129,0.05), rgba(16,185,129,0.35), rgba(16,185,129,0.05))',
+                            backgroundSize: '200% 100%',
+                            animation: 'roadFlow 1.2s linear infinite',
+                          }}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center" style={{ animation: 'travelerMove 1s ease-in-out infinite alternate' }}>
+                          <span className="text-sm" style={{ animation: 'walkBob .6s ease-in-out infinite' }}>🚶‍♂️</span>
+                        </div>
+                      </div>
+                      <span style={{ animation: 'travelGlow 1.2s ease-in-out infinite' }}>กำลังเดินทาง...</span>
+                    </div>
+                  )}
 
                   {/* Save ALL / Select prompt */}
                   <button
-                    onClick={() => startTransition(() => saveAllMoves())}
+                    onClick={() => (isRoleplayMoveMode ? saveRoleplayMoves() : startTransition(() => saveAllMoves()))}
                     disabled={isPending || isSavingMoves || batchMoveCount === 0}
                     className={`w-full flex items-center justify-center gap-2 py-2.5 lg:py-3 px-4 rounded-sm font-display text-sm lg:text-base uppercase tracking-wider transition-all ${
                       isSavingMoves || batchMoveCount > 0
@@ -1637,6 +1859,31 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                       </>
                     )}
                   </button>
+                  {isRoleplayLoading && (
+                    <div className="relative w-full overflow-hidden rounded-sm border border-emerald-400/40 bg-victorian-900/80 px-3 py-2 text-emerald-200 text-xs font-display">
+                      <style dangerouslySetInnerHTML={{ __html: `
+                        @keyframes travelGlow { 0% { opacity: .35 } 50% { opacity: 1 } 100% { opacity: .35 } }
+                        @keyframes walkBob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-4px) } }
+                        @keyframes roadFlow { 0% { background-position: 0% 50% } 100% { background-position: 200% 50% } }
+                        @keyframes travelerMove { 0% { transform: translateX(-12px) } 100% { transform: translateX(12px) } }
+                      `}} />
+                      <div className="absolute inset-0 opacity-60" style={{
+                        background: 'linear-gradient(90deg, rgba(16,185,129,0.05), rgba(16,185,129,0.35), rgba(16,185,129,0.05))',
+                        backgroundSize: '200% 100%',
+                        animation: 'roadFlow 1.2s linear infinite',
+                      }} />
+                      <div className="relative flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base" style={{ animation: 'walkBob .6s ease-in-out infinite' }}>🚶‍♂️</span>
+                          <span style={{ animation: 'travelGlow 1.2s ease-in-out infinite' }}>กำลังเดินทาง...</span>
+                        </div>
+                        <div className="flex items-center gap-2" style={{ animation: 'travelerMove 1s ease-in-out infinite alternate' }}>
+                          <Footprints className="w-4 h-4 text-emerald-300/80" />
+                          <Footprints className="w-4 h-4 text-emerald-300/50" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Cancel button */}
                   <button
@@ -1657,6 +1904,13 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                     <Move className="w-5 h-5" />
                     ✨ ย้ายตำแหน่ง
                   </button>
+                  <button
+                    onClick={openRoleplayMoveModal}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 lg:py-3 px-4 rounded-sm font-display text-sm lg:text-base uppercase tracking-wider transition-all bg-victorian-900/70 border border-emerald-400/30 text-emerald-300 hover:bg-victorian-800/80"
+                  >
+                    <Footprints className="w-5 h-5" />
+                    ย้ายตำแหน่ง (โรลเพลย์)
+                  </button>
                   {!isAdmin && travelPoints <= 0 && (
                     <p className="text-red-500 text-[10px] lg:text-xs text-center mt-1 font-semibold">🚫 {travelLabel}หมด</p>
                   )}
@@ -1664,6 +1918,16 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
               )}
             </div>
           )}
+
+          <div className="px-4 py-2 lg:py-3 border-b border-gold-400/10">
+            <Link
+              href="/dashboard/maps/travel-logs"
+              className="w-full flex items-center justify-center gap-2 py-2.5 lg:py-3 px-4 rounded-sm font-display text-sm lg:text-base uppercase tracking-wider transition-all bg-victorian-900/70 border border-gold-400/20 text-gold-300 hover:bg-victorian-800/80"
+            >
+              <ScrollText className="w-4 h-4 lg:w-5 lg:h-5" />
+              ประวัติการเดินทาง
+            </Link>
+          </div>
 
           {/* ── Zoom Controls ── */}
           <div className="px-4 py-2 lg:py-3 border-b border-gold-400/10">
@@ -2184,6 +2448,56 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
           }} disabled={isPending || !selectedPlayerId}
             className="btn-gold !py-2 !px-4 !text-sm w-full flex items-center justify-center gap-2 disabled:opacity-50">
             <UserPlus className="w-4 h-4" />{isPending ? 'กำลังเพิ่ม...' : 'เพิ่มเข้าแมพ'}
+          </button>
+        </ModalOverlay>
+      )}
+
+      {showRoleplayMoveModal && (
+        <ModalOverlay onClose={() => setShowRoleplayMoveModal(false)} title="ย้ายตำแหน่ง (โรลเพลย์)">
+          <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">ลิงก์ต้นทาง *</label>
+          <input
+            value={roleplayMoveOriginUrl}
+            onChange={e => setRoleplayMoveOriginUrl(e.target.value)}
+            className="input-victorian !py-2 !px-3 w-full mb-3"
+            placeholder="https://..."
+          />
+          <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">ลิงก์ปลายทาง *</label>
+          <input
+            value={roleplayMoveDestinationUrl}
+            onChange={e => setRoleplayMoveDestinationUrl(e.target.value)}
+            className="input-victorian !py-2 !px-3 w-full mb-4"
+            placeholder="https://..."
+          />
+          <button
+            onClick={confirmRoleplayMoveLinks}
+            className="btn-gold !py-2 !px-4 !text-sm w-full flex items-center justify-center gap-2"
+          >
+            ยืนยันและเลือกตำแหน่ง
+          </button>
+        </ModalOverlay>
+      )}
+
+      {showRoleplayJoinModal && (
+        <ModalOverlay onClose={() => setShowRoleplayJoinModal(false)} title="เข้าร่วมแมพ (โรลเพลย์)">
+          <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">ลิงก์ต้นทาง *</label>
+          <input
+            value={roleplayJoinOriginUrl}
+            onChange={e => setRoleplayJoinOriginUrl(e.target.value)}
+            className="input-victorian !py-2 !px-3 w-full mb-3"
+            placeholder="https://..."
+          />
+          <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">ลิงก์ปลายทาง *</label>
+          <input
+            value={roleplayJoinDestinationUrl}
+            onChange={e => setRoleplayJoinDestinationUrl(e.target.value)}
+            className="input-victorian !py-2 !px-3 w-full mb-4"
+            placeholder="https://..."
+          />
+          <button
+            onClick={confirmRoleplayJoinLinks}
+            className="btn-gold !py-2 !px-4 !text-sm w-full flex items-center justify-center gap-2"
+          >
+            ยืนยันและเลือกจุดเกิด
           </button>
         </ModalOverlay>
       )}
