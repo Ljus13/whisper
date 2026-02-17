@@ -86,7 +86,7 @@ export default async function DashboardPage() {
   const { data: grantPathways } = grantIds.length > 0
     ? await supabase
       .from('skill_pathways')
-      .select('id, name, overview, description, bg_url, logo_url')
+      .select('id, name, overview, description, bg_url, logo_url, video_url')
       .in('id', grantIds)
     : { data: [] }
 

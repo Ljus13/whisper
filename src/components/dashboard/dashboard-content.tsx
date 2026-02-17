@@ -11,7 +11,7 @@ import { CornerOrnament, OrnamentedCard } from '@/components/ui/ornaments'
 import dynamic from 'next/dynamic'
 import type { User } from '@supabase/supabase-js'
 import { LogOut, Shield, Swords, Crown, Settings, X, Camera, Map, Zap, Users, Footprints, Flame, Brain, Heart, Pencil, Lock, Image as ImageIcon, BookOpen, FileText, Church } from 'lucide-react'
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -58,6 +58,122 @@ interface GrantPathway {
   description: string | null
   bg_url: string | null
   logo_url: string | null
+  video_url: string | null
+}
+
+function PathwayChoiceCard({
+  pathway,
+  detailText,
+  isChoosingPathway,
+  onChoose
+}: {
+  pathway: GrantPathway
+  detailText: string
+  isChoosingPathway: boolean
+  onChoose: (id: string) => void
+}) {
+  const cardRef = useRef<HTMLDivElement | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const [hovered, setHovered] = useState(false)
+  const [inView, setInView] = useState(false)
+  const [coarsePointer, setCoarsePointer] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(pointer: coarse)')
+    setCoarsePointer(mq.matches)
+    const handler = (e: MediaQueryListEvent) => setCoarsePointer(e.matches)
+    if ('addEventListener' in mq) mq.addEventListener('change', handler)
+    else mq.addListener(handler)
+    return () => {
+      if ('removeEventListener' in mq) mq.removeEventListener('change', handler)
+      else mq.removeListener(handler)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!coarsePointer) {
+      setInView(false)
+      return
+    }
+    const el = cardRef.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      entries => {
+        for (const entry of entries) {
+          if (entry.target === el) {
+            setInView(entry.isIntersecting && entry.intersectionRatio >= 0.6)
+          }
+        }
+      },
+      { threshold: [0, 0.6, 1] }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [coarsePointer])
+
+  const shouldPlay = Boolean(pathway.video_url) && (coarsePointer ? inView : hovered)
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    if (shouldPlay) {
+      const p = video.play()
+      if (p && typeof p.catch === 'function') p.catch(() => {})
+    } else {
+      video.pause()
+      video.currentTime = 0
+    }
+  }, [shouldPlay])
+
+  return (
+    <div
+      ref={cardRef}
+      className="snap-center shrink-0 w-72 md:w-96 rounded-2xl border border-gold-400/10 bg-victorian-900/70 overflow-hidden transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0_18px_50px_rgba(0,0,0,0.45)]"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div className="relative aspect-square">
+        {pathway.bg_url ? (
+          <img src={pathway.bg_url} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" decoding="async" />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-victorian-900 via-victorian-950 to-black" />
+        )}
+        {pathway.video_url && (
+          <video
+            ref={videoRef}
+            src={pathway.video_url}
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${shouldPlay ? 'opacity-100' : 'opacity-0'}`}
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            poster={pathway.bg_url || undefined}
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
+        {pathway.logo_url && (
+          <div className="absolute top-4 right-4 w-14 h-14 rounded-full bg-black/40 border border-gold-400/30 flex items-center justify-center">
+            <img src={pathway.logo_url} alt="" className="w-10 h-10 object-contain" loading="lazy" decoding="async" />
+          </div>
+        )}
+      </div>
+      <div className="p-5 space-y-3">
+        <div className="text-gold-200 text-xl font-semibold">{pathway.name}</div>
+        <div className="text-victorian-300 text-sm max-h-24 overflow-y-auto pr-2">
+          {detailText}
+        </div>
+        <button
+          type="button"
+          onClick={() => onChoose(pathway.id)}
+          disabled={isChoosingPathway}
+          className="btn-gold w-full !py-2 !text-sm disabled:opacity-50"
+        >
+          {isChoosingPathway ? 'กำลังยืนยัน...' : 'เลือกเส้นทางนี้'}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 
@@ -959,35 +1075,13 @@ export default function DashboardContent({
                   {availablePathways.map(pathway => {
                     const detailText = pathway.overview || pathway.description || 'ไม่มีรายละเอียด'
                     return (
-                      <div key={pathway.id} className="snap-center shrink-0 w-72 md:w-96 rounded-2xl border border-gold-400/10 bg-victorian-900/70 overflow-hidden transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
-                        <div className="relative h-44 md:h-56">
-                          {pathway.bg_url ? (
-                            <img src={pathway.bg_url} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" decoding="async" />
-                          ) : (
-                            <div className="absolute inset-0 bg-gradient-to-br from-victorian-900 via-victorian-950 to-black" />
-                          )}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
-                          {pathway.logo_url && (
-                            <div className="absolute top-4 right-4 w-14 h-14 rounded-full bg-black/40 border border-gold-400/30 flex items-center justify-center">
-                              <img src={pathway.logo_url} alt="" className="w-10 h-10 object-contain" loading="lazy" decoding="async" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="p-5 space-y-3">
-                          <div className="text-gold-200 text-xl font-semibold">{pathway.name}</div>
-                          <div className="text-victorian-300 text-sm max-h-24 overflow-y-auto pr-2">
-                            {detailText}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleChoosePathway(pathway.id)}
-                            disabled={isChoosingPathway}
-                            className="btn-gold w-full !py-2 !text-sm disabled:opacity-50"
-                          >
-                            {isChoosingPathway ? 'กำลังยืนยัน...' : 'เลือกเส้นทางนี้'}
-                          </button>
-                        </div>
-                      </div>
+                      <PathwayChoiceCard
+                        key={pathway.id}
+                        pathway={pathway}
+                        detailText={detailText}
+                        isChoosingPathway={isChoosingPathway}
+                        onChoose={handleChoosePathway}
+                      />
                     )
                   })}
                 </div>

@@ -44,6 +44,7 @@ export interface SkillPathway {
   overview: string | null
   bg_url: string | null
   logo_url: string | null
+  video_url: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -391,6 +392,7 @@ export interface Database {
           description?: string | null
           bg_url?: string | null
           logo_url?: string | null
+          video_url?: string | null
           sort_order?: number
         }
         Update: {
@@ -398,6 +400,7 @@ export interface Database {
           description?: string | null
           bg_url?: string | null
           logo_url?: string | null
+          video_url?: string | null
           sort_order?: number
         }
       }

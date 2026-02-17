@@ -219,6 +219,7 @@ export async function createSkillPathway(formData: FormData) {
   const overview = formData.get('overview') as string | null
   const bg_url = formData.get('bg_url') as string | null
   const logo_url = formData.get('logo_url') as string | null
+  const video_url = formData.get('video_url') as string | null
 
   if (!name?.trim() || !type_id) return { error: 'Name and type are required' }
 
@@ -230,7 +231,8 @@ export async function createSkillPathway(formData: FormData) {
       description: description?.trim() || null,
       overview: overview?.trim() || null,
       bg_url: bg_url?.trim() || null,
-      logo_url: logo_url?.trim() || null
+      logo_url: logo_url?.trim() || null,
+      video_url: video_url?.trim() || null
     })
 
   if (error) return { error: error.message }
@@ -246,6 +248,7 @@ export async function updateSkillPathway(id: string, formData: FormData) {
   const overview = formData.get('overview') as string | null
   const bg_url = formData.get('bg_url') as string | null
   const logo_url = formData.get('logo_url') as string | null
+  const video_url = formData.get('video_url') as string | null
 
   if (!name?.trim()) return { error: 'Name is required' }
 
@@ -256,7 +259,8 @@ export async function updateSkillPathway(id: string, formData: FormData) {
       description: description?.trim() || null,
       overview: overview?.trim() || null,
       bg_url: bg_url?.trim() || null,
-      logo_url: logo_url?.trim() || null
+      logo_url: logo_url?.trim() || null,
+      video_url: video_url?.trim() || null
     })
     .eq('id', id)
 

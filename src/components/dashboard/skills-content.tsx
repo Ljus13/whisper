@@ -179,6 +179,7 @@ function AdminPanel({
                       <textarea name="overview" placeholder="ภาพรวมของเส้นทาง" className="input-victorian w-full text-sm" rows={3} />
                       <input name="bg_url" placeholder="URL ภาพพื้นหลัง (5:4)" className="input-victorian w-full text-sm" />
                       <input name="logo_url" placeholder="URL โลโก้ (1:1 PNG)" className="input-victorian w-full text-sm" />
+                      <input name="video_url" placeholder="URL วิดีโอ (1:1 MP4)" className="input-victorian w-full text-sm" />
                       <div className="flex gap-2">
                         <button type="submit" disabled={isPending} className="btn-gold px-3 py-1.5 text-xs">บันทึก</button>
                         <button type="button" onClick={() => setShowAddPathway(null)} className="btn-victorian px-3 py-1.5 text-xs">ยกเลิก</button>
@@ -205,6 +206,7 @@ function AdminPanel({
                             <textarea name="overview" defaultValue={pathway.overview || ''} placeholder="ภาพรวมของเส้นทาง" className="input-victorian w-full text-sm" rows={3} />
                             <input name="bg_url" defaultValue={pathway.bg_url || ''} placeholder="URL ภาพพื้นหลัง (5:4)" className="input-victorian w-full text-sm" />
                             <input name="logo_url" defaultValue={pathway.logo_url || ''} placeholder="URL โลโก้ (1:1 PNG)" className="input-victorian w-full text-sm" />
+                            <input name="video_url" defaultValue={pathway.video_url || ''} placeholder="URL วิดีโอ (1:1 MP4)" className="input-victorian w-full text-sm" />
                             <div className="flex gap-2">
                               <button type="submit" disabled={isPending} className="btn-gold px-3 py-1.5 text-xs">บันทึก</button>
                               <button type="button" onClick={() => setEditPathwayId(null)} className="btn-victorian px-3 py-1.5 text-xs">ยกเลิก</button>

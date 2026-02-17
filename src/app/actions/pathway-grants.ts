@@ -88,7 +88,7 @@ export async function acceptPathwayGrant(pathwayId: string) {
 
   const { data: pathway } = await supabase
     .from('skill_pathways')
-    .select('id, name, logo_url, bg_url, overview, description')
+    .select('id, name, logo_url, bg_url, overview, description, video_url')
     .eq('id', pathwayId)
     .single()
 
