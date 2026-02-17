@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useTransition, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import { getCached, setCache } from '@/lib/client-cache'
 import {
   ArrowLeft, Moon, ScrollText, Swords, Target, Shield, Plus, Copy,
   X, ExternalLink, ChevronLeft, ChevronRight, Clock, CheckCircle,
@@ -570,20 +571,45 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
 
   // ─── Fetch functions ───
   const fetchActionCodes = useCallback(async (p: number) => {
+    const cached = getCached<{ codes: CodeEntry[]; page: number; totalPages: number }>(`aq:actionCodes:${p}`)
+    if (cached) {
+      setActionCodes(cached.codes)
+      setAcPage(cached.page)
+      setAcTotalPages(cached.totalPages)
+      return
+    }
     const r = await getActionCodes(p)
     setActionCodes(r.codes as CodeEntry[])
     setAcPage(r.page || 1)
     setAcTotalPages(r.totalPages || 1)
+    setCache(`aq:actionCodes:${p}`, { codes: r.codes as CodeEntry[], page: r.page || 1, totalPages: r.totalPages || 1 })
   }, [])
 
   const fetchQuestCodes = useCallback(async (p: number) => {
+    const cached = getCached<{ codes: CodeEntry[]; page: number; totalPages: number }>(`aq:questCodes:${p}`)
+    if (cached) {
+      setQuestCodes(cached.codes)
+      setQcPage(cached.page)
+      setQcTotalPages(cached.totalPages)
+      return
+    }
     const r = await getQuestCodes(p)
     setQuestCodes(r.codes as CodeEntry[])
     setQcPage(r.page || 1)
     setQcTotalPages(r.totalPages || 1)
+    setCache(`aq:questCodes:${p}`, { codes: r.codes as CodeEntry[], page: r.page || 1, totalPages: r.totalPages || 1 })
   }, [])
 
   const fetchActionSubs = useCallback(async (p: number) => {
+    const cached = getCached<{ submissions: Submission[]; page: number; totalPages: number; total: number }>(`aq:actionSubs:${p}:${isAdmin ? 'admin' : 'player'}`)
+    if (cached) {
+      setActionSubs(cached.submissions)
+      setAsPage(cached.page)
+      setAsTotalPages(cached.totalPages)
+      setAsTotal(cached.total)
+      setAsLoading(false)
+      return
+    }
     setAsLoading(true)
     const r = await getActionSubmissions(p)
     setActionSubs(r.submissions as Submission[])
@@ -591,9 +617,19 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     setAsTotalPages(r.totalPages || 1)
     setAsTotal(r.total || 0)
     setAsLoading(false)
-  }, [])
+    setCache(`aq:actionSubs:${p}:${isAdmin ? 'admin' : 'player'}`, { submissions: r.submissions as Submission[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
+  }, [isAdmin])
 
   const fetchQuestSubs = useCallback(async (p: number) => {
+    const cached = getCached<{ submissions: Submission[]; page: number; totalPages: number; total: number }>(`aq:questSubs:${p}:${isAdmin ? 'admin' : 'player'}`)
+    if (cached) {
+      setQuestSubs(cached.submissions)
+      setQsPage(cached.page)
+      setQsTotalPages(cached.totalPages)
+      setQsTotal(cached.total)
+      setQsLoading(false)
+      return
+    }
     setQsLoading(true)
     const r = await getQuestSubmissions(p)
     setQuestSubs(r.submissions as Submission[])
@@ -601,9 +637,19 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     setQsTotalPages(r.totalPages || 1)
     setQsTotal(r.total || 0)
     setQsLoading(false)
-  }, [])
+    setCache(`aq:questSubs:${p}:${isAdmin ? 'admin' : 'player'}`, { submissions: r.submissions as Submission[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
+  }, [isAdmin])
 
   const fetchSleepLogs = useCallback(async (p: number) => {
+    const cached = getCached<{ logs: SleepLog[]; page: number; totalPages: number; total: number }>(`aq:sleepLogs:${p}`)
+    if (cached) {
+      setSleepLogs(cached.logs)
+      setSlPage(cached.page)
+      setSlTotalPages(cached.totalPages)
+      setSlTotal(cached.total)
+      setSlLoading(false)
+      return
+    }
     setSlLoading(true)
     const r = await getSleepLogs(p)
     setSleepLogs(r.logs as SleepLog[])
@@ -611,9 +657,19 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     setSlTotalPages(r.totalPages || 1)
     setSlTotal(r.total || 0)
     setSlLoading(false)
+    setCache(`aq:sleepLogs:${p}`, { logs: r.logs as SleepLog[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
   }, [])
 
   const fetchRoleplaySubs = useCallback(async (p: number) => {
+    const cached = getCached<{ submissions: RoleplaySubmission[]; page: number; totalPages: number; total: number }>(`aq:roleplaySubs:${p}:${isAdmin ? 'admin' : 'player'}`)
+    if (cached) {
+      setRoleplaySubs(cached.submissions)
+      setRpPage(cached.page)
+      setRpTotalPages(cached.totalPages)
+      setRpTotal(cached.total)
+      setRpLoading(false)
+      return
+    }
     setRpLoading(true)
     const r = await getRoleplaySubmissions(p)
     setRoleplaySubs(r.submissions as RoleplaySubmission[])
@@ -621,7 +677,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     setRpTotalPages(r.totalPages || 1)
     setRpTotal(r.total || 0)
     setRpLoading(false)
-  }, [])
+    setCache(`aq:roleplaySubs:${p}:${isAdmin ? 'admin' : 'player'}`, { submissions: r.submissions as RoleplaySubmission[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
+  }, [isAdmin])
 
   const fetchDigestProgress = useCallback(async () => {
     const r = await getPotionDigestStatus()
@@ -631,6 +688,16 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   }, [])
 
   const fetchPrayerLogs = useCallback(async (p: number = 1) => {
+    const cacheKey = `aq:prayerLogs:${p}:${isAdmin ? 'admin' : 'player'}`
+    const cached = getCached<{ logs: any[]; page: number; totalPages: number; total: number }>(cacheKey)
+    if (cached) {
+      setPrayerLogs(cached.logs)
+      setPlTotal(cached.total)
+      setPlPage(cached.page)
+      setPlTotalPages(cached.totalPages)
+      setPlLoading(false)
+      return
+    }
     setPlLoading(true)
     let logs: any[] = []
     let total = 0
@@ -657,9 +724,19 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     setPlPage(p)
     setPlTotalPages(totalPages)
     setPlLoading(false)
+    setCache(cacheKey, { logs, page: p, totalPages, total })
   }, [isAdmin])
 
   const fetchPunishments = useCallback(async (p: number) => {
+    const cached = getCached<{ punishments: PunishmentEntry[]; page: number; totalPages: number; total: number }>(`aq:punishments:${p}`)
+    if (cached) {
+      setPunishments(cached.punishments)
+      setPunPage(cached.page)
+      setPunTotalPages(cached.totalPages)
+      setPunTotal(cached.total)
+      setPunLoading(false)
+      return
+    }
     setPunLoading(true)
     const r = await getPunishments(p)
     setPunishments((r.punishments || []) as PunishmentEntry[])
@@ -667,9 +744,19 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     setPunTotalPages(r.totalPages || 1)
     setPunTotal(r.total || 0)
     setPunLoading(false)
+    setCache(`aq:punishments:${p}`, { punishments: (r.punishments || []) as PunishmentEntry[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
   }, [])
 
   const fetchPunishmentLogs = useCallback(async (p: number) => {
+    const cached = getCached<{ logs: PunishmentLogEntry[]; page: number; totalPages: number; total: number }>(`aq:punishmentLogs:${p}`)
+    if (cached) {
+      setPunLogs(cached.logs)
+      setPunLogPage(cached.page)
+      setPunLogTotalPages(cached.totalPages)
+      setPunLogTotal(cached.total)
+      setPunLogLoading(false)
+      return
+    }
     setPunLogLoading(true)
     const r = await getPunishmentLogs(p)
     setPunLogs((r.logs || []) as PunishmentLogEntry[])
@@ -677,6 +764,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     setPunLogTotalPages(r.totalPages || 1)
     setPunLogTotal(r.total || 0)
     setPunLogLoading(false)
+    setCache(`aq:punishmentLogs:${p}`, { logs: (r.logs || []) as PunishmentLogEntry[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
   }, [])
 
   const loadTab = useCallback(async (key: TabKey) => {
@@ -706,7 +794,6 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       autoApplyExpiredPunishments()
     }
     fetchDigestProgress()
-    loadTab('actions')
   }, [isAdmin, fetchDigestProgress, loadTab])
 
   useEffect(() => {
