@@ -37,8 +37,8 @@ export default async function SkillEmbedPage({ params }: { params: Promise<{ cod
   const supabase = await createClient()
 
   const { data: log } = await supabase
-    .rpc<SkillEmbedLog>('get_skill_embed_log', { p_reference_code: referenceCode })
-    .single()
+    .rpc('get_skill_embed_log', { p_reference_code: referenceCode })
+    .single() as { data: SkillEmbedLog | null }
 
   if (!log) notFound()
 
