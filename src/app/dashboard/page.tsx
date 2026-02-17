@@ -13,7 +13,7 @@ export default async function DashboardPage() {
   const user = session.user
 
   // Fetch profile and pathway info in parallel (not sequential!)
-  const [{ data: profile }, { data: playerPathways }] = await Promise.all([
+  const [{ data: profile }, { data: playerPathways }, { data: pathwayGrants }] = await Promise.all([
     supabase
       .from('profiles')
       .select(`
@@ -37,6 +37,10 @@ export default async function DashboardPage() {
       .not('pathway_id', 'is', null)
       .order('id', { ascending: true })
       .limit(1),
+    supabase
+      .from('pathway_grants')
+      .select('pathway_id')
+      .eq('player_id', user.id),
   ])
 
   let rankDisplay = 'ผู้มาเยือน'
@@ -78,5 +82,22 @@ export default async function DashboardPage() {
     }
   }
 
-  return <DashboardContent user={user} profile={profile} rankDisplay={rankDisplay} rankInfo={rankInfo} />
+  const grantIds = (pathwayGrants || []).map(g => g.pathway_id).filter(Boolean)
+  const { data: grantPathways } = grantIds.length > 0
+    ? await supabase
+      .from('skill_pathways')
+      .select('id, name, overview, description, bg_url, logo_url')
+      .in('id', grantIds)
+    : { data: [] }
+
+  return (
+    <DashboardContent
+      user={user}
+      profile={profile}
+      rankDisplay={rankDisplay}
+      rankInfo={rankInfo}
+      grantPathways={grantPathways || []}
+      hasPathway={!!(playerPathways && playerPathways.length > 0)}
+    />
+  )
 }

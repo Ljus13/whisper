@@ -81,6 +81,14 @@ export interface PlayerPathway {
   updated_at: string
 }
 
+export interface PathwayGrant {
+  id: string
+  player_id: string
+  pathway_id: string
+  granted_by: string | null
+  created_at: string
+}
+
 export interface SkillUsageLog {
   id: string
   player_id: string
@@ -438,6 +446,19 @@ export interface Database {
         Update: {
           pathway_id?: string | null
           sequence_id?: string | null
+        }
+      }
+      pathway_grants: {
+        Row: PathwayGrant
+        Insert: {
+          id?: string
+          player_id: string
+          pathway_id: string
+          granted_by?: string | null
+        }
+        Update: {
+          pathway_id?: string
+          granted_by?: string | null
         }
       }
       maps: {

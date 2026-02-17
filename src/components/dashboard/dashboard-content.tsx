@@ -2,6 +2,7 @@
 
 import { signOut, updateProfile } from '@/app/actions/auth'
 import { promotePotionDigest } from '@/app/actions/action-quest'
+import { acceptPathwayGrant } from '@/app/actions/pathway-grants'
 import { applySanityDecay } from '@/app/actions/players'
 import AdminEditModal from '@/components/admin/admin-edit-modal'
 import DisplayNameSetup from '@/components/dashboard/display-name-setup'
@@ -50,6 +51,15 @@ interface RankInfo {
   sequenceName: string | null
 }
 
+interface GrantPathway {
+  id: string
+  name: string
+  overview: string | null
+  description: string | null
+  bg_url: string | null
+  logo_url: string | null
+}
+
 
 function RoleBadge({ role }: { role: string }) {
   const config = {
@@ -73,18 +83,23 @@ export default function DashboardContent({
   user, 
   profile,
   rankDisplay = 'Level 1 Adventurer',
-  rankInfo = null
+  rankInfo = null,
+  grantPathways = [],
+  hasPathway = false
 }: { 
   user: User
   profile: Profile | null
   rankDisplay?: string 
   rankInfo?: RankInfo | null
+  grantPathways?: GrantPathway[]
+  hasPathway?: boolean
 }) {
   const [showProfile, setShowProfile] = useState(false)
   const [showEditAvatar, setShowEditAvatar] = useState(false)
   const [showEditBio, setShowEditBio] = useState(false)
   const [showAdminEdit, setShowAdminEdit] = useState(false)
   const [isSigningOut, startTransition] = useTransition()
+  const [isChoosingPathway, startChoiceTransition] = useTransition()
   const [isSavingBio, setIsSavingBio] = useState(false)
   const router = useRouter()
   
@@ -95,6 +110,10 @@ export default function DashboardContent({
   const [digestProgress, setDigestProgress] = useState(profile?.potion_digest_progress ?? 0)
   const [isPromotingDigest, setIsPromotingDigest] = useState(false)
   const [promoteResult, setPromoteResult] = useState<{ seqNumber: number; seqName: string | null } | null>(null)
+  const [availablePathways, setAvailablePathways] = useState<GrantPathway[]>(grantPathways)
+  const [hasChosenPathway, setHasChosenPathway] = useState(hasPathway)
+  const [choiceError, setChoiceError] = useState<string | null>(null)
+  const [celebrationPathway, setCelebrationPathway] = useState<GrantPathway | null>(null)
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
   
@@ -113,6 +132,14 @@ export default function DashboardContent({
     setDigestProgress(profile?.potion_digest_progress ?? 0)
   }, [profile?.potion_digest_progress])
 
+  useEffect(() => {
+    setAvailablePathways(grantPathways)
+  }, [grantPathways])
+
+  useEffect(() => {
+    setHasChosenPathway(hasPathway)
+  }, [hasPathway])
+
   const displayName = profile?.display_name 
     || user.user_metadata?.full_name 
     || user.email?.split('@')[0] 
@@ -126,6 +153,23 @@ export default function DashboardContent({
   const currentBio = optimisticBio !== undefined ? optimisticBio : profile?.bio
 
   const role = profile?.role || 'player'
+
+  const mustChoosePathway = role === 'player' && !hasChosenPathway && availablePathways.length > 0 && !needsDisplayNameSetup
+
+  function handleChoosePathway(pathwayId: string) {
+    setChoiceError(null)
+    startChoiceTransition(async () => {
+      const result = await acceptPathwayGrant(pathwayId)
+      if (result?.error) {
+        setChoiceError(result.error)
+        return
+      }
+      setAvailablePathways([])
+      setHasChosenPathway(true)
+      setCelebrationPathway(result.pathway || null)
+      router.refresh()
+    })
+  }
 
   function handleSignOut() {
     startTransition(async () => {
@@ -545,6 +589,29 @@ export default function DashboardContent({
               </p>
             </div>
           </a>
+          {isAdmin && (
+            <Link
+              href="/dashboard/pathways-grant"
+              className="group relative overflow-hidden card-victorian p-6 md:p-12 lg:p-16 flex flex-col items-center justify-center gap-4 md:gap-8 
+                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[180px] md:min-h-[350px]
+                        cursor-pointer"
+            >
+              <CornerOrnament className="absolute top-0 left-0 w-12 h-12 md:w-24 md:h-24" />
+              <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-12 h-12 md:w-24 md:h-24" />
+              <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-12 h-12 md:w-24 md:h-24" />
+              <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] w-12 h-12 md:w-24 md:h-24" />
+              <div className="relative z-10 flex flex-col items-center gap-3 md:gap-8">
+                <div className="w-16 h-16 md:w-32 md:h-32 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
+                              flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
+                  <BookOpen className="w-8 h-8 md:w-16 md:h-16 text-gold-400" />
+                </div>
+                <h3 className="heading-victorian text-2xl md:text-5xl">มอบโอสถ</h3>
+                <p className="text-victorian-400 text-center text-sm md:text-2xl font-body hidden md:block">
+                  มอบเส้นทางและติดตามการตัดสินใจ
+                </p>
+              </div>
+            </Link>
+          )}
         </section>
 
       </main>
@@ -866,6 +933,96 @@ export default function DashboardContent({
           onClose={() => setShowAdminEdit(false)}
           onSaved={() => router.refresh()}
         />
+      )}
+
+      {mustChoosePathway && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+          <div className="relative w-full max-w-6xl">
+            <div className="border border-gold-400/20 rounded-2xl overflow-hidden bg-victorian-950/90 shadow-[0_0_60px_rgba(212,175,55,0.15)]">
+              <div className="p-6 md:p-8 border-b border-gold-400/10">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="heading-victorian text-2xl md:text-3xl text-gold-200">กรุณาเลือกเส้นทางของคุณ</div>
+                    <div className="text-victorian-400 text-sm mt-1">สถานะ: กำลังรอตัดสินใจ</div>
+                  </div>
+                  <div className="px-3 py-1.5 text-xs rounded-full border border-amber-400/40 text-amber-200 bg-amber-500/10">
+                    เลื่อนซ้าย/ขวาเพื่อดูตัวเลือกทั้งหมด
+                  </div>
+                </div>
+                {choiceError && (
+                  <div className="mt-3 text-red-400 text-sm">{choiceError}</div>
+                )}
+              </div>
+              <div className="p-6 md:p-8">
+                <div className="flex gap-5 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-4">
+                  {availablePathways.map(pathway => {
+                    const detailText = pathway.overview || pathway.description || 'ไม่มีรายละเอียด'
+                    return (
+                      <div key={pathway.id} className="snap-center shrink-0 w-72 md:w-96 rounded-2xl border border-gold-400/10 bg-victorian-900/70 overflow-hidden transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
+                        <div className="relative h-44 md:h-56">
+                          {pathway.bg_url ? (
+                            <img src={pathway.bg_url} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" decoding="async" />
+                          ) : (
+                            <div className="absolute inset-0 bg-gradient-to-br from-victorian-900 via-victorian-950 to-black" />
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
+                          {pathway.logo_url && (
+                            <div className="absolute top-4 right-4 w-14 h-14 rounded-full bg-black/40 border border-gold-400/30 flex items-center justify-center">
+                              <img src={pathway.logo_url} alt="" className="w-10 h-10 object-contain" loading="lazy" decoding="async" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-5 space-y-3">
+                          <div className="text-gold-200 text-xl font-semibold">{pathway.name}</div>
+                          <div className="text-victorian-300 text-sm max-h-24 overflow-y-auto pr-2">
+                            {detailText}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleChoosePathway(pathway.id)}
+                            disabled={isChoosingPathway}
+                            className="btn-gold w-full !py-2 !text-sm disabled:opacity-50"
+                          >
+                            {isChoosingPathway ? 'กำลังยืนยัน...' : 'เลือกเส้นทางนี้'}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {celebrationPathway && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+          <div className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-amber-400/40 bg-victorian-950/90">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.4),_transparent_60%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(245,158,11,0.35),_transparent_60%)]" />
+            <div className="relative p-6 md:p-10 text-center space-y-5">
+              <div className="mx-auto w-20 h-20 rounded-full border border-amber-400/60 bg-amber-500/10 flex items-center justify-center shadow-[0_0_35px_rgba(251,191,36,0.6)]">
+                {celebrationPathway.logo_url ? (
+                  <img src={celebrationPathway.logo_url} alt="" className="w-12 h-12 object-contain" loading="lazy" decoding="async" />
+                ) : (
+                  <Crown className="w-8 h-8 text-amber-300" />
+                )}
+              </div>
+              <div className="heading-victorian text-2xl md:text-3xl text-amber-200 drop-shadow-[0_0_12px_rgba(251,191,36,0.7)]">
+                ตัดสินใจแล้ว
+              </div>
+              <div className="text-amber-100 text-sm md:text-lg">
+                คุณเลือกเส้นทาง {celebrationPathway.name} แล้ว
+              </div>
+              <button type="button" onClick={() => setCelebrationPathway(null)} className="btn-gold !px-6 !py-2 !text-sm">
+                เริ่มต้นการผจญภัย
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {promoteResult && (
