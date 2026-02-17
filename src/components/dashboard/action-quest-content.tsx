@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useTransition, useCallback, useRef } from 'react'
+import { useState, useEffect, useTransition, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { getCached, setCache } from '@/lib/client-cache'
+import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Moon, ScrollText, Swords, Target, Shield, Plus, Copy,
   X, ExternalLink, ChevronLeft, ChevronRight, Clock, CheckCircle,
@@ -272,6 +273,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>(defaultTab)
   const [loadTimes, setLoadTimes] = useState<Partial<Record<TabKey, number>>>({})
+  const router = useRouter()
   const loadedRef = useRef<Record<TabKey, boolean>>({
     actions: false,
     quests: false,
@@ -683,7 +685,9 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   const fetchDigestProgress = useCallback(async () => {
     const r = await getPotionDigestStatus()
     if (typeof r.progress === 'number') {
-      setDigestProgress(Math.min(100, Math.max(0, r.progress)))
+      const value = Math.min(100, Math.max(0, r.progress))
+      setDigestProgress(value)
+      setCache('aq:digestProgress', { progress: value })
     }
   }, [])
 
@@ -788,17 +792,43 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   }, [fetchActionCodes, fetchActionSubs, fetchQuestCodes, fetchQuestSubs, fetchSleepLogs, fetchPrayerLogs, fetchPunishments, fetchPunishmentLogs, fetchRoleplaySubs])
 
   useEffect(() => {
-    getTodaySleepStatus().then(r => { setSleepSubmitted(r.submitted); setSleepStatus(r.status || null) })
+    const cachedSleep = getCached<{ submitted: boolean; status: string | null }>('aq:sleepStatus')
+    if (cachedSleep) {
+      setSleepSubmitted(cachedSleep.submitted)
+      setSleepStatus(cachedSleep.status)
+    } else {
+      getTodaySleepStatus().then(r => {
+        setSleepSubmitted(r.submitted)
+        setSleepStatus(r.status || null)
+        setCache('aq:sleepStatus', { submitted: r.submitted, status: r.status || null })
+      })
+    }
     if (isAdmin) {
       autoApproveExpiredRequests()
       autoApplyExpiredPunishments()
     }
-    fetchDigestProgress()
+    const cachedDigest = getCached<{ progress: number }>('aq:digestProgress')
+    if (cachedDigest) {
+      setDigestProgress(Math.min(100, Math.max(0, cachedDigest.progress)))
+    } else {
+      fetchDigestProgress()
+    }
   }, [isAdmin, fetchDigestProgress, loadTab])
 
   useEffect(() => {
     loadTab(activeTab)
   }, [activeTab, loadTab])
+
+  // Prefetch all tabs to ensure instant switching (Client-side caching handles the data)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const tabs: TabKey[] = ['actions', 'quests', 'sleep', 'prayer', 'punishments', 'roleplay']
+      tabs.forEach(key => {
+        if (key !== activeTab) loadTab(key)
+      })
+    }, 1000)
+    return () => clearTimeout(timer)
+  }, [loadTab, activeTab])
 
   useEffect(() => {
     setActiveTab(defaultTab)
@@ -1182,15 +1212,22 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   }
 
   /* ═══════════════════ RENDER ═══════════════════ */
-  const tabs: { key: TabKey; label: string; icon: React.ReactNode; href: string }[] = [
+  const tabs: { key: TabKey; label: string; icon: React.ReactNode; href: string }[] = useMemo(() => ([
     { key: 'actions', label: 'แอคชั่น', icon: <Swords className="w-4 h-4" />, href: '/dashboard/action-quest/actions' },
     { key: 'quests', label: 'ภารกิจ', icon: <Target className="w-4 h-4" />, href: '/dashboard/action-quest/quests' },
     { key: 'prayer', label: 'ภาวนา', icon: <Church className="w-4 h-4" />, href: '/dashboard/action-quest/prayer' },
     { key: 'sleep', label: 'นอนหลับ', icon: <Moon className="w-4 h-4" />, href: '/dashboard/action-quest/sleep' },
     { key: 'punishments', label: 'เหตุการณ์', icon: <Skull className="w-4 h-4" />, href: '/dashboard/action-quest/punishments' },
     { key: 'roleplay', label: 'สวมบทบาท', icon: <Sparkles className="w-4 h-4" />, href: '/dashboard/action-quest/roleplay' },
-  ]
+  ]), [])
   const activeLoadTime = loadTimes[activeTab]
+
+  useEffect(() => {
+    if (!usePageTabs) return
+    for (const t of tabs) {
+      router.prefetch(t.href)
+    }
+  }, [usePageTabs, router, tabs])
 
   return (
     <div className="min-h-screen bg-victorian-950 text-victorian-100">
