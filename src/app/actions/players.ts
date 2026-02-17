@@ -19,14 +19,14 @@ async function requireAdmin() {
     throw new Error('Admin or DM role required')
   }
 
-  return { supabase, user }
+  return { supabase, user, role: profile.role }
 }
 
 /* ══════════════════════════════════════════════
    ADMIN: Update any player's profile fields
    ══════════════════════════════════════════════ */
 export async function adminUpdatePlayer(playerId: string, formData: FormData) {
-  const { supabase } = await requireAdmin()
+  const { supabase, role: currentRole } = await requireAdmin()
 
   const display_name = formData.get('display_name') as string | null
   const avatar_url = formData.get('avatar_url') as string | null
@@ -42,6 +42,20 @@ export async function adminUpdatePlayer(playerId: string, formData: FormData) {
 
   // Build update object — only include fields that were provided
   const updates: Record<string, unknown> = {}
+
+  const { data: targetProfile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', playerId)
+    .single()
+
+  if (currentRole === 'admin' && targetProfile?.role === 'dm') {
+    return { error: 'เฉพาะ DM เท่านั้นที่แก้ไข DM ได้' }
+  }
+
+  if (role && role !== targetProfile?.role && currentRole !== 'dm') {
+    return { error: 'เฉพาะ DM เท่านั้นที่เปลี่ยนบทบาทได้' }
+  }
 
   if (display_name !== null && display_name !== '') {
     updates.display_name = display_name.trim()

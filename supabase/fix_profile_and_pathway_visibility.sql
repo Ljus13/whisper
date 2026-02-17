@@ -1,9 +1,8 @@
 -- ══════════════════════════════════════════════════════════════
 -- FIX: Profile & Player Pathway Visibility Issues
 -- ══════════════════════════════════════════════════════════════
--- Issue 1: Admin can edit own profile but cannot edit other players
---          → "Admin can update any profile" policy only checks 'admin' role,
---            should also include 'dm'
+-- Issue 1: Admin ไม่ควรแก้ไขโปรไฟล์ของ DM
+--          → ปรับให้ DM แก้ไขได้ทุกโปรไฟล์ และ Admin แก้ไขได้เฉพาะที่ไม่ใช่ DM
 -- Issue 2: Players cannot see other players' pathways in player list
 --          → player_pathways only has "view own" + "admin/dm view all" policies
 --          → Need to add policy allowing all authenticated users to view all player_pathways
@@ -14,12 +13,25 @@
 -- └──────────────────────────────────────────────────────────────┘
 
 DROP POLICY IF EXISTS "Admin can update any profile" ON public.profiles;
+DROP POLICY IF EXISTS "Admin and DM can update any profile" ON public.profiles;
+DROP POLICY IF EXISTS "DM can update any profile" ON public.profiles;
+DROP POLICY IF EXISTS "Admin can update non-dm profiles" ON public.profiles;
 
-CREATE POLICY "Admin and DM can update any profile"
+CREATE POLICY "DM can update any profile"
   ON public.profiles
   FOR UPDATE
   USING (
-    public.get_my_role() IN ('admin', 'dm')
+    public.get_my_role() = 'dm'
+  );
+
+CREATE POLICY "Admin can update non-dm profiles"
+  ON public.profiles
+  FOR UPDATE
+  USING (
+    public.get_my_role() = 'admin' AND role <> 'dm'
+  )
+  WITH CHECK (
+    public.get_my_role() = 'admin' AND role <> 'dm'
   );
 
 

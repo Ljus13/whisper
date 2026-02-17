@@ -127,8 +127,18 @@ CREATE POLICY "Users can update own profile"
   USING (auth.uid() = id)
   WITH CHECK (auth.uid() = id);
 
--- Policy: Admin can update any profile (including role changes)
-CREATE POLICY "Admin can update any profile"
+CREATE POLICY "DM can update any profile"
+  ON public.profiles
+  FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid()
+      AND role = 'dm'
+    )
+  );
+
+CREATE POLICY "Admin can update non-dm profiles"
   ON public.profiles
   FOR UPDATE
   USING (
@@ -137,6 +147,15 @@ CREATE POLICY "Admin can update any profile"
       WHERE id = auth.uid()
       AND role = 'admin'
     )
+    AND role <> 'dm'
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid()
+      AND role = 'admin'
+    )
+    AND role <> 'dm'
   );
 
 -- Policy: Only the trigger (SECURITY DEFINER) inserts profiles

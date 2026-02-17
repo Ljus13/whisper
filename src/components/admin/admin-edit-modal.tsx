@@ -49,6 +49,7 @@ interface PlayerPathwayInfo {
 
 export default function AdminEditModal({
   player,
+  currentUserRole,
   onClose,
   onSaved,
   pathways = [],
@@ -56,6 +57,7 @@ export default function AdminEditModal({
   playerPathways = [],
 }: {
   player: PlayerProfile
+  currentUserRole: 'player' | 'admin' | 'dm'
   onClose: () => void
   onSaved?: () => void
   pathways?: PathwayInfo[]
@@ -168,17 +170,23 @@ export default function AdminEditModal({
             <label className="block text-sm text-victorian-300 mb-1.5 font-display tracking-wider uppercase">
               บทบาท
             </label>
-            <select
-              name="role"
-              defaultValue={player.role}
-              className="input-victorian !py-2.5 !px-4 !text-base cursor-pointer"
-            >
-              {roleOptions.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
+            {currentUserRole === 'dm' ? (
+              <select
+                name="role"
+                defaultValue={player.role}
+                className="input-victorian !py-2.5 !px-4 !text-base cursor-pointer"
+              >
+                {roleOptions.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="input-victorian !py-2.5 !px-4 !text-base">
+                {roleOptions.find(r => r.value === player.role)?.label ?? player.role}
+              </div>
+            )}
           </div>
 
           {/* Religion */}

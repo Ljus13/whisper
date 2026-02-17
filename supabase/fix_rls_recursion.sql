@@ -19,6 +19,9 @@ $$;
 -- 2. Drop the problematic recursive policies
 DROP POLICY IF EXISTS "DM and Admin can view all profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Admin can update any profile" ON public.profiles;
+DROP POLICY IF EXISTS "Admin and DM can update any profile" ON public.profiles;
+DROP POLICY IF EXISTS "DM can update any profile" ON public.profiles;
+DROP POLICY IF EXISTS "Admin can update non-dm profiles" ON public.profiles;
 
 -- 3. Re-create them using the function (No recursion!)
 CREATE POLICY "DM and Admin can view all profiles"
@@ -28,9 +31,19 @@ CREATE POLICY "DM and Admin can view all profiles"
     public.get_my_role() IN ('admin', 'dm')
   );
 
-CREATE POLICY "Admin can update any profile"
+CREATE POLICY "DM can update any profile"
   ON public.profiles
   FOR UPDATE
   USING (
-    public.get_my_role() = 'admin'
+    public.get_my_role() = 'dm'
+  );
+
+CREATE POLICY "Admin can update non-dm profiles"
+  ON public.profiles
+  FOR UPDATE
+  USING (
+    public.get_my_role() = 'admin' AND role <> 'dm'
+  )
+  WITH CHECK (
+    public.get_my_role() = 'admin' AND role <> 'dm'
   );

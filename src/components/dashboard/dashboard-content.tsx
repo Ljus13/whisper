@@ -862,6 +862,7 @@ export default function DashboardContent({
       {showAdminEdit && profile && (
         <AdminEditModal
           player={profile}
+          currentUserRole={profile.role}
           onClose={() => setShowAdminEdit(false)}
           onSaved={() => router.refresh()}
         />

@@ -136,7 +136,9 @@ export default function PlayersContent({ userId }: { userId: string }) {
     getReligions().then(r => { if (r.religions) setReligions(r.religions as Religion[]) })
   }, [])
 
-  const isAdmin = currentProfile?.role === 'admin' || currentProfile?.role === 'dm'
+  const isAdmin = currentProfile?.role === 'admin'
+  const isDM = currentProfile?.role === 'dm'
+  const isStaff = isAdmin || isDM
   const isSanityLocked = (currentProfile?.sanity ?? 10) === 0
 
   function openReligionForm(rel?: Religion) {
@@ -292,7 +294,7 @@ export default function PlayersContent({ userId }: { userId: string }) {
 
                 <div className="relative z-10 p-6">
                   {/* Admin Edit Button */}
-                  {isAdmin && (
+                  {isStaff && (isDM || player.role !== 'dm') && (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setEditingPlayer(player) }}
@@ -372,7 +374,7 @@ export default function PlayersContent({ userId }: { userId: string }) {
                     </p>
                   )}
 
-                  {isAdmin && (
+                  {isStaff && (
                     <div className="mt-4">
                       <div className="flex items-center justify-between text-xs text-amber-200 mb-1">
                         <span className="font-display tracking-wider">ย่อยโอสถ</span>
@@ -409,7 +411,7 @@ export default function PlayersContent({ userId }: { userId: string }) {
       {activeTab === 'religions' && (
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-10">
         {/* Add button (DM only) */}
-        {isAdmin && (
+        {isStaff && (
           <div className="mb-6 flex justify-between items-center">
             <button
               onClick={() => router.push('/dashboard/religions/prayer-logs')}
@@ -444,7 +446,7 @@ export default function PlayersContent({ userId }: { userId: string }) {
                   <div className="w-full h-full bg-gradient-to-br from-victorian-800/60 via-victorian-900/80 to-victorian-950" />
                 )}
                 {/* Admin actions */}
-                {isAdmin && (
+                {isStaff && (
                   <div className="absolute top-2 right-2 z-30 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
                     <button onClick={() => openReligionForm(rel)}
                       className="p-1.5 text-victorian-300 hover:text-gold-400 bg-black/60 backdrop-blur-sm rounded-sm border border-gold-400/10 hover:border-gold-400/30 cursor-pointer"
@@ -627,6 +629,7 @@ export default function PlayersContent({ userId }: { userId: string }) {
       {editingPlayer && (
         <AdminEditModal
           player={editingPlayer}
+          currentUserRole={currentProfile?.role ?? 'player'}
           onClose={() => setEditingPlayer(null)}
           onSaved={() => router.refresh()}
           pathways={pathways}
