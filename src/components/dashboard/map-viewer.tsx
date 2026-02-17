@@ -2454,6 +2454,17 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
       {showRoleplayMoveModal && (
         <ModalOverlay onClose={() => setShowRoleplayMoveModal(false)} title="ย้ายตำแหน่ง (โรลเพลย์)">
+          <div className="mb-4 p-3 bg-green-900/60 border border-green-400 rounded-sm text-xs text-green-100 font-display leading-relaxed shadow-[0_0_10px_rgba(74,222,128,0.2)]">
+            <div className="flex items-center gap-2 mb-2 text-green-300 font-bold uppercase tracking-wider">
+              <Info className="w-4 h-4" />
+              <span>ข้อควรทราบ</span>
+            </div>
+            <ul className="list-disc pl-4 space-y-1 opacity-90">
+              <li>การย้ายตัวละคร หรือ ย้ายแมพ ผ่านการโรลเพลย์ <strong>จะใช้เวลาสักครู่</strong> แต่หากใช้แต้มเดินทางจะย้ายทันที</li>
+              <li>เส้นทาง <strong>ลูกศิษย์</strong> บางลำดับจะมีเงื่อนไขพิเศษ ที่เดินทางโดยใช้แต้มจะคุ้มค่ากว่า</li>
+              <li>ทีมงานสามารถตรวจสอบประวัติการเดินทางแบบโรลเพลย์ได้ ดังนั้นโปรดโรลเพลย์เดินทางตามจริง</li>
+            </ul>
+          </div>
           <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">ลิงก์ต้นทาง *</label>
           <input
             value={roleplayMoveOriginUrl}
@@ -2479,6 +2490,18 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
       {showRoleplayJoinModal && (
         <ModalOverlay onClose={() => setShowRoleplayJoinModal(false)} title="เข้าร่วมแมพ (โรลเพลย์)">
+          <div className="mb-4 p-3 bg-green-900/60 border border-green-400 rounded-sm text-xs text-green-100 font-display leading-relaxed shadow-[0_0_10px_rgba(74,222,128,0.2)]">
+            <div className="flex items-center gap-2 mb-2 text-green-300 font-bold uppercase tracking-wider">
+              <Info className="w-4 h-4" />
+              <span>ข้อควรทราบ</span>
+            </div>
+            <ul className="list-disc pl-4 space-y-1 opacity-90">
+              <li>การย้ายแมพด้วยโรลเพลย์จะ<strong>ใช้เวลาสักครู่</strong> (ไม่ทันทีเหมือนใช้แต้ม)</li>
+              <li>บางเส้นทาง/เงื่อนไขพิเศษ การใช้แต้มอาจ<strong>คุ้มค่ากว่า</strong></li>
+              <li>ทีมงานสามารถตรวจสอบประวัติย้อนหลังได้ โปรด<strong>โรลเพลย์ตามจริง</strong></li>
+              <li>จุดต้นทาง คือ โรลเพลย์เริ่มออกเดินทาง / จุดปลายทาง คือโรลเพลย์ถึงที่หมายแล้ว</li>
+            </ul>
+          </div>
           <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">ลิงก์ต้นทาง *</label>
           <input
             value={roleplayJoinOriginUrl}
