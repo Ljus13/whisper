@@ -3,6 +3,17 @@ import { createClient } from '@/lib/supabase/server'
 
 export const revalidate = 300
 
+type SkillEmbedLog = {
+  player_id: string
+  skill_id: string
+  used_at: string
+  reference_code: string | null
+  note: string | null
+  outcome: string | null
+  roll: number | null
+  success_rate: number | null
+}
+
 function parseReferenceCode(code: string) {
   const match = code.match(/^SKL-([A-Z0-9]+)-(\d{8})-T(\d{1,2})-R(\d{1,2})-([SF])$/)
   if (!match) return null
@@ -26,7 +37,7 @@ export default async function SkillEmbedPage({ params }: { params: Promise<{ cod
   const supabase = await createClient()
 
   const { data: log } = await supabase
-    .rpc('get_skill_embed_log', { p_reference_code: referenceCode })
+    .rpc<SkillEmbedLog>('get_skill_embed_log', { p_reference_code: referenceCode })
     .single()
 
   if (!log) notFound()
