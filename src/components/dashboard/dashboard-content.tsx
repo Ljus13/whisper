@@ -83,11 +83,15 @@ function PathwayChoiceCard({
     const mq = window.matchMedia('(pointer: coarse)')
     setCoarsePointer(mq.matches)
     const handler = (e: MediaQueryListEvent) => setCoarsePointer(e.matches)
+    const legacyMq = mq as MediaQueryList & {
+      addListener?: (listener: (event: MediaQueryListEvent) => void) => void
+      removeListener?: (listener: (event: MediaQueryListEvent) => void) => void
+    }
     if ('addEventListener' in mq) mq.addEventListener('change', handler)
-    else mq.addListener(handler)
+    else legacyMq.addListener?.(handler)
     return () => {
       if ('removeEventListener' in mq) mq.removeEventListener('change', handler)
-      else mq.removeListener(handler)
+      else legacyMq.removeListener?.(handler)
     }
   }, [])
 
