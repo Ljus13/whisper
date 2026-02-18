@@ -1272,6 +1272,8 @@ export async function getAllActionAndQuestCodes() {
 export interface PunishmentInput {
   name: string
   description?: string
+  event_mode?: 'solo' | 'group'
+  group_mode?: 'all' | 'shared'
   penalty_sanity?: number
   penalty_hp?: number
   penalty_travel?: number
@@ -1294,12 +1296,17 @@ export async function createPunishment(input: PunishmentInput) {
   if (input.required_task_ids.length === 0) return { error: 'กรุณาเลือกแอคชั่น/ภารกิจที่ต้องทำอย่างน้อย 1 รายการ' }
   if (input.player_ids.length === 0) return { error: 'กรุณาเลือกผู้เล่นอย่างน้อย 1 คน' }
 
+  const eventMode = input.event_mode === 'group' ? 'group' : 'solo'
+  const groupMode = input.group_mode === 'shared' ? 'shared' : 'all'
+
   // Create punishment
   const { data: punishment, error: pErr } = await supabase
     .from('punishments')
     .insert({
       name: input.name.trim(),
       description: input.description?.trim() || null,
+      event_mode: eventMode,
+      group_mode: groupMode,
       penalty_sanity: input.penalty_sanity || 0,
       penalty_hp: input.penalty_hp || 0,
       penalty_travel: input.penalty_travel || 0,
@@ -1321,16 +1328,18 @@ export async function createPunishment(input: PunishmentInput) {
     action_code_id: t.action_code_id || null,
     quest_code_id: t.quest_code_id || null,
   }))
-  const { error: tErr } = await supabase.from('punishment_required_tasks').insert(taskInserts)
+  const { data: taskData, error: tErr } = await supabase.from('punishment_required_tasks').insert(taskInserts).select()
   if (tErr) return { error: tErr.message }
+  if (!taskData || taskData.length === 0) return { error: 'ไม่สามารถบันทึกภารกิจได้ (RLS blocked)' }
 
   // Insert assigned players
   const playerInserts = input.player_ids.map(pid => ({
     punishment_id: punishment.id,
     player_id: pid,
   }))
-  const { error: ppErr } = await supabase.from('punishment_players').insert(playerInserts)
+  const { data: ppData, error: ppErr } = await supabase.from('punishment_players').insert(playerInserts).select()
   if (ppErr) return { error: ppErr.message }
+  if (!ppData || ppData.length === 0) return { error: 'ไม่สามารถบันทึกผู้เล่นได้ (RLS blocked) — กรุณารัน SQL migration ใหม่' }
 
   // Log creation
   for (const pid of input.player_ids) {
@@ -1460,64 +1469,67 @@ export async function requestMercy(punishmentId: string) {
   if (pp.penalty_applied) return { error: 'เหตุการณ์ถูกดำเนินการแล้ว' }
   if (pp.mercy_requested) return { error: 'คุณส่งเหตุการณ์ไปแล้ว' }
 
-  // Check if all required tasks have approved submissions
-  const { data: requiredTasks } = await supabase
-    .from('punishment_required_tasks')
-    .select('action_code_id, quest_code_id')
-    .eq('punishment_id', punishmentId)
+  const { data: punishment } = await supabase
+    .from('punishments')
+    .select('id, event_mode, group_mode, primary_submitter_id, created_at')
+    .eq('id', punishmentId)
+    .single()
 
-  if (!requiredTasks || requiredTasks.length === 0) {
-    return { error: 'ไม่พบภารกิจที่กำหนดในเหตุการณ์นี้' }
+  if (!punishment) return { error: 'ไม่พบเหตุการณ์' }
+
+  const isGroupShared = punishment.event_mode === 'group' && punishment.group_mode === 'shared'
+
+  if (isGroupShared) {
+    // Use RPC to check completion (bypasses RLS — can see all players' submissions)
+    const { data: rpcResult } = await supabase.rpc('check_punishment_task_completion', {
+      p_punishment_id: punishmentId,
+      p_user_id: user.id,
+    })
+
+    if (!rpcResult || !rpcResult.allCompleted) {
+      return { error: 'ภารกิจร่วมยังไม่ครบ หรือยังไม่ได้รับอนุมัติ' }
+    }
+
+    // Use SECURITY DEFINER RPC to mark ALL players as completed (bypasses RLS)
+    const { data: rpcComplete, error: rpcErr } = await supabase.rpc('complete_shared_punishment', {
+      p_punishment_id: punishmentId,
+      p_submitted_by: user.id,
+    })
+
+    if (rpcErr) return { error: rpcErr.message }
+
+    revalidateActionQuestPaths()
+    return { success: true, primary_submitter_id: user.id }
   }
 
-  for (const task of requiredTasks) {
-    if (task.action_code_id) {
-      const { data: approvedSub } = await supabase
-        .from('action_submissions')
-        .select('id')
-        .eq('player_id', user.id)
-        .eq('action_code_id', task.action_code_id)
-        .eq('status', 'approved')
-        .limit(1)
-        .maybeSingle()
-      if (!approvedSub) {
-        return { error: 'คุณยังทำแอคชั่น/ภารกิจที่กำหนดไม่ครบ หรือยังไม่ได้รับอนุมัติ' }
-      }
-    }
-    if (task.quest_code_id) {
-      const { data: approvedSub } = await supabase
-        .from('quest_submissions')
-        .select('id')
-        .eq('player_id', user.id)
-        .eq('quest_code_id', task.quest_code_id)
-        .eq('status', 'approved')
-        .limit(1)
-        .maybeSingle()
-      if (!approvedSub) {
-        return { error: 'คุณยังทำแอคชั่น/ภารกิจที่กำหนดไม่ครบ หรือยังไม่ได้รับอนุมัติ' }
-      }
-    }
+  // Solo / group-all: use RPC to validate task completion
+  const { data: soloCheck } = await supabase.rpc('check_punishment_task_completion', {
+    p_punishment_id: punishmentId,
+    p_user_id: user.id,
+  })
+
+  if (!soloCheck || !soloCheck.allCompleted) {
+    return { error: 'คุณยังทำแอคชั่น/ภารกิจที่กำหนดไม่ครบ หรือยังไม่ได้รับอนุมัติ' }
   }
 
-  // All tasks approved — mark mercy requested
+  const now = new Date().toISOString()
   const { error } = await supabase
     .from('punishment_players')
     .update({
       mercy_requested: true,
-      mercy_requested_at: new Date().toISOString(),
+      mercy_requested_at: now,
       is_completed: true,
-      completed_at: new Date().toISOString(),
+      completed_at: now,
     })
     .eq('id', pp.id)
 
   if (error) return { error: error.message }
 
-  // Log mercy request
   await supabase.from('punishment_logs').insert({
     punishment_id: punishmentId,
     player_id: user.id,
     action: 'mercy_requested',
-    details: { message: 'ผู้เล่นทำภารกิจครบและส่งเหตุการณ์' },
+    details: { mode: punishment.event_mode === 'group' ? 'group_all' : 'solo' },
     created_by: user.id,
   })
 
@@ -1679,41 +1691,21 @@ export async function getPunishmentLogs(page: number = 1) {
 export async function checkPlayerTaskCompletion(punishmentId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { allCompleted: false }
+  if (!user) return { allCompleted: false, done: 0, total: 0 }
 
-  const { data: requiredTasks } = await supabase
-    .from('punishment_required_tasks')
-    .select('action_code_id, quest_code_id')
-    .eq('punishment_id', punishmentId)
+  // Use SECURITY DEFINER RPC to bypass RLS — ensures shared mode sees all players' submissions
+  const { data, error } = await supabase.rpc('check_punishment_task_completion', {
+    p_punishment_id: punishmentId,
+    p_user_id: user.id,
+  })
 
-  if (!requiredTasks || requiredTasks.length === 0) return { allCompleted: false }
+  if (error || !data) return { allCompleted: false, done: 0, total: 0 }
 
-  for (const task of requiredTasks) {
-    if (task.action_code_id) {
-      const { data: approvedSub } = await supabase
-        .from('action_submissions')
-        .select('id')
-        .eq('player_id', user.id)
-        .eq('action_code_id', task.action_code_id)
-        .eq('status', 'approved')
-        .limit(1)
-        .maybeSingle()
-      if (!approvedSub) return { allCompleted: false }
-    }
-    if (task.quest_code_id) {
-      const { data: approvedSub } = await supabase
-        .from('quest_submissions')
-        .select('id')
-        .eq('player_id', user.id)
-        .eq('quest_code_id', task.quest_code_id)
-        .eq('status', 'approved')
-        .limit(1)
-        .maybeSingle()
-      if (!approvedSub) return { allCompleted: false }
-    }
+  return {
+    allCompleted: data.allCompleted === true,
+    done: data.done ?? 0,
+    total: data.total ?? 0,
   }
-
-  return { allCompleted: true }
 }
 
 
@@ -1814,6 +1806,8 @@ export async function updateQuestCode(
 export interface PunishmentUpdateInput {
   name: string
   description?: string
+  event_mode?: 'solo' | 'group'
+  group_mode?: 'all' | 'shared'
   penalty_sanity?: number
   penalty_hp?: number
   penalty_travel?: number
@@ -1859,6 +1853,8 @@ export async function updatePunishment(id: string, input: PunishmentUpdateInput)
     .update({
       name: input.name.trim(),
       description: input.description?.trim() || null,
+      event_mode: input.event_mode === 'group' ? 'group' : 'solo',
+      group_mode: input.group_mode === 'shared' ? 'shared' : 'all',
       penalty_sanity: input.penalty_sanity || 0,
       penalty_hp: input.penalty_hp || 0,
       penalty_travel: input.penalty_travel || 0,
@@ -1880,8 +1876,9 @@ export async function updatePunishment(id: string, input: PunishmentUpdateInput)
     action_code_id: t.action_code_id || null,
     quest_code_id: t.quest_code_id || null,
   }))
-  const { error: tErr } = await supabase.from('punishment_required_tasks').insert(taskInserts)
+  const { data: taskData, error: tErr } = await supabase.from('punishment_required_tasks').insert(taskInserts).select()
   if (tErr) return { error: tErr.message }
+  if (!taskData || taskData.length === 0) return { error: 'ไม่สามารถบันทึกภารกิจได้ (RLS blocked)' }
 
   // Replace assigned players: delete those not in new list, add new ones (keep existing completion states)
   const { data: existingPlayers } = await supabase
@@ -1900,7 +1897,9 @@ export async function updatePunishment(id: string, input: PunishmentUpdateInput)
   }
   if (toAdd.length > 0) {
     const playerInserts = toAdd.map(pid => ({ punishment_id: id, player_id: pid }))
-    await supabase.from('punishment_players').insert(playerInserts)
+    const { data: ppData, error: ppAddErr } = await supabase.from('punishment_players').insert(playerInserts).select()
+    if (ppAddErr) return { error: ppAddErr.message }
+    if (!ppData || ppData.length === 0) return { error: 'ไม่สามารถบันทึกผู้เล่นได้ (RLS blocked)' }
     // Log new assignments
     for (const pid of toAdd) {
       await supabase.from('punishment_logs').insert({
@@ -2156,28 +2155,68 @@ export async function getPlayerActivePunishments() {
     .select('*, action_code:action_code_id(id, name, code), quest_code:quest_code_id(id, name, code)')
     .in('punishment_id', pIds)
 
+  const { data: players } = await supabase
+    .from('punishment_players')
+    .select('punishment_id, player_id, is_completed, mercy_requested')
+    .in('punishment_id', pIds)
+
+  const playersByPunishment = new Map<string, Array<{ player_id: string; is_completed: boolean; mercy_requested: boolean }>>()
+  for (const row of (players ?? []) as Array<{ punishment_id: string; player_id: string; is_completed: boolean; mercy_requested: boolean }>) {
+    const list = playersByPunishment.get(row.punishment_id) ?? []
+    list.push({ player_id: row.player_id, is_completed: row.is_completed, mercy_requested: row.mercy_requested })
+    playersByPunishment.set(row.punishment_id, list)
+  }
+
+  // Use RPC to get progress for each punishment (bypasses RLS for shared mode)
+  const progressResults = await Promise.all(
+    punishments.map((p: any) =>
+      supabase.rpc('check_punishment_task_completion', {
+        p_punishment_id: p.id,
+        p_user_id: user.id,
+      })
+    )
+  )
+
+  const progressMap = new Map<string, { done: number; total: number }>()
+  punishments.forEach((p: any, i: number) => {
+    const r = progressResults[i]
+    if (r.data) {
+      progressMap.set(p.id, { done: r.data.done ?? 0, total: r.data.total ?? 0 })
+    }
+  })
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return punishments.map((p: any) => ({
-    id: p.id,
-    name: p.name,
-    description: p.description,
-    deadline: p.deadline,
-    penalty_sanity: p.penalty_sanity,
-    penalty_hp: p.penalty_hp,
-    penalty_travel: p.penalty_travel,
-    penalty_spirituality: p.penalty_spirituality,
-    penalty_max_sanity: p.penalty_max_sanity,
-    penalty_max_travel: p.penalty_max_travel,
-    penalty_max_spirituality: p.penalty_max_spirituality,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    required_tasks: (tasks ?? []).filter((t: any) => t.punishment_id === p.id).map((t: any) => ({
-      id: t.id,
-      action_code_id: t.action_code_id,
-      quest_code_id: t.quest_code_id,
-      action_name: t.action_code?.name || null,
-      action_code_str: t.action_code?.code || null,
-      quest_name: t.quest_code?.name || null,
-      quest_code_str: t.quest_code?.code || null,
-    })),
-  }))
+  return punishments.map((p: any) => {
+    const required = (tasks ?? []).filter((t: any) => t.punishment_id === p.id)
+    const progress = progressMap.get(p.id) ?? { done: 0, total: required.length }
+
+    return {
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      deadline: p.deadline,
+      event_mode: p.event_mode,
+      group_mode: p.group_mode,
+      primary_submitter_id: p.primary_submitter_id || null,
+      penalty_sanity: p.penalty_sanity,
+      penalty_hp: p.penalty_hp,
+      penalty_travel: p.penalty_travel,
+      penalty_spirituality: p.penalty_spirituality,
+      penalty_max_sanity: p.penalty_max_sanity,
+      penalty_max_travel: p.penalty_max_travel,
+      penalty_max_spirituality: p.penalty_max_spirituality,
+      progress_current: progress.done,
+      progress_total: progress.total,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      required_tasks: required.map((t: any) => ({
+        id: t.id,
+        action_code_id: t.action_code_id,
+        quest_code_id: t.quest_code_id,
+        action_name: t.action_code?.name || null,
+        action_code_str: t.action_code?.code || null,
+        quest_name: t.quest_code?.name || null,
+        quest_code_str: t.quest_code?.code || null,
+      })),
+    }
+  })
 }

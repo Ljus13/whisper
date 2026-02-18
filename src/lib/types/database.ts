@@ -155,6 +155,9 @@ export interface Punishment {
   id: string
   name: string
   description: string | null
+  event_mode: 'solo' | 'group'
+  group_mode: 'all' | 'shared'
+  primary_submitter_id: string | null
   penalty_sanity: number
   penalty_hp: number
   penalty_travel: number

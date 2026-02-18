@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useTransition, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
-import { getCached, setCache } from '@/lib/client-cache'
+import { getCached, setCache, invalidateCache } from '@/lib/client-cache'
+import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Moon, ScrollText, Swords, Target, Shield, Plus, Copy,
@@ -84,6 +85,7 @@ interface PlayerOption { id: string; display_name: string; avatar_url: string | 
 interface TaskOption { id: string; name: string; code: string; type: 'action' | 'quest' }
 interface PunishmentEntry {
   id: string; name: string; description: string | null
+  event_mode: 'solo' | 'group'; group_mode: 'all' | 'shared'; primary_submitter_id: string | null
   penalty_sanity: number; penalty_hp: number; penalty_travel: number; penalty_spirituality: number
   penalty_max_sanity: number; penalty_max_travel: number; penalty_max_spirituality: number
   deadline: string | null; is_active: boolean; created_by_name: string; created_at: string
@@ -153,6 +155,16 @@ function Badge({ status }: { status: string }) {
       <Clock className="w-3 h-3" /> รอตรวจ
     </span>
   )
+}
+
+function getEventModeLabel(eventMode?: string, groupMode?: string): { label: string; desc: string; color: string } {
+  if (eventMode === 'group' && groupMode === 'shared') {
+    return { label: '🎯 ภารกิจเป้าหมายร่วม', desc: 'ช่วยกันทำภารกิจทั้งหมดให้สำเร็จ ไม่จำกัดว่าใครเป็นคนทำ', color: 'bg-purple-900/40 text-purple-300 border-purple-500/30' }
+  }
+  if (eventMode === 'group') {
+    return { label: '👥 ภารกิจกลุ่ม', desc: 'สมาชิกทุกคนต้องทำภารกิจให้ครบทุกคน ทีมจึงจะสิ้นสุดเหตุการณ์', color: 'bg-blue-900/40 text-blue-300 border-blue-500/30' }
+  }
+  return { label: '🗡️ ภารกิจส่วนบุคคล', desc: 'บรรลุเป้าหมายเฉพาะตัวคุณ เพื่อเสร็จสิ้นเหตุการณ์', color: 'bg-amber-900/40 text-amber-300 border-amber-500/30' }
 }
 
 function fmtDate(d: string) {
@@ -405,6 +417,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   const [showCreatePunishment, setShowCreatePunishment] = useState(false)
   const [punName, setPunName] = useState('')
   const [punDesc, setPunDesc] = useState('')
+  const [punEventMode, setPunEventMode] = useState<'solo' | 'group'>('solo')
+  const [punGroupMode, setPunGroupMode] = useState<'all' | 'shared'>('all')
   const [punDeadlineDate, setPunDeadlineDate] = useState('')
   const [punDeadlineTime, setPunDeadlineTime] = useState('')
   const [punNoDeadline, setPunNoDeadline] = useState(true)
@@ -455,6 +469,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   const [editPunishment, setEditPunishment] = useState<PunishmentEntry | null>(null)
   const [editPunName, setEditPunName] = useState('')
   const [editPunDesc, setEditPunDesc] = useState('')
+  const [editPunEventMode, setEditPunEventMode] = useState<'solo' | 'group'>('solo')
+  const [editPunGroupMode, setEditPunGroupMode] = useState<'all' | 'shared'>('all')
   const [editPunDeadlineDate, setEditPunDeadlineDate] = useState('')
   const [editPunDeadlineTime, setEditPunDeadlineTime] = useState('')
   const [editPunNoDeadline, setEditPunNoDeadline] = useState(true)
@@ -526,6 +542,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   function resetPunishmentForm() {
     setPunName('')
     setPunDesc('')
+    setPunEventMode('solo')
+    setPunGroupMode('all')
     setPunDeadlineDate('')
     setPunDeadlineTime('')
     setPunNoDeadline(true)
@@ -823,6 +841,57 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     setActiveTab(defaultTab)
   }, [defaultTab])
 
+  // ─── Realtime subscriptions ───
+  const activeTabRef = useRef(activeTab)
+  activeTabRef.current = activeTab
+  const pageRefs = useRef({ acPage, qcPage, asPage, qsPage, slPage, punPage, punLogPage, rpPage, plPage })
+  pageRefs.current = { acPage, qcPage, asPage, qsPage, slPage, punPage, punLogPage, rpPage, plPage }
+
+  useEffect(() => {
+    const supabase = createClient()
+
+    function refreshActiveTab() {
+      const tab = activeTabRef.current
+      const p = pageRefs.current
+      invalidateCache('aq:')
+      if (tab === 'actions') {
+        fetchActionCodes(p.acPage)
+        fetchActionSubs(p.asPage)
+      } else if (tab === 'quests') {
+        fetchQuestCodes(p.qcPage)
+        fetchQuestSubs(p.qsPage)
+      } else if (tab === 'sleep') {
+        fetchSleepLogs(p.slPage)
+      } else if (tab === 'prayer') {
+        fetchPrayerLogs(p.plPage)
+      } else if (tab === 'punishments') {
+        fetchPunishments(p.punPage)
+        fetchPunishmentLogs(p.punLogPage)
+      } else if (tab === 'roleplay') {
+        fetchRoleplaySubs(p.rpPage)
+      }
+    }
+
+    const channel = supabase.channel('aq-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'action_submissions' }, refreshActiveTab)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quest_submissions' }, refreshActiveTab)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'action_codes' }, refreshActiveTab)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quest_codes' }, refreshActiveTab)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sleep_requests' }, refreshActiveTab)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'punishments' }, refreshActiveTab)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'punishment_players' }, refreshActiveTab)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'punishment_required_tasks' }, refreshActiveTab)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'punishment_logs' }, refreshActiveTab)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'roleplay_submissions' }, refreshActiveTab)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'roleplay_links' }, refreshActiveTab)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'prayer_logs' }, refreshActiveTab)
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [fetchActionCodes, fetchActionSubs, fetchQuestCodes, fetchQuestSubs, fetchSleepLogs, fetchPrayerLogs, fetchPunishments, fetchPunishmentLogs, fetchRoleplaySubs])
+
   // ─── Handlers ───
   function handleSleepSubmit() {
     setSleepError(null)
@@ -831,7 +900,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       const r = await submitSleepRequest(mealUrl.trim(), sleepUrl.trim())
       if (r.error) { setSleepError(r.error) } else {
         setSleepSubmitted(true); setSleepStatus('pending'); setShowSleepForm(false)
-        setMealUrl(''); setSleepUrl(''); fetchSleepLogs(1)
+        setMealUrl(''); setSleepUrl(''); invalidateCache('aq:sleepLogs'); fetchSleepLogs(1)
       }
     })
   }
@@ -873,6 +942,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       else {
         const rName = type === 'action' ? (r as { actionName?: string }).actionName : (r as { questName?: string }).questName
         setSubSuccess(`ส่ง${type === 'action' ? 'แอคชั่น' : 'ภารกิจ'} "${rName}" สำเร็จ!`)
+        invalidateCache('aq:')
         if (type === 'action') fetchActionSubs(1); else fetchQuestSubs(1)
       }
     })
@@ -887,6 +957,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       if (r.error) { setRoleplayError(r.error) }
       else {
         setRoleplaySuccess('ส่งลิงก์สวมบทบาทสำเร็จ!')
+        invalidateCache('aq:roleplaySubs')
         fetchRoleplaySubs(1)
       }
     })
@@ -917,6 +988,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       else {
         setPromoteResult({ seqNumber: r.newSeqNumber || 0, seqName: r.newSeqName || null })
         setDigestProgress(0)
+        invalidateCache('aq:')
         fetchActionCodes(acPage)
         fetchQuestCodes(qcPage)
         fetchActionSubs(asPage)
@@ -935,6 +1007,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       if (r.error) toast('error', r.error)
       else {
         toast('success', type === 'sleep' ? 'อนุมัติแล้ว — รีเซ็ต Spirituality' : 'อนุมัติแล้ว')
+        invalidateCache('aq:')
         if (type === 'action') fetchActionSubs(asPage)
         else if (type === 'quest') fetchQuestSubs(qsPage)
         else fetchSleepLogs(slPage)
@@ -954,6 +1027,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       if (r.error) { setRejectError(r.error) } else {
         toast('success', 'ปฏิเสธแล้ว')
         setRejectTarget(null); setRejectReason('')
+        invalidateCache('aq:')
         if (rejectTarget!.type === 'action') fetchActionSubs(asPage)
         else if (rejectTarget!.type === 'quest') fetchQuestSubs(qsPage)
         else fetchSleepLogs(slPage)
@@ -992,6 +1066,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       const r = await createPunishment({
         name: punName,
         description: punDesc || undefined,
+        event_mode: punEventMode,
+        group_mode: punGroupMode,
         ...punPenalties,
         deadline: !punNoDeadline && punDeadlineDate ? new Date(combineDateTime(punDeadlineDate, punDeadlineTime)).toISOString() : null,
         required_task_ids: punSelectedTasks,
@@ -1000,6 +1076,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       if (r.error) { setPunError(r.error) }
       else {
         setPunSuccess(true)
+        invalidateCache('aq:punishments')
+        invalidateCache('aq:punishmentLogs')
         fetchPunishments(1)
         fetchPunishmentLogs(1)
       }
@@ -1012,6 +1090,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       if (r.error) toast('error', r.error)
       else {
         toast('success', 'ส่งเหตุการณ์สำเร็จ! คุณรอดพ้นเหตุการณ์')
+        invalidateCache('aq:punishments')
+        invalidateCache('aq:punishmentLogs')
         fetchPunishments(punPage)
         fetchPunishmentLogs(punLogPage)
       }
@@ -1024,6 +1104,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       if (r.error) toast('error', r.error)
       else {
         toast('success', 'ลงโทษสำเร็จ')
+        invalidateCache('aq:punishments')
+        invalidateCache('aq:punishmentLogs')
         fetchPunishments(punPage)
         fetchPunishmentLogs(punLogPage)
       }
@@ -1038,15 +1120,15 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       if (type === 'action') {
         const r = await archiveActionCode(id)
         if (r.error) toast('error', r.error)
-        else { toast('success', 'เก็บเข้าคลังแล้ว'); fetchActionCodes(acPage) }
+        else { toast('success', 'เก็บเข้าคลังแล้ว'); invalidateCache('aq:actionCodes'); fetchActionCodes(acPage) }
       } else if (type === 'quest') {
         const r = await archiveQuestCode(id)
         if (r.error) toast('error', r.error)
-        else { toast('success', 'เก็บเข้าคลังแล้ว'); fetchQuestCodes(qcPage) }
+        else { toast('success', 'เก็บเข้าคลังแล้ว'); invalidateCache('aq:questCodes'); fetchQuestCodes(qcPage) }
       } else {
         const r = await archivePunishment(id)
         if (r.error) toast('error', r.error)
-        else { toast('success', 'เก็บเข้าคลังแล้ว'); fetchPunishments(punPage) }
+        else { toast('success', 'เก็บเข้าคลังแล้ว'); invalidateCache('aq:punishments'); fetchPunishments(punPage) }
       }
     })
   }
@@ -1095,6 +1177,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       else {
         toast('success', 'แก้ไขโค้ดแอคชั่นสำเร็จ')
         setEditAction(null)
+        invalidateCache('aq:actionCodes')
         fetchActionCodes(acPage)
       }
     })
@@ -1137,6 +1220,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       else {
         toast('success', 'แก้ไขโค้ดภารกิจสำเร็จ')
         setEditQuest(null)
+        invalidateCache('aq:questCodes')
         fetchQuestCodes(qcPage)
       }
     })
@@ -1146,6 +1230,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     setEditPunishment(p)
     setEditPunName(p.name)
     setEditPunDesc(p.description || '')
+    setEditPunEventMode(p.event_mode || 'solo')
+    setEditPunGroupMode(p.group_mode || 'all')
     const hasDeadline = !!p.deadline
     setEditPunNoDeadline(!hasDeadline)
     if (hasDeadline) {
@@ -1185,6 +1271,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       const r = await updatePunishment(editPunishment!.id, {
         name: editPunName,
         description: editPunDesc || undefined,
+        event_mode: editPunEventMode,
+        group_mode: editPunGroupMode,
         ...editPunPenalties,
         deadline: !editPunNoDeadline && editPunDeadlineDate ? new Date(combineDateTime(editPunDeadlineDate, editPunDeadlineTime)).toISOString() : null,
         required_task_ids: editPunSelectedTasks,
@@ -1194,6 +1282,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       else {
         toast('success', 'แก้ไขเหตุการณ์สำเร็จ')
         setEditPunishment(null)
+        invalidateCache('aq:punishments')
+        invalidateCache('aq:punishmentLogs')
         fetchPunishments(punPage)
         fetchPunishmentLogs(punLogPage)
       }
@@ -1886,20 +1976,54 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                       const myEntry = p.assigned_players.find(ap => ap.player_id === _userId)
                       const isExpired = p.deadline && new Date(p.deadline) < new Date()
                       const allDone = p.assigned_players.every(ap => ap.penalty_applied || ap.mercy_requested)
+                      const mercyCount = p.assigned_players.filter(ap => ap.mercy_requested && !ap.penalty_applied).length
+                      const penaltyCount = p.assigned_players.filter(ap => ap.penalty_applied).length
+                      const pendingCount = p.assigned_players.filter(ap => !ap.mercy_requested && !ap.penalty_applied).length
+
+                      // Determine overall status
+                      let statusLabel = ''
+                      let statusColor = ''
+                      if (allDone) {
+                        statusLabel = '✅ ดำเนินการครบแล้ว — พร้อมเก็บเข้าคลัง'
+                        statusColor = 'bg-green-900/50 border-green-500/40 text-green-300'
+                      } else if (isExpired) {
+                        statusLabel = `⏰ หมดเวลา — ยังเหลือ ${pendingCount} คนที่ยังไม่ดำเนินการ`
+                        statusColor = 'bg-red-900/50 border-red-500/40 text-red-300'
+                      } else {
+                        statusLabel = `⏳ กำลังดำเนินการ — รอ ${pendingCount} คน`
+                        statusColor = 'bg-amber-900/40 border-amber-500/30 text-amber-300'
+                      }
 
                       return (
-                        <Card key={p.id} className={`p-4 space-y-3 flex flex-col ${!p.is_active ? 'opacity-60' : ''} border-red-500/20`}>
+                        <Card key={p.id} className={`p-4 space-y-3 flex flex-col ${!p.is_active ? 'opacity-60' : ''} ${allDone ? 'border-green-500/30' : isExpired ? 'border-red-500/30' : 'border-red-500/20'}`}>
+                          {/* Status banner */}
+                          <div className={`text-[10px] font-bold px-2.5 py-1.5 rounded border ${statusColor}`}>
+                            {statusLabel}
+                            {allDone && (
+                              <span className="ml-1 opacity-70">({mercyCount > 0 ? `${mercyCount} รอดพ้น` : ''}{mercyCount > 0 && penaltyCount > 0 ? ', ' : ''}{penaltyCount > 0 ? `${penaltyCount} ถูกลงโทษ` : ''})</span>
+                            )}
+                          </div>
+
                           {/* Header */}
                           <div className="flex items-start justify-between gap-2">
                             <h4 className="text-victorian-100 font-bold text-sm flex items-center gap-1.5 leading-tight">
                               <Skull className="w-3.5 h-3.5 text-red-400 shrink-0" />
                               <span className="line-clamp-2">{p.name}</span>
                             </h4>
-                            {isExpired && <span className="text-red-400 text-[9px] bg-red-500/10 px-1.5 py-0.5 rounded shrink-0">หมดเวลา</span>}
-                            {allDone && !isExpired && <span className="text-green-400 text-[9px] bg-green-500/10 px-1.5 py-0.5 rounded shrink-0">เสร็จสิ้น</span>}
                           </div>
 
                           {p.description && <p className="text-victorian-400 text-[11px] line-clamp-2">{p.description}</p>}
+
+                          {/* Event mode badge */}
+                          {(() => {
+                            const mode = getEventModeLabel(p.event_mode, p.group_mode)
+                            return (
+                              <div className={`text-[10px] px-2 py-1 rounded border ${mode.color}`} title={mode.desc}>
+                                <span className="font-bold">{mode.label}</span>
+                                <span className="opacity-70 ml-1">— {mode.desc}</span>
+                              </div>
+                            )
+                          })()}
 
                           {/* Penalties badges */}
                           <div className="flex flex-wrap gap-1">
@@ -1931,13 +2055,23 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                             </p>
                             <div className="space-y-1">
                               {p.assigned_players.map(ap => (
-                                <div key={ap.id} className="flex items-center justify-between gap-1.5 p-1.5 rounded bg-victorian-900/40 border border-victorian-800/50">
+                                <div key={ap.id} className={`flex items-center justify-between gap-1.5 p-1.5 rounded border ${
+                                  ap.penalty_applied ? 'bg-red-900/30 border-red-500/30' :
+                                  ap.mercy_requested ? 'bg-green-900/30 border-green-500/30' :
+                                  'bg-victorian-900/40 border-victorian-800/50'
+                                }`}>
                                   <div className="flex items-center gap-1.5 min-w-0">
                                     <Avatar name={ap.player_name} url={ap.player_avatar} />
                                     <span className="text-victorian-200 text-[10px] truncate">{ap.player_name}</span>
-                                    {ap.mercy_requested && <span className="text-green-400 text-[9px] shrink-0">✅</span>}
-                                    {ap.penalty_applied && <span className="text-red-400 text-[9px] shrink-0">💀</span>}
-                                    {!ap.is_completed && !ap.penalty_applied && !ap.mercy_requested && <span className="text-amber-400 text-[9px] shrink-0">⏳</span>}
+                                    {ap.mercy_requested && !ap.penalty_applied && (
+                                      <span className="text-green-400 text-[9px] bg-green-500/15 px-1.5 py-0.5 rounded border border-green-500/20 shrink-0 font-bold">✅ รอดพ้น</span>
+                                    )}
+                                    {ap.penalty_applied && (
+                                      <span className="text-red-400 text-[9px] bg-red-500/15 px-1.5 py-0.5 rounded border border-red-500/20 shrink-0 font-bold">💀 ถูกลงโทษ</span>
+                                    )}
+                                    {!ap.is_completed && !ap.penalty_applied && !ap.mercy_requested && (
+                                      <span className="text-amber-400 text-[9px] bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 shrink-0 font-bold">⏳ รอดำเนินการ</span>
+                                    )}
                                   </div>
                                   {isAdmin && !ap.penalty_applied && !ap.mercy_requested && (
                                     <button type="button" onClick={() => handleApplyPenalty(p.id, ap.player_id)} disabled={isPending}
@@ -2736,6 +2870,32 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                 <textarea value={punDesc} onChange={e => setPunDesc(e.target.value)} placeholder="อธิบายเหตุการณ์..." rows={2} className="input-victorian w-full !py-2 !text-sm resize-none" />
               </div>
 
+              <div className="space-y-2">
+                <label className="block text-sm text-victorian-300 font-semibold">รูปแบบเหตุการณ์</label>
+                <div className="flex flex-wrap gap-3">
+                  <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+                    <input type="radio" name="pun-event-mode" checked={punEventMode === 'solo'} onChange={() => { setPunEventMode('solo'); setPunGroupMode('all') }} className="rounded-full border-gold-400/30" />
+                    แบบเดี่ยว (ใครทำใครได้)
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+                    <input type="radio" name="pun-event-mode" checked={punEventMode === 'group'} onChange={() => setPunEventMode('group')} className="rounded-full border-gold-400/30" />
+                    เหตุการณ์รวม
+                  </label>
+                </div>
+                {punEventMode === 'group' && (
+                  <div className="space-y-1 pl-4">
+                    <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+                      <input type="radio" name="pun-group-mode" checked={punGroupMode === 'all'} onChange={() => setPunGroupMode('all')} className="rounded-full border-gold-400/30" />
+                      ทุกคนต้องทำเหมือนกันและส่งให้ครบทุกคน
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+                      <input type="radio" name="pun-group-mode" checked={punGroupMode === 'shared'} onChange={() => setPunGroupMode('shared')} className="rounded-full border-gold-400/30" />
+                      ใครทำอะไรก็ได้ ส่งแล้วนับรวมความคืบหน้า
+                    </label>
+                  </div>
+                )}
+              </div>
+
               {/* Required tasks */}
               <div className="space-y-2">
                 <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
@@ -3037,6 +3197,31 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
             <textarea value={editPunDesc} onChange={e => setEditPunDesc(e.target.value)} rows={2} className="input-victorian w-full !py-2 !text-sm resize-none" />
           </div>
           <div className="space-y-2">
+            <label className="block text-sm text-victorian-300 font-semibold">รูปแบบเหตุการณ์</label>
+            <div className="flex flex-wrap gap-3">
+              <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+                <input type="radio" name="edit-pun-event-mode" checked={editPunEventMode === 'solo'} onChange={() => { setEditPunEventMode('solo'); setEditPunGroupMode('all') }} className="rounded-full border-gold-400/30" />
+                แบบเดี่ยว (ใครทำใครได้)
+              </label>
+              <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+                <input type="radio" name="edit-pun-event-mode" checked={editPunEventMode === 'group'} onChange={() => setEditPunEventMode('group')} className="rounded-full border-gold-400/30" />
+                เหตุการณ์รวม
+              </label>
+            </div>
+            {editPunEventMode === 'group' && (
+              <div className="space-y-1 pl-4">
+                <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+                  <input type="radio" name="edit-pun-group-mode" checked={editPunGroupMode === 'all'} onChange={() => setEditPunGroupMode('all')} className="rounded-full border-gold-400/30" />
+                  ทุกคนต้องทำเหมือนกันและส่งให้ครบทุกคน
+                </label>
+                <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+                  <input type="radio" name="edit-pun-group-mode" checked={editPunGroupMode === 'shared'} onChange={() => setEditPunGroupMode('shared')} className="rounded-full border-gold-400/30" />
+                  ใครทำอะไรก็ได้ ส่งแล้วนับรวมความคืบหน้า
+                </label>
+              </div>
+            )}
+          </div>
+          <div className="space-y-2">
             <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
               <Target className="w-3.5 h-3.5 text-emerald-400" /> แอคชั่น/ภารกิจที่ต้องทำ <span className="text-nouveau-ruby">*</span>
             </label>
@@ -3328,12 +3513,23 @@ function MercyButton({ punishmentId, onMercy, isPending }: {
   const [canMercy, setCanMercy] = useState(false)
   const [checking, setChecking] = useState(true)
 
-  useEffect(() => {
+  const doCheck = useCallback(() => {
     checkPlayerTaskCompletion(punishmentId).then(r => {
       setCanMercy(r.allCompleted)
       setChecking(false)
     })
   }, [punishmentId])
+
+  useEffect(() => {
+    doCheck()
+    const interval = setInterval(doCheck, 5000)
+    const supabase = createClient()
+    const channel = supabase.channel(`mercy-${punishmentId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'action_submissions' }, doCheck)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quest_submissions' }, doCheck)
+      .subscribe()
+    return () => { clearInterval(interval); supabase.removeChannel(channel) }
+  }, [punishmentId, doCheck])
 
   return (
     <div className="pt-2 border-t border-red-500/10">

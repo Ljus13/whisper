@@ -49,3 +49,11 @@ CREATE POLICY "Admin can update sleep requests"
 CREATE INDEX IF NOT EXISTS idx_sleep_requests_player ON public.sleep_requests(player_id);
 CREATE INDEX IF NOT EXISTS idx_sleep_requests_status ON public.sleep_requests(status);
 CREATE INDEX IF NOT EXISTS idx_sleep_requests_created ON public.sleep_requests(created_at DESC);
+
+-- Realtime
+ALTER TABLE public.sleep_requests REPLICA IDENTITY FULL;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'sleep_requests') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.sleep_requests;
+  END IF;
+END $$;

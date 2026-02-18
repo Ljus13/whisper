@@ -1,12 +1,19 @@
 'use client'
 
 import { getPlayerActivePunishments } from '@/app/actions/action-quest'
+import { createClient } from '@/lib/supabase/client'
 import { Skull, Eye, X, Clock } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
 function fmtDate(d: string) {
   const x = new Date(d)
   return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()} ${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}`
+}
+
+function getEventModeTag(eventMode?: string, groupMode?: string): string {
+  if (eventMode === 'group' && groupMode === 'shared') return '🎯 ภารกิจเป้าหมายร่วม — ช่วยกันทำ ไม่จำกัดว่าใครเป็นคนทำ'
+  if (eventMode === 'group') return '👥 ภารกิจกลุ่ม — ทุกคนต้องทำให้ครบทุกคน'
+  return '🗡️ ภารกิจส่วนบุคคล — บรรลุเป้าหมายเฉพาะตัวคุณ'
 }
 
 /* ═══════════════════ Modal Overlay ═══════════════════ */
@@ -27,7 +34,28 @@ export default function PunishmentBanner() {
   const [detail, setDetail] = useState<any | null>(null)
 
   useEffect(() => {
-    getPlayerActivePunishments().then(r => setPunishments(r)).catch(() => {})
+    let mounted = true
+    const fetchData = () => {
+      getPlayerActivePunishments().then(r => {
+        if (mounted) setPunishments(r)
+      }).catch(() => {})
+    }
+    fetchData()
+
+    const supabase = createClient()
+    const channel = supabase
+      .channel('punishment_banner_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'punishments' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'punishment_players' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'punishment_required_tasks' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'action_submissions' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quest_submissions' }, fetchData)
+      .subscribe()
+
+    return () => {
+      mounted = false
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   if (punishments.length === 0) return null
@@ -47,20 +75,35 @@ export default function PunishmentBanner() {
           </div>
         </div>
         <div className="space-y-2">
-          {punishments.map((pun: any) => (
-            <div key={pun.id} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-red-950/60 border border-red-500/30">
-              <div className="flex-1 min-w-0">
-                <p className="text-red-200 text-sm font-semibold truncate">{pun.name}</p>
-                {pun.deadline && (
-                  <p className="text-red-400/70 text-[10px] mt-0.5">⏰ กำหนด: {fmtDate(pun.deadline)}</p>
-                )}
+          {punishments.map((pun: any) => {
+            const current = pun.progress_current ?? 0
+            const total = pun.progress_total ?? 0
+            const pct = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0
+            return (
+              <div key={pun.id} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-red-950/60 border border-red-500/30">
+                <div className="flex-1 min-w-0 space-y-1">
+                  <p className="text-red-200 text-sm font-semibold truncate">{pun.name}</p>
+                  <p className="text-red-400/60 text-[10px]">{getEventModeTag(pun.event_mode, pun.group_mode)}</p>
+                  {pun.deadline && (
+                    <p className="text-red-400/70 text-[10px]">⏰ กำหนด: {fmtDate(pun.deadline)}</p>
+                  )}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[10px] text-red-300/80">
+                      <span>ความคืบหน้า</span>
+                      <span>{current}/{total}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-red-950/60 border border-red-500/20 overflow-hidden">
+                      <div className="h-full bg-red-400/80" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                </div>
+                <button type="button" onClick={() => setDetail(pun)}
+                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 text-xs font-bold cursor-pointer transition-colors">
+                  <Eye className="w-3.5 h-3.5" /> ดูรายละเอียด
+                </button>
               </div>
-              <button type="button" onClick={() => setDetail(pun)}
-                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 text-xs font-bold cursor-pointer transition-colors">
-                <Eye className="w-3.5 h-3.5" /> ดูรายละเอียด
-              </button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 
@@ -80,6 +123,7 @@ export default function PunishmentBanner() {
               {detail.description && (
                 <p className="text-red-300/80 text-sm mt-1 whitespace-pre-wrap">{detail.description}</p>
               )}
+              <p className="text-red-400/70 text-xs mt-2">{getEventModeTag(detail.event_mode, detail.group_mode)}</p>
             </div>
 
             {detail.deadline && (
@@ -88,6 +132,21 @@ export default function PunishmentBanner() {
                 <span>กำหนดเสร็จ: <strong>{fmtDate(detail.deadline)}</strong></span>
               </div>
             )}
+
+            <div className="border-t border-red-500/20 pt-3">
+              <div className="flex items-center justify-between text-xs text-red-300/80">
+                <span>ความคืบหน้า</span>
+                <span>{detail.progress_current ?? 0}/{detail.progress_total ?? 0}</span>
+              </div>
+              <div className="mt-2 h-2 rounded-full bg-red-950/60 border border-red-500/20 overflow-hidden">
+                <div
+                  className="h-full bg-red-400/80"
+                  style={{
+                    width: `${(detail.progress_total ?? 0) > 0 ? Math.min(100, Math.round((detail.progress_current / detail.progress_total) * 100)) : 0}%`,
+                  }}
+                />
+              </div>
+            </div>
 
             {/* Penalties */}
             <div className="border-t border-red-500/20 pt-3">
