@@ -2,8 +2,9 @@
 
 import { getPlayerActivePunishments } from '@/app/actions/action-quest'
 import { createClient } from '@/lib/supabase/client'
+import { debouncedCall } from '@/lib/client-cache'
 import { Skull, Eye, X, Clock } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 function fmtDate(d: string) {
   const x = new Date(d)
@@ -33,27 +34,30 @@ export default function PunishmentBanner() {
   const [punishments, setPunishments] = useState<any[]>([])
   const [detail, setDetail] = useState<any | null>(null)
 
+  const mountedRef = useRef(true)
   useEffect(() => {
-    let mounted = true
+    mountedRef.current = true
     const fetchData = () => {
       getPlayerActivePunishments().then(r => {
-        if (mounted) setPunishments(r)
+        if (mountedRef.current) setPunishments(r)
       }).catch(() => {})
     }
     fetchData()
 
+    const debouncedFetch = () => debouncedCall('pun-banner', fetchData, 500)
+
     const supabase = createClient()
     const channel = supabase
       .channel('punishment_banner_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'punishments' }, fetchData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'punishment_players' }, fetchData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'punishment_required_tasks' }, fetchData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'action_submissions' }, fetchData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'quest_submissions' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'punishments' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'punishment_players' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'punishment_required_tasks' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'action_submissions' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quest_submissions' }, debouncedFetch)
       .subscribe()
 
     return () => {
-      mounted = false
+      mountedRef.current = false
       supabase.removeChannel(channel)
     }
   }, [])

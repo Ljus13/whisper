@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
-import { getCached, setCache, invalidateCache } from '@/lib/client-cache'
+import { getCached, setCache, invalidateCache, isCacheStale, debouncedCall } from '@/lib/client-cache'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import {
@@ -591,113 +591,123 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
 
   // ─── Fetch functions ───
   const fetchActionCodes = useCallback(async (p: number) => {
-    const cached = getCached<{ codes: CodeEntry[]; page: number; totalPages: number }>(`aq:actionCodes:${p}`)
+    const cacheKey = `aq:actionCodes:${p}`
+    const cached = getCached<{ codes: CodeEntry[]; page: number; totalPages: number }>(cacheKey)
     if (cached) {
       setActionCodes(cached.codes)
       setAcPage(cached.page)
       setAcTotalPages(cached.totalPages)
-      return
+      if (!isCacheStale(cacheKey)) return
     }
     const r = await getActionCodes(p)
     setActionCodes(r.codes as CodeEntry[])
     setAcPage(r.page || 1)
     setAcTotalPages(r.totalPages || 1)
-    setCache(`aq:actionCodes:${p}`, { codes: r.codes as CodeEntry[], page: r.page || 1, totalPages: r.totalPages || 1 })
+    setCache(cacheKey, { codes: r.codes as CodeEntry[], page: r.page || 1, totalPages: r.totalPages || 1 })
   }, [])
 
   const fetchQuestCodes = useCallback(async (p: number) => {
-    const cached = getCached<{ codes: CodeEntry[]; page: number; totalPages: number }>(`aq:questCodes:${p}`)
+    const cacheKey = `aq:questCodes:${p}`
+    const cached = getCached<{ codes: CodeEntry[]; page: number; totalPages: number }>(cacheKey)
     if (cached) {
       setQuestCodes(cached.codes)
       setQcPage(cached.page)
       setQcTotalPages(cached.totalPages)
-      return
+      if (!isCacheStale(cacheKey)) return
     }
     const r = await getQuestCodes(p)
     setQuestCodes(r.codes as CodeEntry[])
     setQcPage(r.page || 1)
     setQcTotalPages(r.totalPages || 1)
-    setCache(`aq:questCodes:${p}`, { codes: r.codes as CodeEntry[], page: r.page || 1, totalPages: r.totalPages || 1 })
+    setCache(cacheKey, { codes: r.codes as CodeEntry[], page: r.page || 1, totalPages: r.totalPages || 1 })
   }, [])
 
   const fetchActionSubs = useCallback(async (p: number) => {
-    const cached = getCached<{ submissions: Submission[]; page: number; totalPages: number; total: number }>(`aq:actionSubs:${p}:${isAdmin ? 'admin' : 'player'}`)
+    const cacheKey = `aq:actionSubs:${p}:${isAdmin ? 'admin' : 'player'}`
+    const cached = getCached<{ submissions: Submission[]; page: number; totalPages: number; total: number }>(cacheKey)
     if (cached) {
       setActionSubs(cached.submissions)
       setAsPage(cached.page)
       setAsTotalPages(cached.totalPages)
       setAsTotal(cached.total)
       setAsLoading(false)
-      return
+      if (!isCacheStale(cacheKey)) return
+    } else {
+      setAsLoading(true)
     }
-    setAsLoading(true)
     const r = await getActionSubmissions(p)
     setActionSubs(r.submissions as Submission[])
     setAsPage(r.page || 1)
     setAsTotalPages(r.totalPages || 1)
     setAsTotal(r.total || 0)
     setAsLoading(false)
-    setCache(`aq:actionSubs:${p}:${isAdmin ? 'admin' : 'player'}`, { submissions: r.submissions as Submission[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
+    setCache(cacheKey, { submissions: r.submissions as Submission[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
   }, [isAdmin])
 
   const fetchQuestSubs = useCallback(async (p: number) => {
-    const cached = getCached<{ submissions: Submission[]; page: number; totalPages: number; total: number }>(`aq:questSubs:${p}:${isAdmin ? 'admin' : 'player'}`)
+    const cacheKey = `aq:questSubs:${p}:${isAdmin ? 'admin' : 'player'}`
+    const cached = getCached<{ submissions: Submission[]; page: number; totalPages: number; total: number }>(cacheKey)
     if (cached) {
       setQuestSubs(cached.submissions)
       setQsPage(cached.page)
       setQsTotalPages(cached.totalPages)
       setQsTotal(cached.total)
       setQsLoading(false)
-      return
+      if (!isCacheStale(cacheKey)) return
+    } else {
+      setQsLoading(true)
     }
-    setQsLoading(true)
     const r = await getQuestSubmissions(p)
     setQuestSubs(r.submissions as Submission[])
     setQsPage(r.page || 1)
     setQsTotalPages(r.totalPages || 1)
     setQsTotal(r.total || 0)
     setQsLoading(false)
-    setCache(`aq:questSubs:${p}:${isAdmin ? 'admin' : 'player'}`, { submissions: r.submissions as Submission[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
+    setCache(cacheKey, { submissions: r.submissions as Submission[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
   }, [isAdmin])
 
   const fetchSleepLogs = useCallback(async (p: number) => {
-    const cached = getCached<{ logs: SleepLog[]; page: number; totalPages: number; total: number }>(`aq:sleepLogs:${p}`)
+    const cacheKey = `aq:sleepLogs:${p}`
+    const cached = getCached<{ logs: SleepLog[]; page: number; totalPages: number; total: number }>(cacheKey)
     if (cached) {
       setSleepLogs(cached.logs)
       setSlPage(cached.page)
       setSlTotalPages(cached.totalPages)
       setSlTotal(cached.total)
       setSlLoading(false)
-      return
+      if (!isCacheStale(cacheKey)) return
+    } else {
+      setSlLoading(true)
     }
-    setSlLoading(true)
     const r = await getSleepLogs(p)
     setSleepLogs(r.logs as SleepLog[])
     setSlPage(r.page || 1)
     setSlTotalPages(r.totalPages || 1)
     setSlTotal(r.total || 0)
     setSlLoading(false)
-    setCache(`aq:sleepLogs:${p}`, { logs: r.logs as SleepLog[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
+    setCache(cacheKey, { logs: r.logs as SleepLog[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
   }, [])
 
   const fetchRoleplaySubs = useCallback(async (p: number) => {
-    const cached = getCached<{ submissions: RoleplaySubmission[]; page: number; totalPages: number; total: number }>(`aq:roleplaySubs:${p}:${isAdmin ? 'admin' : 'player'}`)
+    const cacheKey = `aq:roleplaySubs:${p}:${isAdmin ? 'admin' : 'player'}`
+    const cached = getCached<{ submissions: RoleplaySubmission[]; page: number; totalPages: number; total: number }>(cacheKey)
     if (cached) {
       setRoleplaySubs(cached.submissions)
       setRpPage(cached.page)
       setRpTotalPages(cached.totalPages)
       setRpTotal(cached.total)
       setRpLoading(false)
-      return
+      if (!isCacheStale(cacheKey)) return
+    } else {
+      setRpLoading(true)
     }
-    setRpLoading(true)
     const r = await getRoleplaySubmissions(p)
     setRoleplaySubs(r.submissions as RoleplaySubmission[])
     setRpPage(r.page || 1)
     setRpTotalPages(r.totalPages || 1)
     setRpTotal(r.total || 0)
     setRpLoading(false)
-    setCache(`aq:roleplaySubs:${p}:${isAdmin ? 'admin' : 'player'}`, { submissions: r.submissions as RoleplaySubmission[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
+    setCache(cacheKey, { submissions: r.submissions as RoleplaySubmission[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
   }, [isAdmin])
 
   const fetchDigestProgress = useCallback(async () => {
@@ -718,9 +728,10 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       setPlPage(cached.page)
       setPlTotalPages(cached.totalPages)
       setPlLoading(false)
-      return
+      if (!isCacheStale(cacheKey)) return
+    } else {
+      setPlLoading(true)
     }
-    setPlLoading(true)
     let logs: any[] = []
     let total = 0
     let totalPages = 1
@@ -750,43 +761,47 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   }, [isAdmin])
 
   const fetchPunishments = useCallback(async (p: number) => {
-    const cached = getCached<{ punishments: PunishmentEntry[]; page: number; totalPages: number; total: number }>(`aq:punishments:${p}`)
+    const cacheKey = `aq:punishments:${p}`
+    const cached = getCached<{ punishments: PunishmentEntry[]; page: number; totalPages: number; total: number }>(cacheKey)
     if (cached) {
       setPunishments(cached.punishments)
       setPunPage(cached.page)
       setPunTotalPages(cached.totalPages)
       setPunTotal(cached.total)
       setPunLoading(false)
-      return
+      if (!isCacheStale(cacheKey)) return
+    } else {
+      setPunLoading(true)
     }
-    setPunLoading(true)
     const r = await getPunishments(p)
     setPunishments((r.punishments || []) as PunishmentEntry[])
     setPunPage(r.page || 1)
     setPunTotalPages(r.totalPages || 1)
     setPunTotal(r.total || 0)
     setPunLoading(false)
-    setCache(`aq:punishments:${p}`, { punishments: (r.punishments || []) as PunishmentEntry[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
+    setCache(cacheKey, { punishments: (r.punishments || []) as PunishmentEntry[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
   }, [])
 
   const fetchPunishmentLogs = useCallback(async (p: number) => {
-    const cached = getCached<{ logs: PunishmentLogEntry[]; page: number; totalPages: number; total: number }>(`aq:punishmentLogs:${p}`)
+    const cacheKey = `aq:punishmentLogs:${p}`
+    const cached = getCached<{ logs: PunishmentLogEntry[]; page: number; totalPages: number; total: number }>(cacheKey)
     if (cached) {
       setPunLogs(cached.logs)
       setPunLogPage(cached.page)
       setPunLogTotalPages(cached.totalPages)
       setPunLogTotal(cached.total)
       setPunLogLoading(false)
-      return
+      if (!isCacheStale(cacheKey)) return
+    } else {
+      setPunLogLoading(true)
     }
-    setPunLogLoading(true)
     const r = await getPunishmentLogs(p)
     setPunLogs((r.logs || []) as PunishmentLogEntry[])
     setPunLogPage(r.page || 1)
     setPunLogTotalPages(r.totalPages || 1)
     setPunLogTotal(r.total || 0)
     setPunLogLoading(false)
-    setCache(`aq:punishmentLogs:${p}`, { logs: (r.logs || []) as PunishmentLogEntry[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
+    setCache(cacheKey, { logs: (r.logs || []) as PunishmentLogEntry[], page: r.page || 1, totalPages: r.totalPages || 1, total: r.total || 0 })
   }, [])
 
   const loadTab = useCallback(async (key: TabKey) => {
@@ -851,25 +866,29 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     const supabase = createClient()
 
     function refreshActiveTab() {
-      const tab = activeTabRef.current
-      const p = pageRefs.current
-      invalidateCache('aq:')
-      if (tab === 'actions') {
-        fetchActionCodes(p.acPage)
-        fetchActionSubs(p.asPage)
-      } else if (tab === 'quests') {
-        fetchQuestCodes(p.qcPage)
-        fetchQuestSubs(p.qsPage)
-      } else if (tab === 'sleep') {
-        fetchSleepLogs(p.slPage)
-      } else if (tab === 'prayer') {
-        fetchPrayerLogs(p.plPage)
-      } else if (tab === 'punishments') {
-        fetchPunishments(p.punPage)
-        fetchPunishmentLogs(p.punLogPage)
-      } else if (tab === 'roleplay') {
-        fetchRoleplaySubs(p.rpPage)
-      }
+      debouncedCall('aq-realtime', () => {
+        const tab = activeTabRef.current
+        const p = pageRefs.current
+        if (tab === 'actions') {
+          invalidateCache('aq:actionCodes'); invalidateCache('aq:actionSubs')
+          fetchActionCodes(p.acPage); fetchActionSubs(p.asPage)
+        } else if (tab === 'quests') {
+          invalidateCache('aq:questCodes'); invalidateCache('aq:questSubs')
+          fetchQuestCodes(p.qcPage); fetchQuestSubs(p.qsPage)
+        } else if (tab === 'sleep') {
+          invalidateCache('aq:sleepLogs'); invalidateCache('aq:sleepStatus')
+          fetchSleepLogs(p.slPage)
+        } else if (tab === 'prayer') {
+          invalidateCache('aq:prayerLogs')
+          fetchPrayerLogs(p.plPage)
+        } else if (tab === 'punishments') {
+          invalidateCache('aq:punishments'); invalidateCache('aq:punishmentLogs')
+          fetchPunishments(p.punPage); fetchPunishmentLogs(p.punLogPage)
+        } else if (tab === 'roleplay') {
+          invalidateCache('aq:roleplaySubs')
+          fetchRoleplaySubs(p.rpPage)
+        }
+      }, 400)
     }
 
     const channel = supabase.channel('aq-realtime')
@@ -999,18 +1018,31 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   }
 
   function handleApprove(id: string, type: 'action' | 'quest' | 'sleep') {
+    // Optimistic UI: update local state immediately
+    if (type === 'action') {
+      setActionSubs(prev => prev.map(s => s.id === id ? { ...s, status: 'approved' } : s))
+    } else if (type === 'quest') {
+      setQuestSubs(prev => prev.map(s => s.id === id ? { ...s, status: 'approved' } : s))
+    } else {
+      setSleepLogs(prev => prev.map(s => s.id === id ? { ...s, status: 'approved' } : s))
+    }
+    toast('success', type === 'sleep' ? 'อนุมัติแล้ว — รีเซ็ต Spirituality' : 'อนุมัติแล้ว')
+
     startTransition(async () => {
       let r: { error?: string }
       if (type === 'action') r = await approveActionSubmission(id)
       else if (type === 'quest') r = await approveQuestSubmission(id)
       else r = await approveSleepRequest(id)
-      if (r.error) toast('error', r.error)
-      else {
-        toast('success', type === 'sleep' ? 'อนุมัติแล้ว — รีเซ็ต Spirituality' : 'อนุมัติแล้ว')
-        invalidateCache('aq:')
-        if (type === 'action') fetchActionSubs(asPage)
-        else if (type === 'quest') fetchQuestSubs(qsPage)
-        else fetchSleepLogs(slPage)
+      if (r.error) {
+        toast('error', r.error)
+        // Revert optimistic update on error
+        if (type === 'action') { invalidateCache('aq:actionSubs'); fetchActionSubs(asPage) }
+        else if (type === 'quest') { invalidateCache('aq:questSubs'); fetchQuestSubs(qsPage) }
+        else { invalidateCache('aq:sleepLogs'); fetchSleepLogs(slPage) }
+      } else {
+        if (type === 'action') { invalidateCache('aq:actionSubs'); fetchActionSubs(asPage) }
+        else if (type === 'quest') { invalidateCache('aq:questSubs'); fetchQuestSubs(qsPage) }
+        else { invalidateCache('aq:sleepLogs'); invalidateCache('aq:sleepStatus'); fetchSleepLogs(slPage) }
       }
     })
   }
@@ -1019,19 +1051,27 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     if (!rejectTarget) return
     setRejectError(null)
     if (rejectTarget.type !== 'sleep' && !rejectReason.trim()) { setRejectError('กรุณาระบุเหตุผล'); return }
+    const target = rejectTarget
+    // Optimistic UI: update local state immediately
+    if (target.type === 'action') {
+      setActionSubs(prev => prev.map(s => s.id === target.id ? { ...s, status: 'rejected' } : s))
+    } else if (target.type === 'quest') {
+      setQuestSubs(prev => prev.map(s => s.id === target.id ? { ...s, status: 'rejected' } : s))
+    } else {
+      setSleepLogs(prev => prev.map(s => s.id === target.id ? { ...s, status: 'rejected' } : s))
+    }
+    toast('success', 'ปฏิเสธแล้ว')
+    setRejectTarget(null); setRejectReason('')
+
     startTransition(async () => {
       let r: { error?: string }
-      if (rejectTarget!.type === 'action') r = await rejectActionSubmission(rejectTarget!.id, rejectReason)
-      else if (rejectTarget!.type === 'quest') r = await rejectQuestSubmission(rejectTarget!.id, rejectReason)
-      else r = await rejectSleepRequest(rejectTarget!.id)
-      if (r.error) { setRejectError(r.error) } else {
-        toast('success', 'ปฏิเสธแล้ว')
-        setRejectTarget(null); setRejectReason('')
-        invalidateCache('aq:')
-        if (rejectTarget!.type === 'action') fetchActionSubs(asPage)
-        else if (rejectTarget!.type === 'quest') fetchQuestSubs(qsPage)
-        else fetchSleepLogs(slPage)
-      }
+      if (target.type === 'action') r = await rejectActionSubmission(target.id, rejectReason)
+      else if (target.type === 'quest') r = await rejectQuestSubmission(target.id, rejectReason)
+      else r = await rejectSleepRequest(target.id)
+      if (r.error) { toast('error', r.error) }
+      if (target.type === 'action') { invalidateCache('aq:actionSubs'); fetchActionSubs(asPage) }
+      else if (target.type === 'quest') { invalidateCache('aq:questSubs'); fetchQuestSubs(qsPage) }
+      else { invalidateCache('aq:sleepLogs'); fetchSleepLogs(slPage) }
     })
   }
 
@@ -1085,30 +1125,44 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   }
 
   function handleRequestMercy(punishmentId: string) {
+    // Optimistic UI: mark current user's entry as mercy_requested
+    setPunishments(prev => prev.map(p => {
+      if (p.id !== punishmentId) return p
+      return {
+        ...p,
+        assigned_players: p.assigned_players.map((ap: any) =>
+          ap.player_id === _userId ? { ...ap, mercy_requested: true, is_completed: true } : ap
+        ),
+      }
+    }))
+    toast('success', 'ส่งเหตุการณ์สำเร็จ! คุณรอดพ้นเหตุการณ์')
+
     startTransition(async () => {
       const r = await requestMercy(punishmentId)
       if (r.error) toast('error', r.error)
-      else {
-        toast('success', 'ส่งเหตุการณ์สำเร็จ! คุณรอดพ้นเหตุการณ์')
-        invalidateCache('aq:punishments')
-        invalidateCache('aq:punishmentLogs')
-        fetchPunishments(punPage)
-        fetchPunishmentLogs(punLogPage)
-      }
+      invalidateCache('aq:punishments'); invalidateCache('aq:punishmentLogs')
+      fetchPunishments(punPage); fetchPunishmentLogs(punLogPage)
     })
   }
 
   function handleApplyPenalty(punishmentId: string, playerId: string) {
+    // Optimistic UI: mark player as penalty_applied
+    setPunishments(prev => prev.map(p => {
+      if (p.id !== punishmentId) return p
+      return {
+        ...p,
+        assigned_players: p.assigned_players.map((ap: any) =>
+          ap.player_id === playerId ? { ...ap, penalty_applied: true, is_completed: true } : ap
+        ),
+      }
+    }))
+    toast('success', 'ลงโทษสำเร็จ')
+
     startTransition(async () => {
       const r = await applyPenalty(punishmentId, playerId)
       if (r.error) toast('error', r.error)
-      else {
-        toast('success', 'ลงโทษสำเร็จ')
-        invalidateCache('aq:punishments')
-        invalidateCache('aq:punishmentLogs')
-        fetchPunishments(punPage)
-        fetchPunishmentLogs(punLogPage)
-      }
+      invalidateCache('aq:punishments'); invalidateCache('aq:punishmentLogs')
+      fetchPunishments(punPage); fetchPunishmentLogs(punLogPage)
     })
   }
 
