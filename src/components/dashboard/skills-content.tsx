@@ -4,7 +4,8 @@ import { useState, useTransition, useEffect, useCallback } from 'react'
 import type { Profile, SkillType, SkillPathway, SkillSequence, Skill, PlayerPathway } from '@/lib/types/database'
 import {
   ArrowLeft, ChevronDown, ChevronRight, Plus, Trash2, Sparkles, Zap,
-  GitBranch, Layers, Shield, Lock, BookOpen, Pencil, Copy, Check, X, ScrollText
+  GitBranch, Layers, Shield, Lock, BookOpen, Pencil, Copy, Check, X, ScrollText,
+  Gift, Clock, Infinity
 } from 'lucide-react'
 import {
   createSkillType, updateSkillType, deleteSkillType,
@@ -13,6 +14,7 @@ import {
   createSkill, updateSkill, deleteSkill,
   castSkill
 } from '@/app/actions/skills'
+import { getGrantedSkillsForPlayer, useGrantedSkill as castGrantedSkill } from '@/app/actions/granted-skills'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
 import { OrnamentedCard } from '@/components/ui/ornaments'
 import { createClient } from '@/lib/supabase/client'
@@ -468,7 +470,7 @@ function AdminPanel({
    PLAYER VIEW: Two-column pathway + skills
    ═══════════════════════════════════════ */
 function PlayerSkillView({
-  profile, skillTypes, pathways, sequences, skills, playerPathways
+  profile, skillTypes, pathways, sequences, skills, playerPathways, grantedSkills, onRefresh
 }: {
   profile: Profile | null
   skillTypes: SkillType[]
@@ -476,6 +478,8 @@ function PlayerSkillView({
   sequences: SkillSequence[]
   skills: Skill[]
   playerPathways: PlayerPathway[]
+  grantedSkills: any[]
+  onRefresh: () => void
 }) {
   const [isPending, startTransition] = useTransition()
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null)
@@ -501,6 +505,17 @@ function PlayerSkillView({
   const [optimisticSpirit, setOptimisticSpirit] = useState<number | null>(null)
   const [origin, setOrigin] = useState('')
   const displaySpirit = optimisticSpirit ?? profile?.spirituality ?? 0
+
+  // Granted skill usage state
+  const [selectedGranted, setSelectedGranted] = useState<any | null>(null)
+  const [grantedRollPhase, setGrantedRollPhase] = useState<'input' | 'rolling' | 'result'>('input')
+  const [grantedSuccessRate, setGrantedSuccessRate] = useState('')
+  const [grantedRollNote, setGrantedRollNote] = useState('')
+  const [grantedRollingValue, setGrantedRollingValue] = useState(1)
+  const [grantedResult, setGrantedResult] = useState<any | null>(null)
+  const [grantedError, setGrantedError] = useState<string | null>(null)
+  const [grantedCopied, setGrantedCopied] = useState(false)
+  const [grantedShowAll, setGrantedShowAll] = useState(false)
 
   // Determine which skills the player can access
   function canAccessSkill(skill: Skill): boolean {
@@ -570,6 +585,92 @@ function PlayerSkillView({
     setSkillResult(null)
     setRollPhase('input')
   }
+
+  // ─── Granted skill handlers ───
+  function handleUseGranted(gs: any) {
+    setGrantedError(null)
+    setGrantedCopied(false)
+    setGrantedResult(null)
+    setGrantedRollPhase('input')
+    setGrantedSuccessRate('')
+    setGrantedRollNote('')
+    setGrantedRollingValue(1)
+    setSelectedGranted(gs)
+  }
+
+  function closeGrantedModal() {
+    setSelectedGranted(null)
+    setGrantedResult(null)
+    setGrantedRollPhase('input')
+  }
+
+  async function runGrantedRollAnimation() {
+    return new Promise<number>((resolve) => {
+      const delays = [40, 60, 80, 100, 120, 160, 200, 260, 340, 420]
+      let index = 0
+      const tick = () => {
+        const value = Math.floor(Math.random() * 20) + 1
+        setGrantedRollingValue(value)
+        if (index >= delays.length - 1) { resolve(value); return }
+        index += 1
+        setTimeout(tick, delays[index])
+      }
+      setTimeout(tick, delays[0])
+    })
+  }
+
+  async function handleGrantedConfirmRoll() {
+    if (!selectedGranted) return
+    const rate = parseInt(grantedSuccessRate, 10)
+    if (!rate || rate < 1 || rate > 20) {
+      setGrantedError('กรุณาระบุอัตราสำเร็จระหว่าง 1-20')
+      return
+    }
+    setGrantedError(null)
+    setGrantedRollPhase('rolling')
+    const spiritCost = selectedGranted.skills?.spirit_cost ?? 0
+    setOptimisticSpirit(displaySpirit - spiritCost)
+    const rollValue = await runGrantedRollAnimation()
+    startTransition(async () => {
+      const result = await castGrantedSkill(selectedGranted.id, rate, rollValue, grantedRollNote)
+      if (result.error) {
+        setOptimisticSpirit(null)
+        setGrantedError(result.error)
+        setGrantedRollPhase('input')
+        return
+      }
+      if (result.success) {
+        setOptimisticSpirit(result.remaining ?? null)
+        setGrantedResult(result)
+        setGrantedRollPhase('result')
+        onRefresh()
+      }
+    })
+  }
+
+  function handleGrantedCopyCode(code: string) {
+    navigator.clipboard.writeText(code).then(() => {
+      setGrantedCopied(true)
+      setTimeout(() => setGrantedCopied(false), 2000)
+    })
+  }
+
+  function getGrantedCooldownStatus(gs: any): { canUse: boolean; remainingMin: number } {
+    if (gs.reuse_policy === 'once' && gs.times_used > 0) return { canUse: false, remainingMin: 0 }
+    if (gs.reuse_policy === 'cooldown' && gs.last_used_at && gs.cooldown_minutes) {
+      const cooldownEnd = new Date(gs.last_used_at)
+      cooldownEnd.setMinutes(cooldownEnd.getMinutes() + gs.cooldown_minutes)
+      if (new Date() < cooldownEnd) {
+        return { canUse: false, remainingMin: Math.ceil((cooldownEnd.getTime() - Date.now()) / 60000) }
+      }
+    }
+    if (gs.expires_at && new Date(gs.expires_at) < new Date()) return { canUse: false, remainingMin: 0 }
+    if (!gs.is_active) return { canUse: false, remainingMin: 0 }
+    return { canUse: true, remainingMin: 0 }
+  }
+
+  // Filter active granted skills
+  const activeGrantedSkills = grantedSkills.filter(gs => gs.is_active && (!gs.expires_at || new Date(gs.expires_at) > new Date()))
 
   function getSkillMeta(skill: Skill) {
     const pathway = pathways.find(p => p.id === skill.pathway_id)
@@ -995,6 +1096,336 @@ function PlayerSkillView({
           </div>
         )
       })}
+
+      {/* ═══ อื่น ๆ — Granted Skills Section ═══ */}
+      {activeGrantedSkills.length > 0 && (() => {
+        const INITIAL_SHOW = 5
+        const visibleGranted = grantedShowAll ? activeGrantedSkills : activeGrantedSkills.slice(0, INITIAL_SHOW)
+        return (
+        <OrnamentedCard className="p-5 md:p-6">
+          <h3 className="heading-victorian text-2xl flex items-center gap-3 mb-4">
+            <Gift className="w-6 h-6 text-gold-400" /> อื่น ๆ
+            <span className="text-sm text-victorian-400 font-normal">สกิลที่ได้รับมอบจากทีมงาน</span>
+          </h3>
+
+          <div className="space-y-3">
+            {visibleGranted.map((gs: any) => {
+              const skillInfo = gs.skills || {}
+              const { canUse, remainingMin } = getGrantedCooldownStatus(gs)
+              const hasEffects = gs.effect_hp || gs.effect_sanity || gs.effect_max_sanity || gs.effect_travel || gs.effect_max_travel || gs.effect_spirituality || gs.effect_max_spirituality || gs.effect_potion_digest
+
+              return (
+                <div key={gs.id} className="rounded-xl border-2 border-gold-400/20 bg-victorian-800/50 hover:border-gold-400/40 transition-all overflow-hidden">
+                  {/* Skill image banner */}
+                  {gs.image_url && (
+                    <div className="relative w-full h-36 md:h-44">
+                      <img
+                        src={gs.image_url}
+                        alt={gs.title}
+                        className="w-full h-full object-cover"
+                        onError={e => { (e.target as HTMLImageElement).parentElement!.style.display = 'none' }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-victorian-800/90 via-victorian-800/30 to-transparent" />
+                      <div className="absolute bottom-0 left-0 right-0 px-4 pb-3 flex items-end gap-2">
+                        <Gift className="w-5 h-5 text-gold-400 flex-shrink-0 drop-shadow" />
+                        <span className="text-lg font-semibold text-gold-100 drop-shadow">{gs.title}</span>
+                      </div>
+                    </div>
+                  )}
+                  <div className="p-4">
+                  {/* Header (no image) */}
+                  {!gs.image_url && (
+                    <div className="flex items-center gap-2 mb-3">
+                      <Gift className="w-5 h-5 text-gold-400 flex-shrink-0" />
+                      <span className="text-lg font-semibold text-gold-200">{gs.title}</span>
+                      {gs.reuse_policy === 'cooldown' && (
+                        <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1 flex-shrink-0">
+                          <Clock className="w-3 h-3" /> {gs.cooldown_minutes >= 60 ? `${Math.floor(gs.cooldown_minutes / 60)} ชม.` : `${gs.cooldown_minutes} นาที`}
+                        </span>
+                      )}
+                      {gs.reuse_policy === 'unlimited' && (
+                        <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-300 border border-green-500/30 flex items-center gap-1 flex-shrink-0">
+                          <Infinity className="w-3 h-3" /> ไม่จำกัด
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 2-column layout on desktop */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Left box: รายละเอียด (grant info only) */}
+                    <div className="rounded-lg border border-gold-400/15 bg-victorian-900/50 p-3 space-y-2">
+                      <p className="text-xs text-victorian-500 uppercase tracking-wider font-semibold border-b border-gold-400/10 pb-1.5">รายละเอียด</p>
+
+                      {gs.detail ? (
+                        <p className="text-sm text-victorian-300 leading-relaxed">{gs.detail}</p>
+                      ) : (
+                        <p className="text-xs text-victorian-600 italic">ไม่มีรายละเอียดเพิ่มเติม</p>
+                      )}
+
+                      {gs.expires_at && (
+                        <div className="text-xs text-victorian-500 flex items-center gap-1 pt-1 border-t border-gold-400/10">
+                          <Clock className="w-3 h-3" /> หมดอายุ: {new Date(gs.expires_at).toLocaleString('th-TH')}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right box: ผลลัพธ์การใช้งาน (original skill + effects + button) */}
+                    <div className="rounded-lg border border-gold-400/15 bg-victorian-900/50 p-3 space-y-3 flex flex-col">
+                      <p className="text-xs text-victorian-500 uppercase tracking-wider font-semibold border-b border-gold-400/10 pb-1.5">ผลลัพธ์การใช้งาน</p>
+
+                      {/* Original skill info */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm text-victorian-200 font-medium">{skillInfo.name || '—'}</span>
+                        <span className="text-xs text-purple-300 flex items-center gap-1 bg-purple-500/15 px-2 py-0.5 rounded-full border border-purple-500/30 flex-shrink-0">
+                          <Zap className="w-3 h-3" /> {skillInfo.spirit_cost ?? 0}
+                        </span>
+                      </div>
+                      {skillInfo.description && (
+                        <p className="text-xs text-victorian-400 leading-relaxed -mt-1">{skillInfo.description}</p>
+                      )}
+
+                      {/* Effects */}
+                      {hasEffects && (
+                        <div className="space-y-1">
+                          <p className="text-xs text-amber-400 font-medium">ผลกระทบที่จะได้รับ</p>
+                          <div className="flex flex-wrap gap-1">
+                            {gs.effect_hp !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${gs.effect_hp > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_hp > 0 ? '+' : ''}{gs.effect_hp} HP</span>}
+                            {gs.effect_sanity !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${gs.effect_sanity > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_sanity > 0 ? '+' : ''}{gs.effect_sanity} Sanity</span>}
+                            {gs.effect_max_sanity !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${gs.effect_max_sanity > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_max_sanity > 0 ? '+' : ''}{gs.effect_max_sanity} Max Sanity</span>}
+                            {gs.effect_travel !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${gs.effect_travel > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_travel > 0 ? '+' : ''}{gs.effect_travel} Travel</span>}
+                            {gs.effect_max_travel !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${gs.effect_max_travel > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_max_travel > 0 ? '+' : ''}{gs.effect_max_travel} Max Travel</span>}
+                            {gs.effect_spirituality !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${gs.effect_spirituality > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_spirituality > 0 ? '+' : ''}{gs.effect_spirituality} Spirit</span>}
+                            {gs.effect_max_spirituality !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${gs.effect_max_spirituality > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_max_spirituality > 0 ? '+' : ''}{gs.effect_max_spirituality} Max Spirit</span>}
+                            {gs.effect_potion_digest !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${gs.effect_potion_digest > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_potion_digest > 0 ? '+' : ''}{gs.effect_potion_digest} Digest</span>}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Use button — pushed to bottom */}
+                      <div className="mt-auto pt-1">
+                        <button
+                          onClick={() => handleUseGranted(gs)}
+                          disabled={isPending || !canUse}
+                          className={`w-full px-5 py-2.5 rounded-xl text-base font-bold transition-all ${
+                            canUse
+                              ? 'btn-gold hover:scale-105 active:scale-95'
+                              : 'bg-victorian-800 text-victorian-500 border border-victorian-700 cursor-not-allowed'
+                          }`}
+                        >
+                          {isPending ? '...' : !canUse
+                            ? (gs.reuse_policy === 'once' && gs.times_used > 0 ? 'ใช้แล้ว' : remainingMin > 0 ? `พักตัวอีก ${remainingMin} นาที` : 'ไม่สามารถใช้ได้')
+                            : 'ใช้สกิล'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  </div>{/* end p-4 */}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Load more / collapse */}
+          {activeGrantedSkills.length > INITIAL_SHOW && (
+            <button
+              onClick={() => setGrantedShowAll((v: boolean) => !v)}
+              className="mt-4 w-full py-2 rounded-lg border border-gold-400/20 text-victorian-400 hover:text-gold-300 hover:border-gold-400/40 text-sm transition-colors"
+            >
+              {grantedShowAll
+                ? `ซ่อน (แสดงแค่ ${INITIAL_SHOW} รายการ)`
+                : `แสดงทั้งหมด ${activeGrantedSkills.length} รายการ`}
+            </button>
+          )}
+        </OrnamentedCard>
+        )
+      })()}
+
+      {/* ═══ Granted Skill Usage Modal ═══ */}
+      {selectedGranted && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={closeGrantedModal}
+          style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
+        >
+          <div
+            className="w-full max-w-2xl rounded-xl border-2 border-gold-400/30 p-6 md:p-8 space-y-5 animate-in fade-in zoom-in duration-300 max-h-[90vh] overflow-y-auto"
+            style={{ backgroundColor: '#1A1612' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-end">
+              <button type="button" onClick={closeGrantedModal} className="text-victorian-400 hover:text-gold-400 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {grantedRollPhase === 'input' && (() => {
+              const skillInfo = selectedGranted.skills || {}
+              const spiritCost = skillInfo.spirit_cost ?? 0
+              return (
+              <div className="space-y-5">
+                {/* Grant title & detail */}
+                <div className="text-center space-y-2">
+                  <div className="flex items-center justify-center gap-2 text-gold-300 text-lg font-semibold">
+                    <Gift className="w-5 h-5" /> ใช้สกิลที่ได้รับมอบ
+                  </div>
+                  <h3 className="heading-victorian text-3xl">{selectedGranted.title}</h3>
+                  {selectedGranted.detail && <p className="text-victorian-300 text-sm">{selectedGranted.detail}</p>}
+                </div>
+
+                {/* Original skill info */}
+                <div className="p-4 rounded-xl bg-victorian-800/60 border border-gold-400/15 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-gold-400" />
+                      <span className="text-gold-200 font-semibold">{skillInfo.name || '—'}</span>
+                    </div>
+                    <span className="text-xs text-purple-300 flex items-center gap-1 bg-purple-500/15 px-2 py-0.5 rounded-full border border-purple-500/30">
+                      <Zap className="w-3 h-3" /> {spiritCost} พลังวิญญาณ
+                    </span>
+                  </div>
+                  {skillInfo.description && (
+                    <p className="text-sm text-victorian-300 leading-relaxed">{skillInfo.description}</p>
+                  )}
+                </div>
+
+                {/* Spirit cost warning */}
+                {spiritCost > 0 && (
+                  <div className="rounded-xl border border-purple-400/20 bg-purple-900/20 p-3 text-sm flex items-center justify-between">
+                    <span className="text-purple-300">พลังวิญญาณที่ต้องใช้: <strong>{spiritCost}</strong></span>
+                    <span className="text-victorian-400">คงเหลือ: <strong className="text-purple-200">{displaySpirit}</strong></span>
+                  </div>
+                )}
+
+                {/* Show effects warning */}
+                {(selectedGranted.effect_hp || selectedGranted.effect_sanity || selectedGranted.effect_max_sanity || selectedGranted.effect_travel || selectedGranted.effect_max_travel || selectedGranted.effect_spirituality || selectedGranted.effect_max_spirituality || selectedGranted.effect_potion_digest) && (
+                  <div className="rounded-xl border border-amber-400/20 bg-amber-900/20 p-4 text-sm space-y-2">
+                    <p className="text-amber-300 font-semibold">ผลกระทบเพิ่มเติมเมื่อใช้งาน</p>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedGranted.effect_hp !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${selectedGranted.effect_hp > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{selectedGranted.effect_hp > 0 ? '+' : ''}{selectedGranted.effect_hp} HP</span>}
+                      {selectedGranted.effect_sanity !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${selectedGranted.effect_sanity > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{selectedGranted.effect_sanity > 0 ? '+' : ''}{selectedGranted.effect_sanity} Sanity</span>}
+                      {selectedGranted.effect_max_sanity !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${selectedGranted.effect_max_sanity > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{selectedGranted.effect_max_sanity > 0 ? '+' : ''}{selectedGranted.effect_max_sanity} Max Sanity</span>}
+                      {selectedGranted.effect_travel !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${selectedGranted.effect_travel > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{selectedGranted.effect_travel > 0 ? '+' : ''}{selectedGranted.effect_travel} Travel</span>}
+                      {selectedGranted.effect_max_travel !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${selectedGranted.effect_max_travel > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{selectedGranted.effect_max_travel > 0 ? '+' : ''}{selectedGranted.effect_max_travel} Max Travel</span>}
+                      {selectedGranted.effect_spirituality !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${selectedGranted.effect_spirituality > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{selectedGranted.effect_spirituality > 0 ? '+' : ''}{selectedGranted.effect_spirituality} Spirit</span>}
+                      {selectedGranted.effect_max_spirituality !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${selectedGranted.effect_max_spirituality > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{selectedGranted.effect_max_spirituality > 0 ? '+' : ''}{selectedGranted.effect_max_spirituality} Max Spirit</span>}
+                      {selectedGranted.effect_potion_digest !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${selectedGranted.effect_potion_digest > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{selectedGranted.effect_potion_digest > 0 ? '+' : ''}{selectedGranted.effect_potion_digest} Digest</span>}
+                    </div>
+                  </div>
+                )}
+
+                <div className="rounded-xl border border-gold-400/20 bg-victorian-900/60 p-4 text-victorian-200 text-sm space-y-1">
+                  <p className="text-gold-300 font-semibold">คำแนะนำ</p>
+                  <p>โปรดระบุอัตราสำเร็จตามที่ได้รับแจ้งจากทีมงาน แล้วกดยืนยันเพื่อสุ่มผลลัพธ์</p>
+                  <p>พลังวิญญาณจะถูกหักตามค่าสกิลต้นฉบับ และผลกระทบเพิ่มเติมจะถูกนำไปใช้ทันที</p>
+                </div>
+
+                {grantedError && (
+                  <div className="p-3 bg-red-900/40 border border-red-500/40 rounded-lg text-red-300 text-sm">{grantedError}</div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-victorian-300 mb-1.5">อัตราสำเร็จ (1-20) <span className="text-nouveau-ruby">*</span></label>
+                    <input type="number" min={1} max={20} value={grantedSuccessRate} onChange={e => setGrantedSuccessRate(e.target.value)} className="input-victorian w-full !py-2 !text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-victorian-300 mb-1.5">หมายเหตุ (ถ้ามี)</label>
+                    <input type="text" value={grantedRollNote} onChange={e => setGrantedRollNote(e.target.value)} className="input-victorian w-full !py-2 !text-sm" />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <button type="button" onClick={closeGrantedModal} className="btn-victorian px-5 py-2 text-sm">ยกเลิก</button>
+                  <button type="button" onClick={handleGrantedConfirmRoll} disabled={isPending} className="btn-gold px-6 py-2 text-sm">
+                    {isPending ? 'กำลังดำเนินการ...' : 'ยืนยันการใช้สกิล'}
+                  </button>
+                </div>
+              </div>
+              )
+            })()}
+
+            {grantedRollPhase === 'rolling' && (
+              <div className="space-y-5 text-center">
+                <div className="text-gold-300 text-lg font-semibold">กำลังสุ่มผลลัพธ์</div>
+                <div className="text-6xl md:text-7xl font-mono text-gold-200 animate-pulse">{grantedRollingValue}</div>
+                <div className="text-victorian-400 text-sm">ระบบกำลังประมวลผล…</div>
+              </div>
+            )}
+
+            {grantedRollPhase === 'result' && grantedResult && (() => {
+              const isSuccess = grantedResult.outcome === 'success'
+              const embedUrl = origin ? `${origin}/embed/skills/${grantedResult.referenceCode}` : ''
+              return (
+                <div className="space-y-5">
+                  <div className="flex justify-center">
+                    <div className={`w-20 h-20 rounded-full border-2 flex items-center justify-center ${isSuccess ? 'bg-green-500/10 border-green-400/30' : 'bg-red-500/10 border-red-400/30'}`}>
+                      <Gift className={`w-10 h-10 ${isSuccess ? 'text-green-400' : 'text-red-400'}`} />
+                    </div>
+                  </div>
+                  <div className="text-center space-y-2">
+                    <p className={`text-sm ${isSuccess ? 'text-green-300' : 'text-red-300'}`}>{isSuccess ? 'ใช้สกิลสำเร็จ' : 'ใช้สกิลไม่สำเร็จ'}</p>
+                    <h3 className="heading-victorian text-3xl mt-1">{grantedResult.grantTitle}</h3>
+                    <p className="text-victorian-400 text-sm">สกิล: {grantedResult.skillName}</p>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm text-victorian-200">
+                    <div className="rounded-lg border border-gold-400/20 bg-victorian-900/70 p-3 text-center">
+                      ผลสุ่ม: <span className="text-gold-300 font-bold">{grantedResult.roll}</span>
+                    </div>
+                    <div className="rounded-lg border border-gold-400/20 bg-victorian-900/70 p-3 text-center">
+                      อัตราสำเร็จ: <span className="text-gold-300 font-bold">{grantedResult.successRate}</span>
+                    </div>
+                    <div className="rounded-lg border border-purple-400/20 bg-purple-900/20 p-3 text-center">
+                      หัก: <span className="text-purple-300 font-bold">{grantedResult.spiritCost ?? 0}</span>
+                    </div>
+                    <div className="rounded-lg border border-purple-400/20 bg-purple-900/20 p-3 text-center">
+                      คงเหลือ: <span className="text-purple-300 font-bold">{grantedResult.remaining ?? '—'}</span>
+                    </div>
+                  </div>
+
+                  {/* Effects applied */}
+                  {grantedResult.effects && (
+                    <div className="rounded-lg border border-gold-400/10 bg-victorian-900/60 p-3 space-y-1">
+                      <p className="text-xs text-victorian-400 uppercase tracking-wider">ผลกระทบที่ได้รับ</p>
+                      <div className="flex flex-wrap gap-1">
+                        {Object.entries(grantedResult.effects).map(([key, val]) => {
+                          if (val === 0) return null
+                          const labels: Record<string, string> = { effect_hp: 'HP', effect_sanity: 'Sanity', effect_max_sanity: 'Max Sanity', effect_travel: 'Travel', effect_max_travel: 'Max Travel', effect_spirituality: 'Spirit', effect_max_spirituality: 'Max Spirit', effect_potion_digest: 'Digest' }
+                          return <span key={key} className={`text-xs px-2 py-0.5 rounded-full font-bold ${(val as number) > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{(val as number) > 0 ? '+' : ''}{val as number} {labels[key] || key}</span>
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {grantedResult.note && (
+                    <div className="rounded-lg border border-gold-400/10 bg-victorian-900/60 p-3 text-victorian-300 text-sm">
+                      หมายเหตุ: {grantedResult.note}
+                    </div>
+                  )}
+
+                  <div className="bg-victorian-900/80 border border-gold-400/20 rounded-lg p-4 space-y-2">
+                    <p className="text-victorian-400 text-xs uppercase tracking-wider text-center">โค้ด Iframe</p>
+                    <div className="flex items-center justify-center gap-3">
+                      <code className="text-gold-300 text-xs md:text-sm font-mono tracking-wider select-all break-all text-center">
+                        {embedUrl ? `<iframe src="${embedUrl}" width="560" height="60" style="border:0"></iframe>` : grantedResult.referenceCode}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => handleGrantedCopyCode(embedUrl ? `<iframe src="${embedUrl}" width="560" height="60" style="border:0"></iframe>` : grantedResult.referenceCode)}
+                        className="p-2 rounded-lg border border-gold-400/20 text-gold-400 hover:bg-gold-400/10 transition-colors cursor-pointer"
+                      >
+                        {grantedCopied ? <Check className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <button type="button" onClick={closeGrantedModal} className="btn-gold w-full py-3 text-base">ปิด</button>
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1009,6 +1440,7 @@ export default function SkillsContent({ userId }: SkillsContentProps) {
   const [sequences, setSequences] = useState<SkillSequence[]>(getCached<SkillSequence[]>('skills:sequences') ?? [])
   const [skills, setSkills] = useState<Skill[]>(getCached<Skill[]>('skills:skills') ?? [])
   const [playerPathways, setPlayerPathways] = useState<PlayerPathway[]>(getCached<PlayerPathway[]>(`skills:pp:${userId}`) ?? [])
+  const [grantedSkills, setGrantedSkills] = useState<any[]>(getCached<any[]>(`skills:granted:${userId}`) ?? [])
   const [loaded, setLoaded] = useState(!!getCached('skills:profile'))
 
   const fetchData = useCallback(() => {
@@ -1020,13 +1452,15 @@ export default function SkillsContent({ userId }: SkillsContentProps) {
       supabase.from('skill_sequences').select('*').order('seq_number', { ascending: false }),
       supabase.from('skills').select('*').order('name'),
       supabase.from('player_pathways').select('*').eq('player_id', userId),
-    ]).then(([pRes, tRes, pwRes, sqRes, skRes, ppRes]) => {
+      getGrantedSkillsForPlayer(),
+    ]).then(([pRes, tRes, pwRes, sqRes, skRes, ppRes, gsRes]) => {
       if (pRes.data) { setProfile(pRes.data); setCache('skills:profile', pRes.data) }
       if (tRes.data) { setSkillTypes(tRes.data); setCache('skills:types', tRes.data, REF_TTL) }
       if (pwRes.data) { setPathways(pwRes.data); setCache('skills:pathways', pwRes.data, REF_TTL) }
       if (sqRes.data) { setSequences(sqRes.data); setCache('skills:sequences', sqRes.data, REF_TTL) }
       if (skRes.data) { setSkills(skRes.data); setCache('skills:skills', skRes.data, REF_TTL) }
       if (ppRes.data) { setPlayerPathways(ppRes.data); setCache(`skills:pp:${userId}`, ppRes.data) }
+      if (gsRes && !gsRes.error) { setGrantedSkills(gsRes.skills); setCache(`skills:granted:${userId}`, gsRes.skills) }
       setLoaded(true)
     })
   }, [userId])
@@ -1044,6 +1478,7 @@ export default function SkillsContent({ userId }: SkillsContentProps) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'skill_sequences' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'skills' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'player_pathways' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'granted_skills' }, () => fetchData())
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -1169,6 +1604,8 @@ export default function SkillsContent({ userId }: SkillsContentProps) {
             sequences={sequences}
             skills={skills}
             playerPathways={playerPathways}
+            grantedSkills={grantedSkills}
+            onRefresh={fetchData}
           />
         )}
       </div>

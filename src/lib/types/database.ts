@@ -103,6 +103,49 @@ export interface SkillUsageLog {
   used_at: string
 }
 
+export type GrantedSkillReusePolicy = 'once' | 'cooldown' | 'unlimited'
+
+export interface GrantedSkill {
+  id: string
+  player_id: string
+  skill_id: string
+  granted_by: string
+  title: string
+  detail: string | null
+  image_url: string | null
+  reuse_policy: GrantedSkillReusePolicy
+  cooldown_minutes: number | null
+  expires_at: string | null
+  effect_hp: number
+  effect_sanity: number
+  effect_max_sanity: number
+  effect_travel: number
+  effect_max_travel: number
+  effect_spirituality: number
+  effect_max_spirituality: number
+  effect_potion_digest: number
+  times_used: number
+  last_used_at: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface GrantedSkillLog {
+  id: string
+  granted_skill_id: string | null
+  player_id: string
+  skill_id: string
+  granted_by: string
+  action: 'grant' | 'use' | 'expire' | 'revoke'
+  title: string
+  detail: string | null
+  effects_json: Record<string, number> | null
+  reference_code: string | null
+  note: string | null
+  created_at: string
+}
+
 export type SleepRequestStatus = 'pending' | 'approved' | 'rejected'
 
 export interface SleepRequest {

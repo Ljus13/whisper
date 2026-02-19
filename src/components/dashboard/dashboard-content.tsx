@@ -732,6 +732,29 @@ export default function DashboardContent({
               </div>
             </Link>
           )}
+          {isAdmin && (
+            <Link
+              href="/dashboard/grant-skills"
+              className="group relative overflow-hidden card-victorian p-6 md:p-12 lg:p-16 flex flex-col items-center justify-center gap-4 md:gap-8 
+                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[180px] md:min-h-[350px]
+                        cursor-pointer"
+            >
+              <CornerOrnament className="absolute top-0 left-0 w-12 h-12 md:w-24 md:h-24" />
+              <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-12 h-12 md:w-24 md:h-24" />
+              <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-12 h-12 md:w-24 md:h-24" />
+              <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] w-12 h-12 md:w-24 md:h-24" />
+              <div className="relative z-10 flex flex-col items-center gap-3 md:gap-8">
+                <div className="w-16 h-16 md:w-32 md:h-32 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
+                              flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
+                  <Flame className="w-8 h-8 md:w-16 md:h-16 text-gold-400" />
+                </div>
+                <h3 className="heading-victorian text-2xl md:text-5xl">มอบพลัง</h3>
+                <p className="text-victorian-400 text-center text-sm md:text-2xl font-body hidden md:block">
+                  มอบสกิลพิเศษให้ผู้เล่น
+                </p>
+              </div>
+            </Link>
+          )}
         </section>
 
       </main>
