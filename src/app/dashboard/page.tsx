@@ -90,6 +90,19 @@ export default async function DashboardPage() {
       .in('id', grantIds)
     : { data: [] }
 
+  // Fetch offline status for DM toggle
+  let siteOffline = false
+  let siteOfflineReason: string | null = null
+  if (profile?.role === 'dm') {
+    const { data: settings } = await supabase
+      .from('site_settings')
+      .select('is_offline, offline_reason')
+      .eq('id', 'main')
+      .single()
+    siteOffline = settings?.is_offline === true
+    siteOfflineReason = settings?.offline_reason ?? null
+  }
+
   return (
     <DashboardContent
       user={user}
@@ -98,6 +111,8 @@ export default async function DashboardPage() {
       rankInfo={rankInfo}
       grantPathways={grantPathways || []}
       hasPathway={!!(playerPathways && playerPathways.length > 0)}
+      siteOffline={siteOffline}
+      siteOfflineReason={siteOfflineReason}
     />
   )
 }

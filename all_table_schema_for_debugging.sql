@@ -449,3 +449,13 @@ CREATE TABLE public.travel_roleplay_logs (
   CONSTRAINT travel_roleplay_logs_from_map_id_fkey FOREIGN KEY (from_map_id) REFERENCES public.maps(id),
   CONSTRAINT travel_roleplay_logs_to_map_id_fkey FOREIGN KEY (to_map_id) REFERENCES public.maps(id)
 );
+CREATE TABLE public.site_settings (
+  id text NOT NULL DEFAULT 'main'::text,
+  is_offline boolean NOT NULL DEFAULT false,
+  offline_reason text,
+  offline_by uuid,
+  offline_at timestamp with time zone,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT site_settings_pkey PRIMARY KEY (id),
+  CONSTRAINT site_settings_offline_by_fkey FOREIGN KEY (offline_by) REFERENCES auth.users(id)
+);

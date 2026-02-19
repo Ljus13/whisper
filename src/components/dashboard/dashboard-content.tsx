@@ -6,6 +6,7 @@ import { acceptPathwayGrant } from '@/app/actions/pathway-grants'
 import { applySanityDecay } from '@/app/actions/players'
 import AdminEditModal from '@/components/admin/admin-edit-modal'
 import DisplayNameSetup from '@/components/dashboard/display-name-setup'
+import OfflineToggle from '@/components/dashboard/offline-toggle'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
 import { CornerOrnament, OrnamentedCard } from '@/components/ui/ornaments'
 import dynamic from 'next/dynamic'
@@ -205,7 +206,9 @@ export default function DashboardContent({
   rankDisplay = 'Level 1 Adventurer',
   rankInfo = null,
   grantPathways = [],
-  hasPathway = false
+  hasPathway = false,
+  siteOffline = false,
+  siteOfflineReason = null,
 }: { 
   user: User
   profile: Profile | null
@@ -213,6 +216,8 @@ export default function DashboardContent({
   rankInfo?: RankInfo | null
   grantPathways?: GrantPathway[]
   hasPathway?: boolean
+  siteOffline?: boolean
+  siteOfflineReason?: string | null
 }) {
   const [showProfile, setShowProfile] = useState(false)
   const [showEditAvatar, setShowEditAvatar] = useState(false)
@@ -889,6 +894,15 @@ export default function DashboardContent({
                 <LogOut className="w-5 h-5" />
                 {isSigningOut ? 'กำลังออกจากระบบ...' : 'ออกจากระบบ'}
               </button>
+
+              {/* DM: Offline Mode Toggle */}
+              {profile?.role === 'dm' && (
+                <OfflineToggle
+                  initialOffline={siteOffline}
+                  initialReason={siteOfflineReason}
+                  isDM={true}
+                />
+              )}
             </div>
           </div>
         </div>

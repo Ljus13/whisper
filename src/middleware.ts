@@ -60,13 +60,64 @@ export async function middleware(request: NextRequest) {
   // getUser() makes a network call to Supabase Auth (~200-400ms) — avoid in middleware
   const { data: { session } } = await supabase.auth.getSession()
 
+  // ── Offline / Maintenance Mode ──
+  const pathname = request.nextUrl.pathname
+  const isMaintenancePage = pathname === '/maintenance'
+  const isEmbedPage = pathname.startsWith('/embed/')
+  const isAuthCallback = pathname.startsWith('/auth/callback')
+
+  // Check offline status (fast single-row read)
+  const { data: settings } = await supabase
+    .from('site_settings')
+    .select('is_offline')
+    .eq('id', 'main')
+    .single()
+
+  const isOffline = settings?.is_offline === true
+
+  if (isOffline && !isEmbedPage && !isAuthCallback) {
+    if (session) {
+      // Logged-in user — check role via profiles
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single()
+
+      const isAdminOrDm = profile?.role === 'admin' || profile?.role === 'dm'
+
+      if (!isAdminOrDm) {
+        // Player → force to /maintenance
+        if (!isMaintenancePage) {
+          return NextResponse.redirect(new URL('/maintenance', request.url))
+        }
+        return response
+      }
+      // Admin/DM → allow through (don't redirect to maintenance)
+      if (isMaintenancePage) {
+        return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
+    } else {
+      // Not logged in + offline → show maintenance page (block login)
+      if (!isMaintenancePage) {
+        return NextResponse.redirect(new URL('/maintenance', request.url))
+      }
+      return response
+    }
+  }
+
+  // If site is online, don't allow access to /maintenance
+  if (!isOffline && isMaintenancePage) {
+    return NextResponse.redirect(new URL(session ? '/dashboard' : '/', request.url))
+  }
+
   // Protect /dashboard routes — redirect to login if not authenticated
-  if (request.nextUrl.pathname.startsWith('/dashboard') && !session) {
+  if (pathname.startsWith('/dashboard') && !session) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
   // If user is logged in and visits login page, redirect to dashboard
-  if (request.nextUrl.pathname === '/' && session) {
+  if (pathname === '/' && session) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
