@@ -50,6 +50,7 @@ function GrantModal({
 }) {
   const [search, setSearch] = useState('')
   const [previewId, setPreviewId] = useState<string | null>(pathways[0]?.id ?? null)
+  const [mobileShowDetail, setMobileShowDetail] = useState(false)
 
   const filtered = search.trim()
     ? pathways.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.overview?.toLowerCase().includes(search.toLowerCase()))
@@ -57,141 +58,186 @@ function GrantModal({
 
   const preview = pathways.find(p => p.id === previewId)
 
+  function handleSelectItem(id: string) {
+    setPreviewId(id)
+    setMobileShowDetail(true)
+  }
+
+  // Shared detail panel content
+  const DetailPanel = preview ? (
+    <>
+      {/* Image */}
+      <div className="relative h-56 md:h-96 flex-shrink-0 overflow-hidden">
+        {preview.bg_url ? (
+          <img src={preview.bg_url} alt={preview.name} className="w-full h-full object-cover object-top" />
+        ) : (
+          <div className="w-full h-full bg-victorian-900" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#1A1612] via-[#1A1612]/40 to-transparent" />
+        {preview.logo_url && (
+          <img src={preview.logo_url} alt="" className="absolute bottom-3 left-4 h-10 w-10 object-contain drop-shadow-lg" />
+        )}
+        <h3 className={`absolute bottom-3 font-display text-xl text-gold-100 drop-shadow ${preview.logo_url ? 'left-16' : 'left-4'}`}>
+          {preview.name}
+        </h3>
+      </div>
+
+      {/* Overview */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {preview.overview ? (
+          <p className="text-sm text-victorian-300 leading-relaxed">{preview.overview}</p>
+        ) : (
+          <p className="text-xs text-victorian-600 italic">ไม่มีรายละเอียด</p>
+        )}
+      </div>
+
+      {/* Toggle button */}
+      <div className="p-4 border-t border-gold-400/10 flex-shrink-0">
+        <button
+          type="button"
+          onClick={() => onToggle(preview.id)}
+          className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+            selectedPathwayIds.includes(preview.id)
+              ? 'bg-amber-500/20 border border-amber-400/40 text-amber-200 hover:bg-amber-500/30'
+              : 'bg-victorian-800/60 border border-gold-400/15 text-victorian-300 hover:border-gold-400/30 hover:text-gold-200'
+          }`}
+        >
+          {selectedPathwayIds.includes(preview.id) ? (
+            <><CheckCircle2 className="w-4 h-4" /> เลือกแล้ว — คลิกเพื่อยกเลิก</>
+          ) : (
+            <><Check className="w-4 h-4" /> เลือกเส้นทางนี้</>
+          )}
+        </button>
+      </div>
+    </>
+  ) : (
+    <div className="flex-1 flex items-center justify-center text-victorian-600 text-sm p-8">
+      เลือกเส้นทางจากรายการ
+    </div>
+  )
+
+  // Shared list panel content
+  const ListPanel = (
+    <>
+      {/* Search */}
+      <div className="p-3 border-b border-gold-400/10 flex-shrink-0">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-victorian-500" />
+          <input
+            type="text"
+            placeholder="ค้นหาเส้นทาง..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full bg-victorian-900/60 border border-gold-400/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-victorian-200 placeholder-victorian-600 focus:outline-none focus:border-gold-400/30"
+          />
+        </div>
+      </div>
+
+      {/* List */}
+      <div className="flex-1 overflow-y-auto">
+        {filtered.length === 0 ? (
+          <p className="text-center text-victorian-600 text-xs py-6">ไม่พบเส้นทาง</p>
+        ) : filtered.map(p => {
+          const isSelected = selectedPathwayIds.includes(p.id)
+          const isActive = previewId === p.id
+          return (
+            <button
+              key={p.id}
+              onClick={() => handleSelectItem(p.id)}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-all border-l-2 ${
+                isActive
+                  ? 'border-gold-400 bg-gold-400/8 text-gold-200'
+                  : 'border-transparent hover:bg-victorian-800/40 text-victorian-300'
+              }`}
+            >
+              {p.bg_url ? (
+                <img src={p.bg_url} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0 opacity-80" />
+              ) : (
+                <div className="w-8 h-8 rounded bg-victorian-800 flex-shrink-0" />
+              )}
+              <span className="text-xs font-medium truncate flex-1">{p.name}</span>
+              {isSelected && <CheckCircle2 className="w-4 h-4 text-amber-400 flex-shrink-0" />}
+            </button>
+          )
+        })}
+      </div>
+    </>
+  )
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4"
       onClick={onClose}
       style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}
     >
       <div
-        className="w-full max-w-4xl rounded-xl border-2 border-gold-400/20 flex flex-col"
-        style={{ backgroundColor: '#1A1612', maxHeight: '90vh' }}
+        className="w-full sm:max-w-4xl sm:rounded-xl rounded-t-xl border-2 border-gold-400/20 flex flex-col"
+        style={{ backgroundColor: '#1A1612', height: '100dvh', maxHeight: '100dvh' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gold-400/10 flex-shrink-0">
-          <div>
-            <h2 className="text-gold-300 font-display text-lg">มอบโอสถให้ {player.display_name || player.id.slice(0, 8)}</h2>
-            <p className="text-victorian-500 text-xs mt-0.5">เลือกเส้นทางที่จะมอบให้ ({selectedPathwayIds.length} เส้นทางที่เลือก)</p>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gold-400/10 flex-shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            {/* Mobile back button */}
+            {mobileShowDetail && (
+              <button
+                onClick={() => setMobileShowDetail(false)}
+                className="md:hidden text-victorian-400 hover:text-gold-400 flex-shrink-0 mr-1"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+            )}
+            <div className="min-w-0">
+              <h2 className="text-gold-300 font-display text-base sm:text-lg truncate">
+                {mobileShowDetail && preview
+                  ? <span className="md:hidden">{preview.name}</span>
+                  : null}
+                <span className={mobileShowDetail && preview ? 'hidden md:inline' : ''}>
+                  มอบโอสถให้ {player.display_name || player.id.slice(0, 8)}
+                </span>
+              </h2>
+              <p className="text-victorian-500 text-xs mt-0.5 hidden sm:block">เลือกเส้นทางที่จะมอบให้ ({selectedPathwayIds.length} เส้นทางที่เลือก)</p>
+            </div>
           </div>
-          <button onClick={onClose} className="text-victorian-400 hover:text-gold-400 transition-colors">
+          <button onClick={onClose} className="text-victorian-400 hover:text-gold-400 transition-colors flex-shrink-0">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Body: 2-column master-detail */}
-        <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Body */}
+        <div className="flex-1 min-h-0 overflow-hidden">
 
-          {/* LEFT: searchable list */}
-          <div className="w-64 flex-shrink-0 border-r border-gold-400/10 flex flex-col">
-            {/* Search */}
-            <div className="p-3 border-b border-gold-400/10 flex-shrink-0">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-victorian-500" />
-                <input
-                  type="text"
-                  placeholder="ค้นหาเส้นทาง..."
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  className="w-full bg-victorian-900/60 border border-gold-400/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-victorian-200 placeholder-victorian-600 focus:outline-none focus:border-gold-400/30"
-                />
+          {/* ── MOBILE: show list OR detail ── */}
+          <div className="flex flex-col h-full md:hidden">
+            {mobileShowDetail ? (
+              <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                {DetailPanel}
               </div>
-            </div>
-
-            {/* List */}
-            <div className="flex-1 overflow-y-auto">
-              {filtered.length === 0 ? (
-                <p className="text-center text-victorian-600 text-xs py-6">ไม่พบเส้นทาง</p>
-              ) : filtered.map(p => {
-                const isSelected = selectedPathwayIds.includes(p.id)
-                const isActive = previewId === p.id
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => setPreviewId(p.id)}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-all border-l-2 ${
-                      isActive
-                        ? 'border-gold-400 bg-gold-400/8 text-gold-200'
-                        : 'border-transparent hover:bg-victorian-800/40 text-victorian-300'
-                    }`}
-                  >
-                    {/* Thumbnail */}
-                    {p.bg_url ? (
-                      <img src={p.bg_url} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0 opacity-80" />
-                    ) : (
-                      <div className="w-8 h-8 rounded bg-victorian-800 flex-shrink-0" />
-                    )}
-                    <span className="text-xs font-medium truncate flex-1">{p.name}</span>
-                    {isSelected && (
-                      <CheckCircle2 className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* RIGHT: detail panel */}
-          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            {preview ? (
-              <>
-                {/* Image */}
-                <div className="relative h-64 flex-shrink-0 overflow-hidden">
-                  {preview.bg_url ? (
-                    <img src={preview.bg_url} alt={preview.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-victorian-900" />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#1A1612] via-[#1A1612]/40 to-transparent" />
-                  {preview.logo_url && (
-                    <img src={preview.logo_url} alt="" className="absolute bottom-3 left-4 h-10 w-10 object-contain drop-shadow-lg" />
-                  )}
-                  <h3 className={`absolute bottom-3 font-display text-xl text-gold-100 drop-shadow ${preview.logo_url ? 'left-16' : 'left-4'}`}>
-                    {preview.name}
-                  </h3>
-                </div>
-
-                {/* Overview */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {preview.overview ? (
-                    <p className="text-sm text-victorian-300 leading-relaxed">{preview.overview}</p>
-                  ) : (
-                    <p className="text-xs text-victorian-600 italic">ไม่มีรายละเอียด</p>
-                  )}
-                </div>
-
-                {/* Toggle button */}
-                <div className="p-4 border-t border-gold-400/10 flex-shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => onToggle(preview.id)}
-                    className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                      selectedPathwayIds.includes(preview.id)
-                        ? 'bg-amber-500/20 border border-amber-400/40 text-amber-200 hover:bg-amber-500/30'
-                        : 'bg-victorian-800/60 border border-gold-400/15 text-victorian-300 hover:border-gold-400/30 hover:text-gold-200'
-                    }`}
-                  >
-                    {selectedPathwayIds.includes(preview.id) ? (
-                      <><CheckCircle2 className="w-4 h-4" /> เลือกแล้ว — คลิกเพื่อยกเลิก</>
-                    ) : (
-                      <><Check className="w-4 h-4" /> เลือกเส้นทางนี้</>
-                    )}
-                  </button>
-                </div>
-              </>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-victorian-600 text-sm">
-                เลือกเส้นทางจากรายการทางซ้าย
+              <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                {ListPanel}
               </div>
             )}
+          </div>
+
+          {/* ── DESKTOP: side-by-side ── */}
+          <div className="hidden md:flex h-full">
+            {/* Left */}
+            <div className="w-64 flex-shrink-0 border-r border-gold-400/10 flex flex-col">
+              {ListPanel}
+            </div>
+            {/* Right */}
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+              {DetailPanel}
+            </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 border-t border-gold-400/10 flex-shrink-0 space-y-3">
+        <div className="px-4 py-3 border-t border-gold-400/10 flex-shrink-0 space-y-2">
           {error && <p className="text-red-400 text-sm">{error}</p>}
-          <div className="flex items-center justify-between gap-4">
-            <p className="text-xs text-victorian-500">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-victorian-500 truncate">
               เลือกแล้ว: {selectedPathwayIds.length > 0
                 ? pathways.filter(p => selectedPathwayIds.includes(p.id)).map(p => p.name).join(', ')
                 : 'ยังไม่ได้เลือก'}
@@ -200,7 +246,7 @@ function GrantModal({
               type="button"
               onClick={onSubmit}
               disabled={isPending || selectedPathwayIds.length === 0}
-              className="btn-gold px-6 py-2 text-sm disabled:opacity-50 flex-shrink-0"
+              className="btn-gold px-5 py-2 text-sm disabled:opacity-50 flex-shrink-0"
             >
               {isPending ? 'กำลังมอบโอสถ...' : `มอบโอสถ (${selectedPathwayIds.length})`}
             </button>
