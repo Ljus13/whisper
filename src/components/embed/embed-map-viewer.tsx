@@ -42,21 +42,34 @@ export default function EmbedMapViewer({ map, tokens, zones }: Props) {
     const fetchData = async () => {
       const [mapRes, rawTokensRes, zonesRes] = await Promise.all([
         supabase.from('maps').select('*').eq('id', mapId).single(),
-        supabase.from('map_tokens').select('*, profiles:user_id(display_name, avatar_url, role)').eq('map_id', mapId),
+        supabase.from('map_tokens').select('*').eq('map_id', mapId),
         supabase.from('map_locked_zones').select('*').eq('map_id', mapId),
       ])
 
       if (mapRes.data) setMapState(mapRes.data as GameMap)
 
-      const builtTokens: MapTokenWithProfile[] = (rawTokensRes.data ?? []).map((t: Record<string, unknown>) => {
-        const profile = t.profiles as Record<string, unknown> | null
-        return {
-          ...t,
-          display_name: profile?.display_name as string | null ?? t.npc_name as string | null,
-          avatar_url: profile?.avatar_url as string | null ?? t.npc_image_url as string | null,
-          role: profile?.role as string ?? 'player',
-        } as MapTokenWithProfile
-      })
+      const rawTokens = rawTokensRes.data ?? []
+      const playerUserIds = rawTokens
+        .filter((t) => t.token_type === 'player' && t.user_id)
+        .map((t) => t.user_id as string)
+
+      let profileMap: Record<string, { display_name: string | null; avatar_url: string | null; role: string }> = {}
+      if (playerUserIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, display_name, avatar_url, role')
+          .in('id', playerUserIds)
+        if (profiles) {
+          profileMap = Object.fromEntries(profiles.map((p) => [p.id, p]))
+        }
+      }
+
+      const builtTokens: MapTokenWithProfile[] = rawTokens.map((t) => ({
+        ...t,
+        display_name: t.user_id ? (profileMap[t.user_id]?.display_name ?? null) : t.npc_name,
+        avatar_url: t.user_id ? (profileMap[t.user_id]?.avatar_url ?? null) : t.npc_image_url,
+        role: t.user_id ? (profileMap[t.user_id]?.role ?? 'player') : 'player',
+      } as MapTokenWithProfile))
 
       setTokensState(builtTokens)
       setZonesState((zonesRes.data ?? []) as MapLockedZone[])
