@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useTransition, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useTransition, useCallback, useRef, useMemo, memo } from 'react'
 import Link from 'next/link'
 import { getCached, setCache, invalidateCache, isCacheStale, debouncedCall } from '@/lib/client-cache'
 import { createClient } from '@/lib/supabase/client'
@@ -277,6 +277,410 @@ function DateTimeInput({ dateVal, timeVal, onDateChange, onTimeChange }: {
     </div>
   )
 }
+
+/* ═══════════════════ Memoized Row Components ═══════════════════ */
+
+const ActionCodeRow = memo(function ActionCodeRow({ c, isPending, onCopy, onEdit, onArchive }: {
+  c: CodeEntry
+  isPending: boolean
+  onCopy: (code: string) => void
+  onEdit: (c: CodeEntry) => void
+  onArchive: (id: string, name: string) => void
+}) {
+  const grants = [
+    c.reward_hp ? `❤️+${c.reward_hp}` : '',
+    c.reward_sanity ? `🧠+${c.reward_sanity}` : '',
+    c.reward_travel ? `🗺️+${c.reward_travel}` : '',
+    c.reward_spirituality ? `✨+${c.reward_spirituality}` : '',
+  ].filter(Boolean)
+  const caps = [
+    c.reward_max_sanity ? `🧠↑${c.reward_max_sanity}` : '',
+    c.reward_max_travel ? `🗺️↑${c.reward_max_travel}` : '',
+    c.reward_max_spirituality ? `✨↑${c.reward_max_spirituality}` : '',
+  ].filter(Boolean)
+  const isExpired = c.expires_at && new Date(c.expires_at) < new Date()
+  return (
+    <tr className={`border-b border-victorian-800/50 hover:bg-victorian-800/20 ${isExpired ? 'opacity-50' : ''}`}>
+      <td className="py-2 pr-3 text-victorian-200">{c.name}{isExpired && <span className="text-red-400 text-[10px] ml-1">(หมดอายุ)</span>}</td>
+      <td className="py-2 pr-3">
+        <button type="button" onClick={() => onCopy(c.code)}
+          className="inline-flex items-center gap-1 text-gold-400 font-mono text-xs hover:text-gold-300 cursor-pointer">
+          {c.code} <Copy className="w-3 h-3" />
+        </button>
+      </td>
+      <td className="py-2 pr-3">
+        {grants.length === 0 && caps.length === 0 ? (
+          <span className="text-victorian-600 text-xs">—</span>
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {grants.map((g, i) => <span key={i} className="text-xs bg-emerald-900/40 text-emerald-300 px-1.5 py-0.5 rounded">{g}</span>)}
+            {caps.map((g, i) => <span key={i} className="text-xs bg-amber-900/40 text-amber-300 px-1.5 py-0.5 rounded">{g}</span>)}
+          </div>
+        )}
+      </td>
+      <td className="py-2 pr-3">
+        {c.expires_at ? (
+          <span className={`text-xs ${isExpired ? 'text-red-400' : 'text-cyan-400'}`}>{fmtDate(c.expires_at)}</span>
+        ) : (
+          <span className="text-victorian-600 text-xs">ตลอดไป</span>
+        )}
+      </td>
+      <td className="py-2 pr-3">
+        {c.max_repeats !== null && c.max_repeats !== undefined ? (
+          <span className="text-xs text-orange-400">{c.max_repeats} ครั้ง</span>
+        ) : (
+          <span className="text-victorian-600 text-xs">ไม่จำกัด</span>
+        )}
+      </td>
+      <td className="py-2 pr-3 text-victorian-400">{c.created_by_name}</td>
+      <td className="py-2 pr-3 text-victorian-500 text-xs">{fmtDate(c.created_at)}</td>
+      <td className="py-2">
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => onEdit(c)} disabled={isPending}
+            className="p-1.5 rounded bg-gold-400/10 border border-gold-400/20 text-gold-400 hover:bg-gold-400/20 cursor-pointer disabled:opacity-50 transition-colors" title="แก้ไข">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button type="button" onClick={() => onArchive(c.id, c.name)} disabled={isPending}
+            className="p-1.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 cursor-pointer disabled:opacity-50 transition-colors" title="เก็บเข้าคลัง">
+            <Archive className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+})
+
+const QuestCodeRow = memo(function QuestCodeRow({ c, isPending, onCopy, onEdit, onArchive }: {
+  c: CodeEntry
+  isPending: boolean
+  onCopy: (code: string) => void
+  onEdit: (c: CodeEntry) => void
+  onArchive: (id: string, name: string) => void
+}) {
+  const isExpired = c.expires_at && new Date(c.expires_at) < new Date()
+  return (
+    <tr className={`border-b border-victorian-800/50 hover:bg-victorian-800/20 ${isExpired ? 'opacity-50' : ''}`}>
+      <td className="py-2 pr-3 text-victorian-200">{c.name}{isExpired && <span className="text-red-400 text-[10px] ml-1">(หมดอายุ)</span>}</td>
+      <td className="py-2 pr-3">
+        <button type="button" onClick={() => onCopy(c.code)}
+          className="inline-flex items-center gap-1 text-gold-400 font-mono text-xs hover:text-gold-300 cursor-pointer">
+          {c.code} <Copy className="w-3 h-3" />
+        </button>
+      </td>
+      <td className="py-2 pr-3">
+        {c.map_name ? (
+          <span className="inline-flex items-center gap-1 text-emerald-400 text-xs"><MapPin className="w-3 h-3" /> {c.map_name}</span>
+        ) : (
+          <span className="text-victorian-600 text-xs">— ไม่จำกัด</span>
+        )}
+      </td>
+      <td className="py-2 pr-3">
+        {c.npc_name ? (
+          <span className="inline-flex items-center gap-1 text-nouveau-ruby text-xs"><Ghost className="w-3 h-3" /> {c.npc_name}</span>
+        ) : (
+          <span className="text-victorian-600 text-xs">—</span>
+        )}
+      </td>
+      <td className="py-2 pr-3">
+        {c.expires_at ? (
+          <span className={`text-xs ${isExpired ? 'text-red-400' : 'text-cyan-400'}`}>{fmtDate(c.expires_at)}</span>
+        ) : (
+          <span className="text-victorian-600 text-xs">ตลอดไป</span>
+        )}
+      </td>
+      <td className="py-2 pr-3">
+        {c.max_repeats !== null && c.max_repeats !== undefined ? (
+          <span className="text-xs text-orange-400">{c.max_repeats} ครั้ง</span>
+        ) : (
+          <span className="text-victorian-600 text-xs">ไม่จำกัด</span>
+        )}
+      </td>
+      <td className="py-2 pr-3 text-victorian-400">{c.created_by_name}</td>
+      <td className="py-2 pr-3 text-victorian-500 text-xs">{fmtDate(c.created_at)}</td>
+      <td className="py-2">
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => onEdit(c)} disabled={isPending}
+            className="p-1.5 rounded bg-gold-400/10 border border-gold-400/20 text-gold-400 hover:bg-gold-400/20 cursor-pointer disabled:opacity-50 transition-colors" title="แก้ไข">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button type="button" onClick={() => onArchive(c.id, c.name)} disabled={isPending}
+            className="p-1.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 cursor-pointer disabled:opacity-50 transition-colors" title="เก็บเข้าคลัง">
+            <Archive className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+})
+
+const SubmissionRow = memo(function SubmissionRow({ s, type, isAdmin, isPending, onApprove, onReject, onViewRejection }: {
+  s: Submission
+  type: 'action' | 'quest'
+  isAdmin: boolean
+  isPending: boolean
+  onApprove: (id: string) => void
+  onReject: (id: string) => void
+  onViewRejection: (reason: string, name: string) => void
+}) {
+  const name = type === 'action' ? s.action_name : s.quest_name
+  const code = type === 'action' ? s.action_code : s.quest_code
+  const grants = type === 'action' && s.status === 'approved' ? [
+    s.reward_hp ? `❤️+${s.reward_hp}` : '',
+    s.reward_sanity ? `🧠+${s.reward_sanity}` : '',
+    s.reward_travel ? `🗺️+${s.reward_travel}` : '',
+    s.reward_spirituality ? `✨+${s.reward_spirituality}` : '',
+  ].filter(Boolean) : []
+  return (
+    <tr className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
+      {isAdmin && (
+        <td className="py-2.5 pr-3">
+          <div className="flex items-center gap-2">
+            <Avatar name={s.player_name} url={s.player_avatar} />
+            <span className="text-victorian-200 text-xs">{s.player_name}</span>
+          </div>
+        </td>
+      )}
+      <td className="py-2.5 pr-3 text-victorian-200 text-xs">{name}</td>
+      <td className="py-2.5 pr-3 text-victorian-500 font-mono text-[11px]">{code}</td>
+      <td className="py-2.5 pr-3">
+        <Badge status={s.status} />
+        {s.status === 'rejected' && s.rejection_reason && (
+          <button type="button" onClick={() => onViewRejection(s.rejection_reason!, name || '')}
+            className="ml-1 text-[10px] text-red-400 hover:text-red-300 underline cursor-pointer">
+            ดูเหตุผล
+          </button>
+        )}
+      </td>
+      <td className="py-2.5 pr-3">
+        <div className="flex flex-wrap gap-1">
+          {s.evidence_urls.map((url, i) => (
+            <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+              className="text-[11px] text-gold-400/70 hover:text-gold-400 underline">
+              #{i + 1}
+            </a>
+          ))}
+        </div>
+      </td>
+      {type === 'action' && (
+        <td className="py-2.5 pr-3">
+          {grants.length === 0 ? (
+            <span className="text-victorian-600 text-xs">—</span>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {grants.map((g, i) => <span key={i} className="text-[10px] bg-emerald-900/40 text-emerald-300 px-1 py-0.5 rounded">{g}</span>)}
+            </div>
+          )}
+        </td>
+      )}
+      <td className="py-2.5 pr-3 text-victorian-500 text-xs">{fmtDate(s.created_at)}</td>
+      {isAdmin && (
+        <td className="py-2.5">
+          {s.status === 'pending' ? (
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => onApprove(s.id)} disabled={isPending}
+                className="px-2 py-1 rounded bg-green-500/10 border border-green-500/30 text-green-400 text-[11px] font-bold hover:bg-green-500/20 cursor-pointer disabled:opacity-50">
+                อนุมัติ
+              </button>
+              <button type="button" onClick={() => onReject(s.id)} disabled={isPending}
+                className="px-2 py-1 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-[11px] font-bold hover:bg-red-500/20 cursor-pointer disabled:opacity-50">
+                ปฏิเสธ
+              </button>
+            </div>
+          ) : (
+            <span className="text-victorian-600 text-xs">—</span>
+          )}
+        </td>
+      )}
+    </tr>
+  )
+})
+
+const SleepLogRow = memo(function SleepLogRow({ log, isAdmin, isPending, onApprove, onReject }: {
+  log: SleepLog
+  isAdmin: boolean
+  isPending: boolean
+  onApprove: (id: string) => void
+  onReject: (id: string) => void
+}) {
+  return (
+    <tr className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
+      {isAdmin && (
+        <td className="py-2.5 pr-3">
+          <div className="flex items-center gap-2">
+            <Avatar name={log.player_name} url={log.player_avatar} />
+            <span className="text-victorian-200 text-xs">{log.player_name}</span>
+          </div>
+        </td>
+      )}
+      <td className="py-2.5 pr-3"><Badge status={log.status} /></td>
+      <td className="py-2.5 pr-3">
+        <div className="flex items-center gap-2">
+          <a href={log.meal_url} target="_blank" rel="noopener noreferrer"
+            className="text-xs text-gold-400/70 hover:text-gold-400 transition-colors">
+            🍖 มื้ออาหาร
+          </a>
+          <a href={log.sleep_url} target="_blank" rel="noopener noreferrer"
+            className="text-xs text-gold-400/70 hover:text-gold-400 transition-colors">
+            🌙 นอนหลับ
+          </a>
+        </div>
+        {log.status === 'approved' && (
+          <span className="text-blue-400 text-[10px]">✨ พลังวิญญาณฟื้นกลับเต็มแล้ว</span>
+        )}
+      </td>
+      <td className="py-2.5 pr-3 text-victorian-500 text-xs">{fmtDate(log.created_at)}</td>
+      <td className="py-2.5 pr-3 text-victorian-600 text-xs">{log.reviewed_by_name || '—'}</td>
+      {isAdmin && (
+        <td className="py-2.5">
+          {log.status === 'pending' ? (
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => onApprove(log.id)} disabled={isPending}
+                className="px-2 py-1 rounded bg-green-500/10 border border-green-500/30 text-green-400 text-[11px] font-bold hover:bg-green-500/20 cursor-pointer disabled:opacity-50">
+                อนุมัติ
+              </button>
+              <button type="button" onClick={() => onReject(log.id)} disabled={isPending}
+                className="px-2 py-1 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-[11px] font-bold hover:bg-red-500/20 cursor-pointer disabled:opacity-50">
+                ปฏิเสธ
+              </button>
+            </div>
+          ) : (
+            <span className="text-victorian-600 text-xs">—</span>
+          )}
+        </td>
+      )}
+    </tr>
+  )
+})
+
+const PrayerLogRow = memo(function PrayerLogRow({ log, isAdmin }: {
+  log: any
+  isAdmin: boolean
+}) {
+  const church = log.map_churches
+  const religion = church?.religions
+  const mapName = church?.maps?.name
+  const player = log.profiles
+  return (
+    <tr className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
+      {isAdmin && (
+        <td className="py-2.5 pr-3">
+          <div className="flex items-center gap-2">
+            <Avatar name={player?.display_name || '?'} url={player?.avatar_url} />
+            <span className="text-victorian-200 text-xs">{player?.display_name || 'Unknown'}</span>
+          </div>
+        </td>
+      )}
+      <td className="py-2.5 pr-3">
+        <div className="flex items-center gap-2">
+          {religion?.logo_url ? (
+            <img src={religion.logo_url} alt="" className="w-6 h-6 rounded-full border border-gold-400/20" />
+          ) : (
+            <Church className="w-4 h-4 text-gold-400/50" />
+          )}
+          <div>
+            <div className="text-victorian-200 text-xs font-semibold">{religion?.name_th || 'ไม่ทราบศาสนา'}</div>
+            <div className="text-victorian-500 text-[10px]">{mapName || 'ไม่ทราบแผนที่'}</div>
+          </div>
+        </div>
+      </td>
+      <td className="py-2.5 pr-3">
+        <span className="inline-flex items-center gap-1 text-cyan-400 text-xs font-bold bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20">
+          🧠 +{log.sanity_gained}
+        </span>
+      </td>
+      <td className="py-2.5 pr-3">
+        <div className="flex flex-wrap gap-1">
+          {(log.evidence_urls as string[]).map((url, i) => (
+            <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+              className="text-xs text-gold-400/70 hover:text-gold-400 transition-colors bg-gold-400/5 px-1 rounded flex items-center gap-1">
+              <ExternalLink className="w-3 h-3" /> ลิงก์ {i + 1}
+            </a>
+          ))}
+        </div>
+      </td>
+      <td className="py-2.5 text-victorian-500 text-xs">{fmtDate(log.created_at)}</td>
+    </tr>
+  )
+})
+
+const PunishmentLogRow = memo(function PunishmentLogRow({ log, isAdmin }: {
+  log: PunishmentLogEntry
+  isAdmin: boolean
+}) {
+  const actionLabel: Record<string, string> = {
+    assigned: '📋 มอบหมายเหตุการณ์',
+    penalty_applied: '💀 ดำเนินการแล้ว',
+    mercy_requested: '📨 ส่งเหตุการณ์',
+    completed: '✅ สำเร็จ',
+    expired: '⏰ หมดเวลา',
+  }
+  return (
+    <tr className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
+      {isAdmin && (
+        <td className="py-2.5 pr-3">
+          <div className="flex items-center gap-2">
+            <Avatar name={log.player_name} url={log.player_avatar} />
+            <span className="text-victorian-200 text-xs">{log.player_name}</span>
+          </div>
+        </td>
+      )}
+      <td className="py-2.5 pr-3 text-victorian-200 text-xs">{log.punishment_name}</td>
+      <td className="py-2.5 pr-3 text-victorian-300 text-xs">{actionLabel[log.action] || log.action}</td>
+      <td className="py-2.5 pr-3 text-victorian-500 text-xs">{log.created_by_name || '—'}</td>
+      <td className="py-2.5 text-victorian-500 text-xs">{fmtDate(log.created_at)}</td>
+    </tr>
+  )
+})
+
+const RoleplaySubRow = memo(function RoleplaySubRow({ sub, isAdmin, onReview }: {
+  sub: RoleplaySubmission
+  isAdmin: boolean
+  onReview: (submissionId: string, link: RoleplayLink) => void
+}) {
+  return (
+    <tr className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
+      {isAdmin && (
+        <td className="py-2.5 pr-3">
+          <div className="flex items-center gap-2">
+            <Avatar name={sub.player_name} url={sub.player_avatar} />
+            <span className="text-victorian-200 text-xs">{sub.player_name}</span>
+          </div>
+        </td>
+      )}
+      <td className="py-2.5 pr-3 text-victorian-300 text-xs">
+        {sub.sequence_labels && sub.sequence_labels.length > 0 ? sub.sequence_labels.join(' / ') : '—'}
+      </td>
+      <td className="py-2.5 pr-3 text-victorian-500 text-xs">{fmtDate(sub.created_at)}</td>
+      <td className="py-2.5 pr-3">
+        <div className="flex flex-wrap gap-2">
+          {sub.links.map((link, idx) => (
+            <div key={link.id} className="flex items-center gap-2">
+              <a href={link.url} target="_blank" rel="noreferrer" className="text-fuchsia-300 hover:text-fuchsia-200 break-all text-xs">
+                {link.url || `ลิงก์ ${idx + 1}`}
+              </a>
+              {link.digest_level === 'pending' && isAdmin && (
+                <button type="button" onClick={() => onReview(sub.id, link)}
+                  className="px-2 py-1 rounded-sm border border-fuchsia-500/30 text-fuchsia-300 text-[10px] hover:bg-fuchsia-500/10">
+                  ช่วยย่อยน้ำยา
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </td>
+      <td className="py-2.5 text-xs text-victorian-400">
+        <div className="flex flex-wrap gap-2">
+          {sub.links.map((link, idx) => (
+            <span key={link.id}>
+              #{idx + 1}: {link.digest_level === 'pending' ? 'รอตรวจสอบ' : 'ย่อยน้ำยาแล้ว'}
+              {link.digest_note ? ` (${link.digest_note})` : ''}
+            </span>
+          ))}
+        </div>
+      </td>
+    </tr>
+  )
+})
 
 /* ═══════════════════ Main Component ═══════════════════ */
 
@@ -856,60 +1260,58 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     setActiveTab(defaultTab)
   }, [defaultTab])
 
-  // ─── Realtime subscriptions ───
-  const activeTabRef = useRef(activeTab)
-  activeTabRef.current = activeTab
+  // ─── Lazy Realtime subscriptions (subscribe only to tables for the active tab) ───
   const pageRefs = useRef({ acPage, qcPage, asPage, qsPage, slPage, punPage, punLogPage, rpPage, plPage })
   pageRefs.current = { acPage, qcPage, asPage, qsPage, slPage, punPage, punLogPage, rpPage, plPage }
 
   useEffect(() => {
     const supabase = createClient()
 
-    function refreshActiveTab() {
+    function refresh() {
       debouncedCall('aq-realtime', () => {
-        const tab = activeTabRef.current
-        const p = pageRefs.current
-        if (tab === 'actions') {
+        const cur = pageRefs.current
+        if (activeTab === 'actions') {
           invalidateCache('aq:actionCodes'); invalidateCache('aq:actionSubs')
-          fetchActionCodes(p.acPage); fetchActionSubs(p.asPage)
-        } else if (tab === 'quests') {
+          fetchActionCodes(cur.acPage); fetchActionSubs(cur.asPage)
+        } else if (activeTab === 'quests') {
           invalidateCache('aq:questCodes'); invalidateCache('aq:questSubs')
-          fetchQuestCodes(p.qcPage); fetchQuestSubs(p.qsPage)
-        } else if (tab === 'sleep') {
+          fetchQuestCodes(cur.qcPage); fetchQuestSubs(cur.qsPage)
+        } else if (activeTab === 'sleep') {
           invalidateCache('aq:sleepLogs'); invalidateCache('aq:sleepStatus')
-          fetchSleepLogs(p.slPage)
-        } else if (tab === 'prayer') {
+          fetchSleepLogs(cur.slPage)
+        } else if (activeTab === 'prayer') {
           invalidateCache('aq:prayerLogs')
-          fetchPrayerLogs(p.plPage)
-        } else if (tab === 'punishments') {
+          fetchPrayerLogs(cur.plPage)
+        } else if (activeTab === 'punishments') {
           invalidateCache('aq:punishments'); invalidateCache('aq:punishmentLogs')
-          fetchPunishments(p.punPage); fetchPunishmentLogs(p.punLogPage)
-        } else if (tab === 'roleplay') {
+          fetchPunishments(cur.punPage); fetchPunishmentLogs(cur.punLogPage)
+        } else if (activeTab === 'roleplay') {
           invalidateCache('aq:roleplaySubs')
-          fetchRoleplaySubs(p.rpPage)
+          fetchRoleplaySubs(cur.rpPage)
         }
       }, 400)
     }
 
-    const channel = supabase.channel('aq-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'action_submissions' }, refreshActiveTab)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'quest_submissions' }, refreshActiveTab)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'action_codes' }, refreshActiveTab)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'quest_codes' }, refreshActiveTab)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sleep_requests' }, refreshActiveTab)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'punishments' }, refreshActiveTab)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'punishment_players' }, refreshActiveTab)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'punishment_required_tasks' }, refreshActiveTab)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'punishment_logs' }, refreshActiveTab)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'roleplay_submissions' }, refreshActiveTab)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'roleplay_links' }, refreshActiveTab)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'prayer_logs' }, refreshActiveTab)
-      .subscribe()
+    // Build a channel with only the tables relevant to the current tab
+    const tabTables: Record<TabKey, string[]> = {
+      actions:     ['action_codes', 'action_submissions'],
+      quests:      ['quest_codes', 'quest_submissions'],
+      sleep:       ['sleep_requests'],
+      prayer:      ['prayer_logs'],
+      punishments: ['punishments', 'punishment_players', 'punishment_required_tasks', 'punishment_logs'],
+      roleplay:    ['roleplay_submissions', 'roleplay_links'],
+    }
+
+    let channel = supabase.channel(`aq-realtime-${activeTab}`)
+    for (const table of tabTables[activeTab]) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, refresh)
+    }
+    channel.subscribe()
 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [fetchActionCodes, fetchActionSubs, fetchQuestCodes, fetchQuestSubs, fetchSleepLogs, fetchPrayerLogs, fetchPunishments, fetchPunishmentLogs, fetchRoleplaySubs])
+  }, [activeTab, fetchActionCodes, fetchActionSubs, fetchQuestCodes, fetchQuestSubs, fetchSleepLogs, fetchPrayerLogs, fetchPunishments, fetchPunishmentLogs, fetchRoleplaySubs])
 
   // ─── Handlers ───
   function handleSleepSubmit() {
@@ -1608,73 +2010,12 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                       </tr>
                     </thead>
                     <tbody>
-                      {actionCodes.map(c => {
-                        const grants = [
-                          c.reward_hp ? `❤️+${c.reward_hp}` : '',
-                          c.reward_sanity ? `🧠+${c.reward_sanity}` : '',
-                          c.reward_travel ? `🗺️+${c.reward_travel}` : '',
-                          c.reward_spirituality ? `✨+${c.reward_spirituality}` : '',
-                        ].filter(Boolean)
-                        const caps = [
-                          c.reward_max_sanity ? `🧠↑${c.reward_max_sanity}` : '',
-                          c.reward_max_travel ? `🗺️↑${c.reward_max_travel}` : '',
-                          c.reward_max_spirituality ? `✨↑${c.reward_max_spirituality}` : '',
-                        ].filter(Boolean)
-                        const isExpired = c.expires_at && new Date(c.expires_at) < new Date()
-                        return (
-                        <tr key={c.id} className={`border-b border-victorian-800/50 hover:bg-victorian-800/20 ${isExpired ? 'opacity-50' : ''}`}>
-                          <td className="py-2 pr-3 text-victorian-200">{c.name}{isExpired && <span className="text-red-400 text-[10px] ml-1">(หมดอายุ)</span>}</td>
-                          <td className="py-2 pr-3">
-                            <button type="button" onClick={() => copyCode(c.code)}
-                              className="inline-flex items-center gap-1 text-gold-400 font-mono text-xs hover:text-gold-300 cursor-pointer">
-                              {c.code} <Copy className="w-3 h-3" />
-                            </button>
-                          </td>
-                          <td className="py-2 pr-3">
-                            {grants.length === 0 && caps.length === 0 ? (
-                              <span className="text-victorian-600 text-xs">—</span>
-                            ) : (
-                              <div className="flex flex-wrap gap-1">
-                                {grants.map((g, i) => <span key={i} className="text-xs bg-emerald-900/40 text-emerald-300 px-1.5 py-0.5 rounded">{g}</span>)}
-                                {caps.map((g, i) => <span key={i} className="text-xs bg-amber-900/40 text-amber-300 px-1.5 py-0.5 rounded">{g}</span>)}
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-2 pr-3">
-                            {c.expires_at ? (
-                              <span className={`text-xs ${isExpired ? 'text-red-400' : 'text-cyan-400'}`}>
-                                {fmtDate(c.expires_at)}
-                              </span>
-                            ) : (
-                              <span className="text-victorian-600 text-xs">ตลอดไป</span>
-                            )}
-                          </td>
-                          <td className="py-2 pr-3">
-                            {c.max_repeats !== null && c.max_repeats !== undefined ? (
-                              <span className="text-xs text-orange-400">{c.max_repeats} ครั้ง</span>
-                            ) : (
-                              <span className="text-victorian-600 text-xs">ไม่จำกัด</span>
-                            )}
-                          </td>
-                          <td className="py-2 pr-3 text-victorian-400">{c.created_by_name}</td>
-                          <td className="py-2 pr-3 text-victorian-500 text-xs">{fmtDate(c.created_at)}</td>
-                          <td className="py-2">
-                            <div className="flex items-center gap-1">
-                              <button type="button" onClick={() => openEditAction(c)} disabled={isPending}
-                                className="p-1.5 rounded bg-gold-400/10 border border-gold-400/20 text-gold-400 hover:bg-gold-400/20 cursor-pointer disabled:opacity-50 transition-colors"
-                                title="แก้ไข">
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button type="button" onClick={() => setArchiveConfirm({ type: 'action', id: c.id, name: c.name })} disabled={isPending}
-                                className="p-1.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 cursor-pointer disabled:opacity-50 transition-colors"
-                                title="เก็บเข้าคลัง">
-                                <Archive className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                        )
-                      })}
+                      {actionCodes.map(c => (
+                        <ActionCodeRow key={c.id} c={c} isPending={isPending}
+                          onCopy={copyCode}
+                          onEdit={openEditAction}
+                          onArchive={(id, name) => setArchiveConfirm({ type: 'action', id, name })} />
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -1733,70 +2074,12 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                       </tr>
                     </thead>
                     <tbody>
-                      {questCodes.map(c => {
-                        const isExpired = c.expires_at && new Date(c.expires_at) < new Date()
-                        return (
-                        <tr key={c.id} className={`border-b border-victorian-800/50 hover:bg-victorian-800/20 ${isExpired ? 'opacity-50' : ''}`}>
-                          <td className="py-2 pr-3 text-victorian-200">{c.name}{isExpired && <span className="text-red-400 text-[10px] ml-1">(หมดอายุ)</span>}</td>
-                          <td className="py-2 pr-3">
-                            <button type="button" onClick={() => copyCode(c.code)}
-                              className="inline-flex items-center gap-1 text-gold-400 font-mono text-xs hover:text-gold-300 cursor-pointer">
-                              {c.code} <Copy className="w-3 h-3" />
-                            </button>
-                          </td>
-                          <td className="py-2 pr-3">
-                            {c.map_name ? (
-                              <span className="inline-flex items-center gap-1 text-emerald-400 text-xs">
-                                <MapPin className="w-3 h-3" /> {c.map_name}
-                              </span>
-                            ) : (
-                              <span className="text-victorian-600 text-xs">— ไม่จำกัด</span>
-                            )}
-                          </td>
-                          <td className="py-2 pr-3">
-                            {c.npc_name ? (
-                              <span className="inline-flex items-center gap-1 text-nouveau-ruby text-xs">
-                                <Ghost className="w-3 h-3" /> {c.npc_name}
-                              </span>
-                            ) : (
-                              <span className="text-victorian-600 text-xs">—</span>
-                            )}
-                          </td>
-                          <td className="py-2 pr-3">
-                            {c.expires_at ? (
-                              <span className={`text-xs ${isExpired ? 'text-red-400' : 'text-cyan-400'}`}>
-                                {fmtDate(c.expires_at)}
-                              </span>
-                            ) : (
-                              <span className="text-victorian-600 text-xs">ตลอดไป</span>
-                            )}
-                          </td>
-                          <td className="py-2 pr-3">
-                            {c.max_repeats !== null && c.max_repeats !== undefined ? (
-                              <span className="text-xs text-orange-400">{c.max_repeats} ครั้ง</span>
-                            ) : (
-                              <span className="text-victorian-600 text-xs">ไม่จำกัด</span>
-                            )}
-                          </td>
-                          <td className="py-2 pr-3 text-victorian-400">{c.created_by_name}</td>
-                          <td className="py-2 pr-3 text-victorian-500 text-xs">{fmtDate(c.created_at)}</td>
-                          <td className="py-2">
-                            <div className="flex items-center gap-1">
-                              <button type="button" onClick={() => openEditQuest(c)} disabled={isPending}
-                                className="p-1.5 rounded bg-gold-400/10 border border-gold-400/20 text-gold-400 hover:bg-gold-400/20 cursor-pointer disabled:opacity-50 transition-colors"
-                                title="แก้ไข">
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button type="button" onClick={() => setArchiveConfirm({ type: 'quest', id: c.id, name: c.name })} disabled={isPending}
-                                className="p-1.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 cursor-pointer disabled:opacity-50 transition-colors"
-                                title="เก็บเข้าคลัง">
-                                <Archive className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                        )
-                      })}
+                      {questCodes.map(c => (
+                        <QuestCodeRow key={c.id} c={c} isPending={isPending}
+                          onCopy={copyCode}
+                          onEdit={openEditQuest}
+                          onArchive={(id, name) => setArchiveConfirm({ type: 'quest', id, name })} />
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -1855,53 +2138,9 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                     </tr>
                   </thead>
                   <tbody>
-                    {prayerLogs.map(log => {
-                      const church = log.map_churches
-                      const religion = church?.religions
-                      const mapName = church?.maps?.name
-                      const player = log.profiles
-                      return (
-                        <tr key={log.id} className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
-                          {isAdmin && (
-                            <td className="py-2.5 pr-3">
-                              <div className="flex items-center gap-2">
-                                <Avatar name={player?.display_name || '?'} url={player?.avatar_url} />
-                                <span className="text-victorian-200 text-xs">{player?.display_name || 'Unknown'}</span>
-                              </div>
-                            </td>
-                          )}
-                          <td className="py-2.5 pr-3">
-                            <div className="flex items-center gap-2">
-                              {religion?.logo_url ? (
-                                <img src={religion.logo_url} alt="" className="w-6 h-6 rounded-full border border-gold-400/20" />
-                              ) : (
-                                <Church className="w-4 h-4 text-gold-400/50" />
-                              )}
-                              <div>
-                                <div className="text-victorian-200 text-xs font-semibold">{religion?.name_th || 'ไม่ทราบศาสนา'}</div>
-                                <div className="text-victorian-500 text-[10px]">{mapName || 'ไม่ทราบแผนที่'}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-2.5 pr-3">
-                            <span className="inline-flex items-center gap-1 text-cyan-400 text-xs font-bold bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20">
-                              🧠 +{log.sanity_gained}
-                            </span>
-                          </td>
-                          <td className="py-2.5 pr-3">
-                            <div className="flex flex-wrap gap-1">
-                              {(log.evidence_urls as string[]).map((url, i) => (
-                                <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                                  className="text-xs text-gold-400/70 hover:text-gold-400 transition-colors bg-gold-400/5 px-1 rounded flex items-center gap-1">
-                                  <ExternalLink className="w-3 h-3" /> ลิงก์ {i + 1}
-                                </a>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="py-2.5 text-victorian-500 text-xs">{fmtDate(log.created_at)}</td>
-                        </tr>
-                      )
-                    })}
+                    {prayerLogs.map(log => (
+                      <PrayerLogRow key={log.id} log={log} isAdmin={isAdmin} />
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -1941,52 +2180,9 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                     </thead>
                     <tbody>
                       {sleepLogs.map(log => (
-                        <tr key={log.id} className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
-                          {isAdmin && (
-                            <td className="py-2.5 pr-3">
-                              <div className="flex items-center gap-2">
-                                <Avatar name={log.player_name} url={log.player_avatar} />
-                                <span className="text-victorian-200 text-xs">{log.player_name}</span>
-                              </div>
-                            </td>
-                          )}
-                          <td className="py-2.5 pr-3"><Badge status={log.status} /></td>
-                          <td className="py-2.5 pr-3">
-                            <div className="flex items-center gap-2">
-                              <a href={log.meal_url} target="_blank" rel="noopener noreferrer"
-                                className="text-xs text-gold-400/70 hover:text-gold-400 transition-colors">
-                                🍖 มื้ออาหาร
-                              </a>
-                              <a href={log.sleep_url} target="_blank" rel="noopener noreferrer"
-                                className="text-xs text-gold-400/70 hover:text-gold-400 transition-colors">
-                                🌙 นอนหลับ
-                              </a>
-                            </div>
-                            {log.status === 'approved' && (
-                              <span className="text-blue-400 text-[10px]">✨ พลังวิญญาณฟื้นกลับเต็มแล้ว</span>
-                            )}
-                          </td>
-                          <td className="py-2.5 pr-3 text-victorian-500 text-xs">{fmtDate(log.created_at)}</td>
-                          <td className="py-2.5 pr-3 text-victorian-600 text-xs">{log.reviewed_by_name || '—'}</td>
-                          {isAdmin && (
-                            <td className="py-2.5">
-                              {log.status === 'pending' ? (
-                                <div className="flex items-center gap-1">
-                                  <button type="button" onClick={() => handleApprove(log.id, 'sleep')} disabled={isPending}
-                                    className="px-2 py-1 rounded bg-green-500/10 border border-green-500/30 text-green-400 text-[11px] font-bold hover:bg-green-500/20 cursor-pointer disabled:opacity-50">
-                                    อนุมัติ
-                                  </button>
-                                  <button type="button" onClick={() => { setRejectTarget({ id: log.id, type: 'sleep' }); setRejectReason(''); setRejectError(null) }} disabled={isPending}
-                                    className="px-2 py-1 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-[11px] font-bold hover:bg-red-500/20 cursor-pointer disabled:opacity-50">
-                                    ปฏิเสธ
-                                  </button>
-                                </div>
-                              ) : (
-                                <span className="text-victorian-600 text-xs">—</span>
-                              )}
-                            </td>
-                          )}
-                        </tr>
+                        <SleepLogRow key={log.id} log={log} isAdmin={isAdmin} isPending={isPending}
+                          onApprove={(id) => handleApprove(id, 'sleep')}
+                          onReject={(id) => { setRejectTarget({ id, type: 'sleep' }); setRejectReason(''); setRejectError(null) }} />
                       ))}
                     </tbody>
                   </table>
@@ -2200,31 +2396,9 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                         </tr>
                       </thead>
                       <tbody>
-                        {punLogs.map(log => {
-                          const actionLabel: Record<string, string> = {
-                            assigned: '📋 มอบหมายเหตุการณ์',
-                            penalty_applied: '💀 ดำเนินการแล้ว',
-                            mercy_requested: '📨 ส่งเหตุการณ์',
-                            completed: '✅ สำเร็จ',
-                            expired: '⏰ หมดเวลา',
-                          }
-                          return (
-                            <tr key={log.id} className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
-                              {isAdmin && (
-                                <td className="py-2.5 pr-3">
-                                  <div className="flex items-center gap-2">
-                                    <Avatar name={log.player_name} url={log.player_avatar} />
-                                    <span className="text-victorian-200 text-xs">{log.player_name}</span>
-                                  </div>
-                                </td>
-                              )}
-                              <td className="py-2.5 pr-3 text-victorian-200 text-xs">{log.punishment_name}</td>
-                              <td className="py-2.5 pr-3 text-victorian-300 text-xs">{actionLabel[log.action] || log.action}</td>
-                              <td className="py-2.5 pr-3 text-victorian-500 text-xs">{log.created_by_name || '—'}</td>
-                              <td className="py-2.5 text-victorian-500 text-xs">{fmtDate(log.created_at)}</td>
-                            </tr>
-                          )
-                        })}
+                        {punLogs.map(log => (
+                          <PunishmentLogRow key={log.id} log={log} isAdmin={isAdmin} />
+                        ))}
                       </tbody>
                     </table>
                   </div>
@@ -2264,50 +2438,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                       </thead>
                       <tbody>
                         {roleplaySubs.map(sub => (
-                          <tr key={sub.id} className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
-                            {isAdmin && (
-                              <td className="py-2.5 pr-3">
-                                <div className="flex items-center gap-2">
-                                  <Avatar name={sub.player_name} url={sub.player_avatar} />
-                                  <span className="text-victorian-200 text-xs">{sub.player_name}</span>
-                                </div>
-                              </td>
-                            )}
-                            <td className="py-2.5 pr-3 text-victorian-300 text-xs">
-                              {sub.sequence_labels && sub.sequence_labels.length > 0 ? sub.sequence_labels.join(' / ') : '—'}
-                            </td>
-                            <td className="py-2.5 pr-3 text-victorian-500 text-xs">{fmtDate(sub.created_at)}</td>
-                            <td className="py-2.5 pr-3">
-                              <div className="flex flex-wrap gap-2">
-                                {sub.links.map((link, idx) => (
-                                  <div key={link.id} className="flex items-center gap-2">
-                                    <a href={link.url} target="_blank" rel="noreferrer" className="text-fuchsia-300 hover:text-fuchsia-200 break-all text-xs">
-                                      {link.url || `ลิงก์ ${idx + 1}`}
-                                    </a>
-                                    {link.digest_level === 'pending' && isAdmin && (
-                                      <button
-                                        type="button"
-                                        onClick={() => { setDigestReviewTarget({ submissionId: sub.id, link }); setDigestLevel('none'); setDigestNote(''); setDigestError(null) }}
-                                        className="px-2 py-1 rounded-sm border border-fuchsia-500/30 text-fuchsia-300 text-[10px] hover:bg-fuchsia-500/10"
-                                      >
-                                        ช่วยย่อยน้ำยา
-                                      </button>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </td>
-                            <td className="py-2.5 text-xs text-victorian-400">
-                              <div className="flex flex-wrap gap-2">
-                                {sub.links.map((link, idx) => (
-                                  <span key={link.id}>
-                                    #{idx + 1}: {link.digest_level === 'pending' ? 'รอตรวจสอบ' : 'ย่อยน้ำยาแล้ว'}
-                                    {link.digest_note ? ` (${link.digest_note})` : ''}
-                                  </span>
-                                ))}
-                              </div>
-                            </td>
-                          </tr>
+                          <RoleplaySubRow key={sub.id} sub={sub} isAdmin={isAdmin}
+                            onReview={(submissionId, link) => { setDigestReviewTarget({ submissionId, link }); setDigestLevel('none'); setDigestNote(''); setDigestError(null) }} />
                         ))}
                       </tbody>
                     </table>
@@ -3390,88 +3522,10 @@ function SubmissionTable({ subs, type, isAdmin, isPending, onApprove, onReject, 
           </tr>
         </thead>
         <tbody>
-          {subs.map(s => {
-            const name = type === 'action' ? s.action_name : s.quest_name
-            const code = type === 'action' ? s.action_code : s.quest_code
-            const grants = type === 'action' && s.status === 'approved' ? [
-              s.reward_hp ? `❤️+${s.reward_hp}` : '',
-              s.reward_sanity ? `🧠+${s.reward_sanity}` : '',
-              s.reward_travel ? `🗺️+${s.reward_travel}` : '',
-              s.reward_spirituality ? `✨+${s.reward_spirituality}` : '',
-            ].filter(Boolean) : []
-            const caps = type === 'action' && s.status === 'approved' ? [
-              s.reward_max_sanity ? `🧠↑${s.reward_max_sanity}` : '',
-              s.reward_max_travel ? `🗺️↑${s.reward_max_travel}` : '',
-              s.reward_max_spirituality ? `✨↑${s.reward_max_spirituality}` : '',
-            ].filter(Boolean) : []
-
-            return (
-              <tr key={s.id} className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
-                {isAdmin && (
-                  <td className="py-2.5 pr-3">
-                    <div className="flex items-center gap-2">
-                      <Avatar name={s.player_name} url={s.player_avatar} />
-                      <span className="text-victorian-200 text-xs">{s.player_name}</span>
-                    </div>
-                  </td>
-                )}
-                <td className="py-2.5 pr-3 text-victorian-200">{name}</td>
-                <td className="py-2.5 pr-3 text-victorian-500 font-mono text-[11px]">{code}</td>
-                <td className="py-2.5 pr-3">
-                  <Badge status={s.status} />
-                  {s.status === 'rejected' && s.rejection_reason && (
-                    <button type="button"
-                      onClick={() => onViewRejection(s.rejection_reason!, name || '')}
-                      className="block mt-1 text-[10px] text-red-400 hover:text-red-300 cursor-pointer underline">
-                      ดูเหตุผล
-                    </button>
-                  )}
-                </td>
-                <td className="py-2.5 pr-3">
-                  <div className="flex flex-wrap gap-1">
-                    {s.evidence_urls.map((url, i) => (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                        className="text-[11px] text-gold-400/70 hover:text-gold-400 transition-colors underline">
-                        #{i + 1}
-                      </a>
-                    ))}
-                  </div>
-                </td>
-                {type === 'action' && (
-                  <td className="py-2.5 pr-3">
-                    {grants.length === 0 && caps.length === 0 ? (
-                      <span className="text-victorian-600 text-xs">—</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1">
-                        {grants.map((g, i) => <span key={i} className="text-[10px] bg-emerald-900/40 text-emerald-300 px-1 py-0.5 rounded">{g}</span>)}
-                        {caps.map((g, i) => <span key={i} className="text-[10px] bg-amber-900/40 text-amber-300 px-1 py-0.5 rounded">{g}</span>)}
-                      </div>
-                    )}
-                  </td>
-                )}
-                <td className="py-2.5 pr-3 text-victorian-500 text-xs">{fmtDate(s.created_at)}</td>
-                <td className="py-2.5 pr-3 text-victorian-600 text-xs">{s.reviewed_by_name || '—'}</td>
-                {isAdmin && (
-                  <td className="py-2.5">
-                    {s.status === 'pending' ? (
-                      <div className="flex items-center gap-1">
-                        <button type="button" onClick={() => onApprove(s.id)} disabled={isPending}
-                          className="px-2 py-1 rounded bg-green-500/10 border border-green-500/30 text-green-400 text-[11px] font-bold hover:bg-green-500/20 cursor-pointer disabled:opacity-50">
-                          อนุมัติ
-                        </button>
-                        <button type="button" onClick={() => onReject(s.id)} disabled={isPending}
-                          className="px-2 py-1 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-[11px] font-bold hover:bg-red-500/20 cursor-pointer disabled:opacity-50">
-                          ปฏิเสธ
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-victorian-600 text-xs">—</span>
-                    )}
-                  </td>
-                )}
-              </tr>
-            )
-          })}
+          {subs.map(s => (
+            <SubmissionRow key={s.id} s={s} type={type} isAdmin={isAdmin} isPending={isPending}
+              onApprove={onApprove} onReject={onReject} onViewRejection={onViewRejection} />
+          ))}
         </tbody>
       </table>
     </div>

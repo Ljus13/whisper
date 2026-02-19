@@ -334,12 +334,12 @@ export async function getActionCodes(page: number = 1) {
 
   const { count } = await supabase
     .from('action_codes')
-    .select('*', { count: 'exact', head: true })
+    .select('id', { count: 'exact', head: true })
     .or('archived.is.null,archived.eq.false')
 
   const { data, error } = await supabase
     .from('action_codes')
-    .select('*')
+    .select('id, name, code, created_by, reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality, expires_at, max_repeats, created_at')
     .or('archived.is.null,archived.eq.false')
     .order('created_at', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1)
@@ -428,12 +428,12 @@ export async function getQuestCodes(page: number = 1) {
 
   const { count } = await supabase
     .from('quest_codes')
-    .select('*', { count: 'exact', head: true })
+    .select('id', { count: 'exact', head: true })
     .or('archived.is.null,archived.eq.false')
 
   const { data, error } = await supabase
     .from('quest_codes')
-    .select('*')
+    .select('id, name, code, created_by, map_id, npc_token_id, expires_at, max_repeats, created_at')
     .or('archived.is.null,archived.eq.false')
     .order('created_at', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1)
@@ -498,7 +498,7 @@ export async function submitAction(codeStr: string, evidenceUrls: string[]) {
   if (codeRow.max_repeats !== null && codeRow.max_repeats !== undefined) {
     const { count } = await supabase
       .from('action_submissions')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .eq('player_id', user.id)
       .eq('action_code_id', codeRow.id)
     if ((count || 0) >= codeRow.max_repeats) {
@@ -739,7 +739,7 @@ export async function submitQuest(codeStr: string, evidenceUrls: string[]) {
   if (codeRow.max_repeats !== null && codeRow.max_repeats !== undefined) {
     const { count } = await supabase
       .from('quest_submissions')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .eq('player_id', user.id)
       .eq('quest_code_id', codeRow.id)
     if ((count || 0) >= codeRow.max_repeats) {
@@ -1183,12 +1183,12 @@ export async function getSleepLogs(page: number = 1) {
 
   // Use foreign key joins to get player and reviewer info in one query
   const selectFields = `
-    *,
+    id, player_id, meal_url, sleep_url, status, reviewed_by, reviewed_at, created_at,
     player:player_id(id, display_name, avatar_url),
     reviewer:reviewed_by(id, display_name, avatar_url)
   `
 
-  let countQ = supabase.from('sleep_requests').select('*', { count: 'exact', head: true })
+  let countQ = supabase.from('sleep_requests').select('id', { count: 'exact', head: true })
   if (!isAdmin) countQ = countQ.eq('player_id', user.id)
   const { count } = await countQ
 
@@ -1368,9 +1368,9 @@ export async function getPunishments(page: number = 1) {
   let countQ, dataQ
 
   if (isAdmin) {
-    countQ = supabase.from('punishments').select('*', { count: 'exact', head: true })
+    countQ = supabase.from('punishments').select('id', { count: 'exact', head: true })
       .or('archived.is.null,archived.eq.false')
-    dataQ = supabase.from('punishments').select('*')
+    dataQ = supabase.from('punishments').select('id, name, description, event_mode, group_mode, penalty_hp, penalty_sanity, penalty_travel, penalty_spirituality, penalty_max_sanity, penalty_max_travel, penalty_max_spirituality, deadline, is_active, created_by, created_at')
       .or('archived.is.null,archived.eq.false')
       .order('created_at', { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1)
@@ -1384,9 +1384,9 @@ export async function getPunishments(page: number = 1) {
     const pIds = (myPunishmentIds ?? []).map(p => p.punishment_id)
     if (pIds.length === 0) return { punishments: [], total: 0, page: 1, totalPages: 1 }
 
-    countQ = supabase.from('punishments').select('*', { count: 'exact', head: true }).in('id', pIds)
+    countQ = supabase.from('punishments').select('id', { count: 'exact', head: true }).in('id', pIds)
       .or('archived.is.null,archived.eq.false')
-    dataQ = supabase.from('punishments').select('*')
+    dataQ = supabase.from('punishments').select('id, name, description, event_mode, group_mode, penalty_hp, penalty_sanity, penalty_travel, penalty_spirituality, penalty_max_sanity, penalty_max_travel, penalty_max_spirituality, deadline, is_active, created_by, created_at')
       .in('id', pIds)
       .or('archived.is.null,archived.eq.false')
       .order('created_at', { ascending: false })
@@ -1545,7 +1545,7 @@ export async function applyPenalty(punishmentId: string, playerId: string) {
 
   const { data: punishment } = await supabase
     .from('punishments')
-    .select('*')
+    .select('id, name, penalty_hp, penalty_sanity, penalty_travel, penalty_spirituality, penalty_max_sanity, penalty_max_travel, penalty_max_spirituality')
     .eq('id', punishmentId)
     .single()
 
@@ -1940,7 +1940,7 @@ export async function autoApplyExpiredPunishments() {
   // Find active punishments past deadline
   const { data: expiredPunishments } = await supabase
     .from('punishments')
-    .select('*')
+    .select('id, name, penalty_hp, penalty_sanity, penalty_travel, penalty_spirituality, penalty_max_sanity, penalty_max_travel, penalty_max_spirituality, deadline, is_active')
     .eq('is_active', true)
     .not('deadline', 'is', null)
     .lt('deadline', serverNow)
@@ -2141,7 +2141,7 @@ export async function getPlayerActivePunishments() {
   // Fetch active punishments
   const { data: punishments } = await supabase
     .from('punishments')
-    .select('*')
+    .select('id, name, description, event_mode, group_mode, penalty_hp, penalty_sanity, penalty_travel, penalty_spirituality, penalty_max_sanity, penalty_max_travel, penalty_max_spirituality, deadline, is_active, created_by, created_at')
     .in('id', punishmentIds)
     .eq('is_active', true)
     .or('archived.is.null,archived.eq.false')
