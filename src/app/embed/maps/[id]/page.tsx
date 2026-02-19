@@ -23,21 +23,34 @@ export default async function EmbedMapPage({ params }: PageProps) {
     notFound()
   }
 
-  // Fetch tokens with profile data
+  // Fetch tokens
   const { data: rawTokens } = await supabase
     .from('map_tokens')
-    .select('*, profiles:user_id(display_name, avatar_url, role)')
+    .select('*')
     .eq('map_id', id)
 
-  const tokens: MapTokenWithProfile[] = (rawTokens ?? []).map((t: Record<string, unknown>) => {
-    const profile = t.profiles as Record<string, unknown> | null
-    return {
-      ...t,
-      display_name: profile?.display_name as string | null ?? t.npc_name as string | null,
-      avatar_url: profile?.avatar_url as string | null ?? t.npc_image_url as string | null,
-      role: profile?.role as string ?? 'player',
-    } as MapTokenWithProfile
-  })
+  // Fetch profiles for player tokens separately (map_tokens.user_id FK points to auth.users, not profiles)
+  const playerUserIds = (rawTokens ?? [])
+    .filter((t) => t.token_type === 'player' && t.user_id)
+    .map((t) => t.user_id as string)
+
+  let profileMap: Record<string, { display_name: string | null; avatar_url: string | null; role: string }> = {}
+  if (playerUserIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, display_name, avatar_url, role')
+      .in('id', playerUserIds)
+    if (profiles) {
+      profileMap = Object.fromEntries(profiles.map((p) => [p.id, p]))
+    }
+  }
+
+  const tokens: MapTokenWithProfile[] = (rawTokens ?? []).map((t) => ({
+    ...t,
+    display_name: t.user_id ? (profileMap[t.user_id]?.display_name ?? null) : t.npc_name,
+    avatar_url: t.user_id ? (profileMap[t.user_id]?.avatar_url ?? null) : t.npc_image_url,
+    role: t.user_id ? (profileMap[t.user_id]?.role ?? 'player') : 'player',
+  } as MapTokenWithProfile))
 
   // Fetch locked zones
   const { data: zones } = await supabase
