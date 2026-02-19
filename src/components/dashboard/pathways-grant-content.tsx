@@ -136,7 +136,7 @@ function GrantModal({
             {preview ? (
               <>
                 {/* Image */}
-                <div className="relative h-44 flex-shrink-0 overflow-hidden">
+                <div className="relative h-64 flex-shrink-0 overflow-hidden">
                   {preview.bg_url ? (
                     <img src={preview.bg_url} alt={preview.name} className="w-full h-full object-cover" />
                   ) : (
