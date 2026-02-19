@@ -2670,6 +2670,24 @@ function TokenInfoPopup({ token, isAdmin, isMe, canMove, onClose, onRemove, onMo
   onSaveRadius: (radius: number) => void; isPending: boolean
 }) {
   const [editRadius, setEditRadius] = useState<number>(token.interaction_radius ?? 0)
+  const [pathwayInfo, setPathwayInfo] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (token.token_type !== 'player' || !token.user_id) return
+    const supabase = createClient()
+    supabase
+      .from('player_pathways')
+      .select('pathway:skill_pathways(name), sequence:skill_sequences(seq_number)')
+      .eq('player_id', token.user_id)
+      .then(({ data }) => {
+        if (!data || data.length === 0) return
+        const row = data[0] as unknown as { pathway: { name: string } | null; sequence: { seq_number: number } | null }
+        if (row.pathway) {
+          const label = row.sequence ? `${row.pathway.name} ลำดับ ${row.sequence.seq_number}` : row.pathway.name
+          setPathwayInfo(label)
+        }
+      })
+  }, [token.user_id, token.token_type])
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}
@@ -2689,11 +2707,14 @@ function TokenInfoPopup({ token, isAdmin, isMe, canMove, onClose, onRemove, onMo
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-display text-gold-400 text-3xl truncate mb-1 text-shadow-glow">{token.display_name || token.npc_name}</p>
+            <p className="font-display text-gold-400 text-3xl leading-tight mb-1 text-shadow-glow break-words">{token.display_name || token.npc_name}</p>
             <p className="text-xl text-victorian-400">
               {token.token_type === 'npc' ? 'NPC' : token.role === 'admin' ? 'แอดมิน' : token.role === 'dm' ? 'DM' : 'ผู้เล่น'}
               {isMe && ' (คุณ)'}
             </p>
+            {pathwayInfo && (
+              <p className="text-sm text-victorian-500 mt-1">🛤️ {pathwayInfo}</p>
+            )}
           </div>
           <button onClick={onClose} className="self-start -mt-2 -mr-2 text-victorian-400 hover:text-gold-400 cursor-pointer p-2"><X className="w-8 h-8" /></button>
         </div>

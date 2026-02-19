@@ -39,6 +39,7 @@ export default function EmbedMapViewer({ map, tokens, zones }: Props) {
     const supabase = createClient()
     const mapId = map.id
 
+    // Re-fetch all data (used only by realtime events, NOT on initial mount)
     const fetchData = async () => {
       const [mapRes, rawTokensRes, zonesRes] = await Promise.all([
         supabase.from('maps').select('*').eq('id', mapId).single(),
@@ -71,11 +72,15 @@ export default function EmbedMapViewer({ map, tokens, zones }: Props) {
         role: t.user_id ? (profileMap[t.user_id]?.role ?? 'player') : 'player',
       } as MapTokenWithProfile))
 
-      setTokensState(builtTokens)
+      // Only update if we actually got tokens — avoid overwriting server data with empty anon result
+      if (builtTokens.length > 0 || rawTokens.length === 0) {
+        setTokensState(builtTokens)
+      }
       setZonesState((zonesRes.data ?? []) as MapLockedZone[])
     }
 
-    fetchData()
+    // Do NOT call fetchData() on mount — trust server-rendered props.
+    // Client-side anon in iframe often fails due to third-party cookie blocking.
 
     const channel = supabase
       .channel(`embed_map_view:${mapId}`, { config: { broadcast: { self: false } } })
