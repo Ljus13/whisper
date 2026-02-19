@@ -126,6 +126,7 @@ export interface GrantedSkill {
   effect_potion_digest: number
   times_used: number
   last_used_at: string | null
+  is_transferable: boolean
   is_active: boolean
   created_at: string
   updated_at: string

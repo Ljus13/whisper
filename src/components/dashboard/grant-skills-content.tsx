@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Zap, Search, Gift, Users, ScrollText, X, ChevronLeft, ChevronRight,
   Clock, CheckCircle, Sparkles, Shield, Crown, Swords, Calendar, Repeat, Infinity,
-  Pencil, Trash2, Settings
+  Pencil, Trash2, Settings, LockKeyhole
 } from 'lucide-react'
 import {
   getPlayersForGrantSkill,
@@ -228,6 +228,7 @@ function GrantForm({
   const [title, setTitle] = useState('')
   const [detail, setDetail] = useState('')
   const [imageUrl, setImageUrl] = useState('')
+  const [isTransferable, setIsTransferable] = useState(false)
   const [reusePolicy, setReusePolicy] = useState<'once' | 'cooldown' | 'unlimited'>('once')
   const [cooldownValue, setCooldownValue] = useState('60')
   const [cooldownUnit, setCooldownUnit] = useState<'min' | 'hr'>('min')
@@ -265,6 +266,7 @@ function GrantForm({
       title: title.trim(),
       detail: detail.trim() || undefined,
       imageUrl: imageUrl.trim() || null,
+      isTransferable,
       reusePolicy,
       cooldownMinutes,
       expiresAt,
@@ -364,6 +366,26 @@ function GrantForm({
             <span className="text-xs text-victorian-500">Preview</span>
           </div>
         )}
+      </div>
+
+      {/* 5.2c Transferable toggle */}
+      <div>
+        <label className="block text-sm text-victorian-300 mb-2">การส่งมอบ</label>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setIsTransferable(false)}
+            className={`px-3 py-1.5 rounded-lg text-sm border transition-all flex items-center gap-1.5 ${
+              !isTransferable ? 'border-red-400/50 bg-red-400/10 text-red-300' : 'border-victorian-700 text-victorian-400 hover:border-victorian-500'
+            }`}>
+            <LockKeyhole className="w-3.5 h-3.5" /> โอนไม่ได้
+          </button>
+          <button type="button" onClick={() => setIsTransferable(true)}
+            className={`px-3 py-1.5 rounded-lg text-sm border transition-all flex items-center gap-1.5 ${
+              isTransferable ? 'border-green-400/50 bg-green-400/10 text-green-300' : 'border-victorian-700 text-victorian-400 hover:border-victorian-500'
+            }`}>
+            <Repeat className="w-3.5 h-3.5" /> โอนได้
+          </button>
+        </div>
+        <p className="text-xs text-victorian-500 mt-1">{isTransferable ? 'ผู้เล่นสามารถส่งมอบให้ผู้เล่นอื่นได้' : 'ผูกมัดกับผู้เล่นคนนี้ ไม่สามารถส่งมอบได้'}</p>
       </div>
 
       {/* 5.3 Reuse policy */}
@@ -497,6 +519,7 @@ interface GrantedSkillRow {
   reuse_policy: 'once' | 'cooldown' | 'unlimited'
   cooldown_minutes: number | null
   expires_at: string | null
+  is_transferable: boolean
   is_active: boolean
   times_used: number
   effect_hp: number
@@ -523,6 +546,7 @@ function EditGrantForm({
   const [title, setTitle] = useState(gs.title)
   const [detail, setDetail] = useState(gs.detail || '')
   const [imageUrl, setImageUrl] = useState(gs.image_url || '')
+  const [isTransferable, setIsTransferable] = useState(gs.is_transferable)
   const [reusePolicy, setReusePolicy] = useState<'once' | 'cooldown' | 'unlimited'>(gs.reuse_policy)
   const [cooldownValue, setCooldownValue] = useState(
     gs.cooldown_minutes ? (gs.cooldown_minutes >= 60 ? String(gs.cooldown_minutes / 60) : String(gs.cooldown_minutes)) : '60'
@@ -561,6 +585,7 @@ function EditGrantForm({
       title: title.trim(),
       detail: detail.trim() || null,
       imageUrl: imageUrl.trim() || null,
+      isTransferable,
       reusePolicy,
       cooldownMinutes,
       expiresAt,
@@ -642,6 +667,26 @@ function EditGrantForm({
             <span className="text-xs text-victorian-500">Preview</span>
           </div>
         )}
+      </div>
+
+      {/* Transferable toggle */}
+      <div>
+        <label className="block text-sm text-victorian-300 mb-2">การส่งมอบ</label>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setIsTransferable(false)}
+            className={`px-3 py-1.5 rounded-lg text-sm border transition-all flex items-center gap-1.5 ${
+              !isTransferable ? 'border-red-400/50 bg-red-400/10 text-red-300' : 'border-victorian-700 text-victorian-400 hover:border-victorian-500'
+            }`}>
+            <LockKeyhole className="w-3.5 h-3.5" /> โอนไม่ได้
+          </button>
+          <button type="button" onClick={() => setIsTransferable(true)}
+            className={`px-3 py-1.5 rounded-lg text-sm border transition-all flex items-center gap-1.5 ${
+              isTransferable ? 'border-green-400/50 bg-green-400/10 text-green-300' : 'border-victorian-700 text-victorian-400 hover:border-victorian-500'
+            }`}>
+            <Repeat className="w-3.5 h-3.5" /> โอนได้
+          </button>
+        </div>
+        <p className="text-xs text-victorian-500 mt-1">{isTransferable ? 'ผู้เล่นสามารถส่งมอบให้ผู้เล่นอื่นได้' : 'ผูกมัดกับผู้เล่นคนนี้'}</p>
       </div>
 
       {/* Reuse policy */}

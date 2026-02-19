@@ -5,7 +5,7 @@ import type { Profile, SkillType, SkillPathway, SkillSequence, Skill, PlayerPath
 import {
   ArrowLeft, ChevronDown, ChevronRight, Plus, Trash2, Sparkles, Zap,
   GitBranch, Layers, Shield, Lock, BookOpen, Pencil, Copy, Check, X, ScrollText,
-  Gift, Clock, Infinity
+  Gift, Clock, Infinity, Send, Users, LockKeyhole, Search
 } from 'lucide-react'
 import {
   createSkillType, updateSkillType, deleteSkillType,
@@ -14,7 +14,7 @@ import {
   createSkill, updateSkill, deleteSkill,
   castSkill
 } from '@/app/actions/skills'
-import { getGrantedSkillsForPlayer, useGrantedSkill as castGrantedSkill } from '@/app/actions/granted-skills'
+import { getGrantedSkillsForPlayer, useGrantedSkill as castGrantedSkill, transferGrantedSkill, getPlayersForTransfer } from '@/app/actions/granted-skills'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
 import { OrnamentedCard } from '@/components/ui/ornaments'
 import { createClient } from '@/lib/supabase/client'
@@ -516,6 +516,44 @@ function PlayerSkillView({
   const [grantedError, setGrantedError] = useState<string | null>(null)
   const [grantedCopied, setGrantedCopied] = useState(false)
   const [grantedShowAll, setGrantedShowAll] = useState(false)
+  const [grantedSearch, setGrantedSearch] = useState('')
+
+  // Transfer state
+  const [transferringGrant, setTransferringGrant] = useState<any | null>(null)
+  const [transferPlayers, setTransferPlayers] = useState<{ id: string; display_name: string | null; avatar_url: string | null }[]>([])
+  const [transferSearch, setTransferSearch] = useState('')
+  const [transferLoading, setTransferLoading] = useState(false)
+  const [transferMsg, setTransferMsg] = useState<string | null>(null)
+  const [transferConfirmTarget, setTransferConfirmTarget] = useState<{ id: string; display_name: string | null; avatar_url: string | null } | null>(null)
+  const [isPendingTransfer, startTransferTransition] = useTransition()
+
+  // Transfer handlers
+  function handleOpenTransfer(gs: any) {
+    setTransferringGrant(gs)
+    setTransferSearch('')
+    setTransferMsg(null)
+    setTransferConfirmTarget(null)
+    setTransferLoading(true)
+    getPlayersForTransfer().then(r => {
+      setTransferPlayers(r.players || [])
+      setTransferLoading(false)
+    })
+  }
+
+  function handleConfirmTransfer(targetId: string) {
+    if (!transferringGrant) return
+    startTransferTransition(async () => {
+      const r = await transferGrantedSkill(transferringGrant.id, targetId)
+      if (r.error) {
+        setTransferMsg(r.error)
+      } else {
+        setTransferMsg(`ส่งมอบให้ ${r.targetName} สำเร็จ!`)
+        setTransferringGrant(null)
+        // Refresh data
+        onRefresh()
+      }
+    })
+  }
 
   // Determine which skills the player can access
   function canAccessSkill(skill: Skill): boolean {
@@ -1099,143 +1137,151 @@ function PlayerSkillView({
 
       {/* ═══ อื่น ๆ — Granted Skills Section ═══ */}
       {activeGrantedSkills.length > 0 && (() => {
-        const INITIAL_SHOW = 5
-        const visibleGranted = grantedShowAll ? activeGrantedSkills : activeGrantedSkills.slice(0, INITIAL_SHOW)
+        const filtered = grantedSearch.trim()
+          ? activeGrantedSkills.filter((gs: any) =>
+              gs.title?.toLowerCase().includes(grantedSearch.toLowerCase()) ||
+              gs.detail?.toLowerCase().includes(grantedSearch.toLowerCase()) ||
+              gs.skills?.name?.toLowerCase().includes(grantedSearch.toLowerCase())
+            )
+          : activeGrantedSkills
         return (
         <OrnamentedCard className="p-5 md:p-6">
-          <h3 className="heading-victorian text-2xl flex items-center gap-3 mb-4">
-            <Gift className="w-6 h-6 text-gold-400" /> อื่น ๆ
-            <span className="text-sm text-victorian-400 font-normal">สกิลที่ได้รับมอบจากทีมงาน</span>
-          </h3>
+          {/* Header + search */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
+            <h3 className="heading-victorian text-2xl flex items-center gap-3 flex-1 min-w-0">
+              <Gift className="w-6 h-6 text-gold-400 flex-shrink-0" /> อื่น ๆ
+              <span className="text-sm text-victorian-400 font-normal truncate">สมบัติ / ของวิเศษ / ม้วนคัมภีร์ / น้ำยา</span>
+            </h3>
+            <div className="relative flex-shrink-0 w-full sm:w-52">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-victorian-500" />
+              <input
+                type="text"
+                placeholder="ค้นหา..."
+                value={grantedSearch}
+                onChange={e => setGrantedSearch(e.target.value)}
+                className="input-victorian w-full !pl-9 !py-1.5 text-sm"
+              />
+            </div>
+          </div>
 
-          <div className="space-y-3">
-            {visibleGranted.map((gs: any) => {
+          {filtered.length === 0 ? (
+            <p className="text-center text-victorian-500 text-sm py-6">ไม่พบรายการที่ค้นหา</p>
+          ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filtered.map((gs: any) => {
               const skillInfo = gs.skills || {}
               const { canUse, remainingMin } = getGrantedCooldownStatus(gs)
               const hasEffects = gs.effect_hp || gs.effect_sanity || gs.effect_max_sanity || gs.effect_travel || gs.effect_max_travel || gs.effect_spirituality || gs.effect_max_spirituality || gs.effect_potion_digest
 
               return (
-                <div key={gs.id} className="rounded-xl border-2 border-gold-400/20 bg-victorian-800/50 hover:border-gold-400/40 transition-all overflow-hidden">
-                  {/* Skill image banner */}
-                  {gs.image_url && (
-                    <div className="relative w-full h-36 md:h-44">
+                <div key={gs.id} className="rounded-xl border-2 border-gold-400/20 bg-victorian-800/50 hover:border-gold-400/40 transition-all overflow-hidden flex flex-col">
+                  {/* Image or plain header */}
+                  {gs.image_url ? (
+                    <div className="relative w-full h-32 flex-shrink-0">
                       <img
                         src={gs.image_url}
                         alt={gs.title}
                         className="w-full h-full object-cover"
                         onError={e => { (e.target as HTMLImageElement).parentElement!.style.display = 'none' }}
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-victorian-800/90 via-victorian-800/30 to-transparent" />
-                      <div className="absolute bottom-0 left-0 right-0 px-4 pb-3 flex items-end gap-2">
-                        <Gift className="w-5 h-5 text-gold-400 flex-shrink-0 drop-shadow" />
-                        <span className="text-lg font-semibold text-gold-100 drop-shadow">{gs.title}</span>
+                      <div className="absolute inset-0 bg-gradient-to-t from-victorian-900/95 via-victorian-900/30 to-transparent" />
+                      <div className="absolute bottom-0 left-0 right-0 px-3 pb-2 flex items-end gap-1.5">
+                        <Gift className="w-4 h-4 text-gold-400 flex-shrink-0 drop-shadow" />
+                        <span className="text-sm font-semibold text-gold-100 drop-shadow leading-tight line-clamp-2">{gs.title}</span>
                       </div>
                     </div>
-                  )}
-                  <div className="p-4">
-                  {/* Header (no image) */}
-                  {!gs.image_url && (
-                    <div className="flex items-center gap-2 mb-3">
-                      <Gift className="w-5 h-5 text-gold-400 flex-shrink-0" />
-                      <span className="text-lg font-semibold text-gold-200">{gs.title}</span>
+                  ) : (
+                    <div className="px-3 pt-3 pb-2 flex items-start gap-2">
+                      <Gift className="w-4 h-4 text-gold-400 flex-shrink-0 mt-0.5" />
+                      <span className="text-sm font-semibold text-gold-200 leading-tight">{gs.title}</span>
                       {gs.reuse_policy === 'cooldown' && (
-                        <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1 flex-shrink-0">
-                          <Clock className="w-3 h-3" /> {gs.cooldown_minutes >= 60 ? `${Math.floor(gs.cooldown_minutes / 60)} ชม.` : `${gs.cooldown_minutes} นาที`}
+                        <span className="ml-auto text-xs px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1 flex-shrink-0">
+                          <Clock className="w-3 h-3" /> {gs.cooldown_minutes >= 60 ? `${Math.floor(gs.cooldown_minutes / 60)}h` : `${gs.cooldown_minutes}m`}
                         </span>
                       )}
                       {gs.reuse_policy === 'unlimited' && (
-                        <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-300 border border-green-500/30 flex items-center gap-1 flex-shrink-0">
-                          <Infinity className="w-3 h-3" /> ไม่จำกัด
+                        <span className="ml-auto text-xs px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-300 border border-green-500/30 flex items-center gap-1 flex-shrink-0">
+                          <Infinity className="w-3 h-3" />
                         </span>
                       )}
                     </div>
                   )}
 
-                  {/* 2-column layout on desktop */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {/* Left box: รายละเอียด (grant info only) */}
-                    <div className="rounded-lg border border-gold-400/15 bg-victorian-900/50 p-3 space-y-2">
-                      <p className="text-xs text-victorian-500 uppercase tracking-wider font-semibold border-b border-gold-400/10 pb-1.5">รายละเอียด</p>
+                  {/* Body */}
+                  <div className="px-3 pb-3 flex flex-col flex-1 gap-2">
+                    {/* Detail */}
+                    {gs.detail && (
+                      <p className="text-xs text-victorian-400 leading-relaxed line-clamp-3">{gs.detail}</p>
+                    )}
 
-                      {gs.detail ? (
-                        <p className="text-sm text-victorian-300 leading-relaxed">{gs.detail}</p>
-                      ) : (
-                        <p className="text-xs text-victorian-600 italic">ไม่มีรายละเอียดเพิ่มเติม</p>
-                      )}
-
-                      {gs.expires_at && (
-                        <div className="text-xs text-victorian-500 flex items-center gap-1 pt-1 border-t border-gold-400/10">
-                          <Clock className="w-3 h-3" /> หมดอายุ: {new Date(gs.expires_at).toLocaleString('th-TH')}
-                        </div>
-                      )}
+                    {/* Skill + spirit cost */}
+                    <div className="flex items-center justify-between gap-2 py-1.5 border-t border-gold-400/10">
+                      <span className="text-xs text-victorian-300 font-medium truncate">{skillInfo.name || '—'}</span>
+                      <span className="text-xs text-purple-300 flex items-center gap-1 bg-purple-500/15 px-1.5 py-0.5 rounded-full border border-purple-500/30 flex-shrink-0">
+                        <Zap className="w-3 h-3" /> {skillInfo.spirit_cost ?? 0}
+                      </span>
                     </div>
 
-                    {/* Right box: ผลลัพธ์การใช้งาน (original skill + effects + button) */}
-                    <div className="rounded-lg border border-gold-400/15 bg-victorian-900/50 p-3 space-y-3 flex flex-col">
-                      <p className="text-xs text-victorian-500 uppercase tracking-wider font-semibold border-b border-gold-400/10 pb-1.5">ผลลัพธ์การใช้งาน</p>
-
-                      {/* Original skill info */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm text-victorian-200 font-medium">{skillInfo.name || '—'}</span>
-                        <span className="text-xs text-purple-300 flex items-center gap-1 bg-purple-500/15 px-2 py-0.5 rounded-full border border-purple-500/30 flex-shrink-0">
-                          <Zap className="w-3 h-3" /> {skillInfo.spirit_cost ?? 0}
-                        </span>
+                    {/* Effects */}
+                    {hasEffects && (
+                      <div className="flex flex-wrap gap-1">
+                        {gs.effect_hp !== 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${gs.effect_hp > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_hp > 0 ? '+' : ''}{gs.effect_hp} HP</span>}
+                        {gs.effect_sanity !== 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${gs.effect_sanity > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_sanity > 0 ? '+' : ''}{gs.effect_sanity} San</span>}
+                        {gs.effect_max_sanity !== 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${gs.effect_max_sanity > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_max_sanity > 0 ? '+' : ''}{gs.effect_max_sanity} MaxSan</span>}
+                        {gs.effect_travel !== 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${gs.effect_travel > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_travel > 0 ? '+' : ''}{gs.effect_travel} Trv</span>}
+                        {gs.effect_max_travel !== 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${gs.effect_max_travel > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_max_travel > 0 ? '+' : ''}{gs.effect_max_travel} MaxTrv</span>}
+                        {gs.effect_spirituality !== 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${gs.effect_spirituality > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_spirituality > 0 ? '+' : ''}{gs.effect_spirituality} Spr</span>}
+                        {gs.effect_max_spirituality !== 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${gs.effect_max_spirituality > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_max_spirituality > 0 ? '+' : ''}{gs.effect_max_spirituality} MaxSpr</span>}
+                        {gs.effect_potion_digest !== 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${gs.effect_potion_digest > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_potion_digest > 0 ? '+' : ''}{gs.effect_potion_digest} Dig</span>}
                       </div>
-                      {skillInfo.description && (
-                        <p className="text-xs text-victorian-400 leading-relaxed -mt-1">{skillInfo.description}</p>
-                      )}
+                    )}
 
-                      {/* Effects */}
-                      {hasEffects && (
-                        <div className="space-y-1">
-                          <p className="text-xs text-amber-400 font-medium">ผลกระทบที่จะได้รับ</p>
-                          <div className="flex flex-wrap gap-1">
-                            {gs.effect_hp !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${gs.effect_hp > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_hp > 0 ? '+' : ''}{gs.effect_hp} HP</span>}
-                            {gs.effect_sanity !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${gs.effect_sanity > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_sanity > 0 ? '+' : ''}{gs.effect_sanity} Sanity</span>}
-                            {gs.effect_max_sanity !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${gs.effect_max_sanity > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_max_sanity > 0 ? '+' : ''}{gs.effect_max_sanity} Max Sanity</span>}
-                            {gs.effect_travel !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${gs.effect_travel > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_travel > 0 ? '+' : ''}{gs.effect_travel} Travel</span>}
-                            {gs.effect_max_travel !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${gs.effect_max_travel > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_max_travel > 0 ? '+' : ''}{gs.effect_max_travel} Max Travel</span>}
-                            {gs.effect_spirituality !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${gs.effect_spirituality > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_spirituality > 0 ? '+' : ''}{gs.effect_spirituality} Spirit</span>}
-                            {gs.effect_max_spirituality !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${gs.effect_max_spirituality > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_max_spirituality > 0 ? '+' : ''}{gs.effect_max_spirituality} Max Spirit</span>}
-                            {gs.effect_potion_digest !== 0 && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${gs.effect_potion_digest > 0 ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>{gs.effect_potion_digest > 0 ? '+' : ''}{gs.effect_potion_digest} Digest</span>}
-                          </div>
+                    {/* Expiry */}
+                    {gs.expires_at && (
+                      <div className="text-xs text-victorian-500 flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> {new Date(gs.expires_at).toLocaleDateString('th-TH')}
+                      </div>
+                    )}
+
+                    {/* Spacer */}
+                    <div className="flex-1" />
+
+                    {/* Use button */}
+                    <button
+                      onClick={() => handleUseGranted(gs)}
+                      disabled={isPending || !canUse}
+                      className={`w-full px-3 py-2 rounded-lg text-sm font-bold transition-all mt-1 ${
+                        canUse
+                          ? 'btn-gold hover:scale-105 active:scale-95'
+                          : 'bg-victorian-800 text-victorian-500 border border-victorian-700 cursor-not-allowed'
+                      }`}
+                    >
+                      {isPending ? '...' : !canUse
+                        ? (gs.reuse_policy === 'once' && gs.times_used > 0 ? 'ใช้แล้ว' : remainingMin > 0 ? `พัก ${remainingMin} นาที` : 'ไม่สามารถใช้ได้')
+                        : 'ใช้สกิล'}
+                    </button>
+
+                    {/* Transfer / Bound */}
+                    <div className="pt-1 border-t border-gold-400/10">
+                      {gs.is_transferable ? (
+                        <button
+                          onClick={() => handleOpenTransfer(gs)}
+                          className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-green-500/30 bg-green-500/10 text-green-300 hover:bg-green-500/20 text-xs font-medium transition-all"
+                        >
+                          <Send className="w-3.5 h-3.5" /> ส่งมอบ
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-xs text-victorian-600 justify-center py-0.5">
+                          <LockKeyhole className="w-3 h-3" />
+                          <span>ผูกมัดกับ <span className="text-victorian-400">{profile?.display_name || 'คุณ'}</span></span>
                         </div>
                       )}
-
-                      {/* Use button — pushed to bottom */}
-                      <div className="mt-auto pt-1">
-                        <button
-                          onClick={() => handleUseGranted(gs)}
-                          disabled={isPending || !canUse}
-                          className={`w-full px-5 py-2.5 rounded-xl text-base font-bold transition-all ${
-                            canUse
-                              ? 'btn-gold hover:scale-105 active:scale-95'
-                              : 'bg-victorian-800 text-victorian-500 border border-victorian-700 cursor-not-allowed'
-                          }`}
-                        >
-                          {isPending ? '...' : !canUse
-                            ? (gs.reuse_policy === 'once' && gs.times_used > 0 ? 'ใช้แล้ว' : remainingMin > 0 ? `พักตัวอีก ${remainingMin} นาที` : 'ไม่สามารถใช้ได้')
-                            : 'ใช้สกิล'}
-                        </button>
-                      </div>
                     </div>
                   </div>
-                  </div>{/* end p-4 */}
                 </div>
               )
             })}
           </div>
-
-          {/* Load more / collapse */}
-          {activeGrantedSkills.length > INITIAL_SHOW && (
-            <button
-              onClick={() => setGrantedShowAll((v: boolean) => !v)}
-              className="mt-4 w-full py-2 rounded-lg border border-gold-400/20 text-victorian-400 hover:text-gold-300 hover:border-gold-400/40 text-sm transition-colors"
-            >
-              {grantedShowAll
-                ? `ซ่อน (แสดงแค่ ${INITIAL_SHOW} รายการ)`
-                : `แสดงทั้งหมด ${activeGrantedSkills.length} รายการ`}
-            </button>
           )}
         </OrnamentedCard>
         )
@@ -1423,6 +1469,137 @@ function PlayerSkillView({
                 </div>
               )
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Transfer Modal ═══ */}
+      {transferringGrant && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => setTransferringGrant(null)}
+          style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border-2 border-green-500/30 p-6 space-y-4 max-h-[80vh] flex flex-col"
+            style={{ backgroundColor: '#1A1612' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-green-300 flex items-center gap-2">
+                <Send className="w-5 h-5" /> ส่งมอบ
+              </h3>
+              <button onClick={() => setTransferringGrant(null)} className="text-victorian-400 hover:text-gold-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Item being transferred */}
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-victorian-900/50 border border-gold-400/10">
+              {transferringGrant.image_url ? (
+                <img src={transferringGrant.image_url} alt="" className="w-10 h-10 rounded-lg object-cover border border-gold-400/20 flex-shrink-0" />
+              ) : (
+                <div className="w-10 h-10 rounded-lg bg-victorian-800 border border-gold-400/10 flex items-center justify-center flex-shrink-0">
+                  <Gift className="w-5 h-5 text-victorian-600" />
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gold-200 truncate">{transferringGrant.title}</p>
+                <p className="text-xs text-victorian-500 truncate">{transferringGrant.skills?.name || '—'}</p>
+              </div>
+            </div>
+
+            {transferMsg && (
+              <div className={`p-3 rounded-lg text-sm ${transferMsg.includes('สำเร็จ') ? 'bg-green-900/30 border border-green-500/30 text-green-300' : 'bg-red-900/30 border border-red-500/30 text-red-300'}`}>
+                {transferMsg}
+              </div>
+            )}
+
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-victorian-500" />
+              <input
+                type="text"
+                placeholder="ค้นหาผู้เล่น..."
+                value={transferSearch}
+                onChange={e => setTransferSearch(e.target.value)}
+                className="input-victorian w-full !pl-9"
+              />
+            </div>
+
+            {/* Confirm panel — shown after selecting a player */}
+            {transferConfirmTarget ? (
+              <div className="rounded-xl border-2 border-amber-500/40 bg-amber-900/20 p-4 space-y-4">
+                <p className="text-sm text-amber-200 font-semibold text-center">ยืนยันการส่งมอบ</p>
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-victorian-900/60 border border-gold-400/10">
+                  {transferConfirmTarget.avatar_url ? (
+                    <img src={transferConfirmTarget.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-victorian-800 flex items-center justify-center flex-shrink-0">
+                      <Users className="w-5 h-5 text-victorian-500" />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gold-200 truncate">{transferConfirmTarget.display_name || 'ไม่ระบุชื่อ'}</p>
+                    <p className="text-xs text-victorian-500">ผู้รับโอน</p>
+                  </div>
+                </div>
+                <p className="text-xs text-amber-300/80 text-center leading-relaxed">เมื่อส่งมอบแล้ว <span className="font-semibold text-amber-200">{transferringGrant?.title}</span> จะหายไปจากคลังแอบของคุณทันที</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setTransferConfirmTarget(null)}
+                    disabled={isPendingTransfer}
+                    className="flex-1 py-2 rounded-lg border border-victorian-700 text-victorian-400 hover:border-victorian-500 text-sm transition-all disabled:opacity-50"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    onClick={() => handleConfirmTransfer(transferConfirmTarget.id)}
+                    disabled={isPendingTransfer}
+                    className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isPendingTransfer ? (
+                      <span className="animate-pulse">กำลังส่ง...</span>
+                    ) : (
+                      <><Send className="w-4 h-4" /> ยืนยันส่งมอบ</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+            <>
+            {/* Player list */}
+            <div className="flex-1 overflow-y-auto space-y-1 min-h-0">
+              {transferLoading ? (
+                <div className="space-y-2 py-4">{[...Array(4)].map((_, i) => <div key={i} className="h-10 rounded bg-victorian-900/50 animate-pulse" />)}</div>
+              ) : (() => {
+                const filtered = transferSearch.trim()
+                  ? transferPlayers.filter(p => p.display_name?.toLowerCase().includes(transferSearch.toLowerCase()))
+                  : transferPlayers
+                return filtered.length === 0 ? (
+                  <p className="text-center text-victorian-500 text-sm py-4">ไม่พบผู้เล่น</p>
+                ) : (
+                  filtered.map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => setTransferConfirmTarget(p)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-victorian-800 hover:border-green-500/30 hover:bg-green-500/5 text-left transition-all"
+                    >
+                      {p.avatar_url ? (
+                        <img src={p.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-victorian-800 flex items-center justify-center flex-shrink-0">
+                          <Users className="w-4 h-4 text-victorian-500" />
+                        </div>
+                      )}
+                      <span className="text-sm text-victorian-200 truncate">{p.display_name || 'ไม่ระบุชื่อ'}</span>
+                      <ChevronRight className="w-4 h-4 text-victorian-600 ml-auto flex-shrink-0" />
+                    </button>
+                  ))
+                )
+              })()}
+            </div>
+            </>)}
           </div>
         </div>
       )}

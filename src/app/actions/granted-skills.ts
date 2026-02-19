@@ -32,6 +32,7 @@ export interface GrantSkillInput {
   title: string
   detail?: string
   imageUrl?: string | null
+  isTransferable?: boolean
   reusePolicy: 'once' | 'cooldown' | 'unlimited'
   cooldownMinutes?: number
   expiresAt?: string | null
@@ -92,6 +93,7 @@ export async function grantSkillToPlayer(input: GrantSkillInput) {
         title: input.title.trim(),
         detail: input.detail?.trim() || null,
         image_url: input.imageUrl?.trim() || null,
+        is_transferable: input.isTransferable ?? false,
         reuse_policy: input.reusePolicy,
         cooldown_minutes: input.reusePolicy === 'cooldown' ? (input.cooldownMinutes || 60) : null,
         expires_at: input.expiresAt || null,
@@ -132,6 +134,7 @@ export interface UpdateGrantSkillInput {
   title: string
   detail?: string | null
   imageUrl?: string | null
+  isTransferable?: boolean
   reusePolicy: 'once' | 'cooldown' | 'unlimited'
   cooldownMinutes?: number | null
   expiresAt?: string | null
@@ -177,6 +180,7 @@ export async function updateGrantedSkill(input: UpdateGrantSkillInput) {
         effect_spirituality: input.effectSpirituality ?? 0,
         effect_max_spirituality: input.effectMaxSpirituality ?? 0,
         effect_potion_digest: input.effectPotionDigest ?? 0,
+        is_transferable: input.isTransferable ?? false,
         is_active: input.isActive ?? true,
       })
       .eq('id', input.grantedSkillId)
@@ -240,6 +244,100 @@ export async function deleteGrantedSkill(grantedSkillId: string) {
     return { success: true }
   } catch (e: any) {
     return { error: e.message || 'เกิดข้อผิดพลาด' }
+  }
+}
+
+/* ══════════════════════════════════════════════
+   TRANSFER GRANTED SKILL (ผู้เล่นโอนของให้ผู้เล่นอื่น)
+   ══════════════════════════════════════════════ */
+
+export async function transferGrantedSkill(grantedSkillId: string, targetPlayerId: string) {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Not authenticated' }
+
+    if (user.id === targetPlayerId) return { error: 'ไม่สามารถโอนให้ตัวเองได้' }
+
+    // 1) Fetch the granted skill
+    const { data: gs } = await supabase
+      .from('granted_skills')
+      .select('*')
+      .eq('id', grantedSkillId)
+      .eq('player_id', user.id)
+      .single()
+
+    if (!gs) return { error: 'ไม่พบรายการ หรือไม่ใช่ของคุณ' }
+    if (!gs.is_active) return { error: 'สิ่งนี้ถูกปิดใช้งานแล้ว' }
+    if (!gs.is_transferable) return { error: 'สิ่งนี้ไม่สามารถส่งมอบได้' }
+
+    // 2) Verify target player exists
+    const { data: target } = await supabase
+      .from('profiles')
+      .select('id, display_name')
+      .eq('id', targetPlayerId)
+      .single()
+
+    if (!target) return { error: 'ไม่พบผู้เล่นปลายทาง' }
+
+    // 3) Fetch sender name
+    const { data: sender } = await supabase
+      .from('profiles')
+      .select('display_name')
+      .eq('id', user.id)
+      .single()
+
+    // 4) Transfer: update player_id to new owner, reset usage
+    const { error: transferErr } = await supabase
+      .from('granted_skills')
+      .update({
+        player_id: targetPlayerId,
+        times_used: 0,
+        last_used_at: null,
+      })
+      .eq('id', gs.id)
+
+    if (transferErr) return { error: transferErr.message }
+
+    // 5) Log the transfer
+    await supabase.from('granted_skill_logs').insert({
+      granted_skill_id: gs.id,
+      player_id: user.id,
+      skill_id: gs.skill_id,
+      granted_by: user.id,
+      action: 'transfer',
+      title: gs.title,
+      detail: gs.detail,
+      note: `โอนจาก ${sender?.display_name || 'ผู้เล่น'} ให้ ${target.display_name || 'ผู้เล่น'}`,
+    })
+
+    revalidatePath('/dashboard/skills')
+    return { success: true, targetName: target.display_name || 'ผู้เล่น' }
+  } catch (e: any) {
+    return { error: e.message || 'เกิดข้อผิดพลาด' }
+  }
+}
+
+/* ══════════════════════════════════════════════
+   GET PLAYERS FOR TRANSFER (ผู้เล่นอื่นทั้งหมด)
+   ══════════════════════════════════════════════ */
+
+export async function getPlayersForTransfer() {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Not authenticated', players: [] }
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, display_name, avatar_url')
+      .neq('id', user.id)
+      .order('display_name')
+
+    if (error) return { error: error.message, players: [] }
+    return { players: data || [] }
+  } catch (e: any) {
+    return { error: e.message, players: [] }
   }
 }
 
