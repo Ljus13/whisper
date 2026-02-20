@@ -1,6 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import PunishmentBanner from '@/components/dashboard/punishment-banner'
 import NotificationBell from '@/components/dashboard/notification-bell'
+import MaintenanceBanner from '@/components/dashboard/maintenance-banner'
+import MaintenanceToggle from '@/components/dashboard/maintenance-toggle'
+import MaintenanceWall from '@/components/dashboard/maintenance-wall'
+import { getMaintenanceStatus } from '@/app/actions/maintenance'
 
 export default async function DashboardLayout({
   children,
@@ -11,6 +15,7 @@ export default async function DashboardLayout({
   const { data: { user } } = await supabase.auth.getUser()
 
   let isAdmin = false
+  let isDM = false
   if (user) {
     const { data: profile } = await supabase
       .from('profiles')
@@ -18,6 +23,14 @@ export default async function DashboardLayout({
       .eq('id', user.id)
       .single()
     isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
+    isDM = profile?.role === 'dm'
+  }
+
+  const maintenance = await getMaintenanceStatus()
+
+  // Player + maintenance active → show blocking wall (no dashboard access)
+  if (!isAdmin && user && maintenance.enabled) {
+    return <MaintenanceWall webNote={maintenance.web_note} />
   }
 
   return (
@@ -27,6 +40,19 @@ export default async function DashboardLayout({
         <div className="fixed top-4 right-4 z-50">
           <NotificationBell userId={user.id} isAdmin={isAdmin} />
         </div>
+      )}
+
+      {/* DM: Floating maintenance toggle button */}
+      {isDM && (
+        <MaintenanceToggle
+          initialEnabled={maintenance.enabled}
+          initialWebNote={maintenance.web_note}
+        />
+      )}
+
+      {/* Admin/DM: Maintenance banner when active */}
+      {isAdmin && maintenance.enabled && (
+        <MaintenanceBanner webNote={maintenance.web_note} />
       )}
 
       {!isAdmin && user && (

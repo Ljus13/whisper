@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import LoginForm from '@/components/auth/login-form'
+import { getMaintenanceStatus } from '@/app/actions/maintenance'
 
 export default async function HomePage() {
   // If already logged in, redirect to dashboard
@@ -9,6 +10,12 @@ export default async function HomePage() {
 
   if (user) {
     redirect('/dashboard')
+  }
+
+  // Check maintenance mode — block login for non-authenticated users
+  const maintenance = await getMaintenanceStatus()
+  if (maintenance.enabled) {
+    redirect('/maintenance')
   }
 
   return (
