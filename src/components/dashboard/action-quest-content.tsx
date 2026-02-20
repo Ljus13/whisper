@@ -715,7 +715,7 @@ const RoleplaySubRow = memo(function RoleplaySubRow({ sub, isAdmin, onReview }: 
 
 /* ═══════════════════ Main Component ═══════════════════ */
 
-export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTab = 'actions', usePageTabs = false }: { userId: string; isAdmin: boolean; defaultTab?: TabKey; usePageTabs?: boolean }) {
+export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTab = 'quests', usePageTabs = false }: { userId: string; isAdmin: boolean; defaultTab?: TabKey; usePageTabs?: boolean }) {
   const [isPending, startTransition] = useTransition()
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>(defaultTab)
