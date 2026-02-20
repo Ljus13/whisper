@@ -2,6 +2,17 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { createNotification } from '@/app/actions/notifications'
+
+/* ── Helper: get display name ── */
+async function getDisplayName(supabase: any, userId: string): Promise<string> {
+  const { data } = await supabase
+    .from('profiles')
+    .select('display_name')
+    .eq('id', userId)
+    .single()
+  return data?.display_name || 'ผู้เล่น'
+}
 
 /* ── Helper: verify admin/dm role ── */
 async function requireAdmin() {
@@ -26,7 +37,7 @@ async function requireAdmin() {
    ADMIN: Update any player's profile fields
    ══════════════════════════════════════════════ */
 export async function adminUpdatePlayer(playerId: string, formData: FormData) {
-  const { supabase, role: currentRole } = await requireAdmin()
+  const { supabase, user, role: currentRole } = await requireAdmin()
 
   const display_name = formData.get('display_name') as string | null
   const avatar_url = formData.get('avatar_url') as string | null
@@ -137,6 +148,18 @@ export async function adminUpdatePlayer(playerId: string, formData: FormData) {
     .eq('id', playerId)
 
   if (error) return { error: error.message }
+
+  // Notification: player gets notified about admin update
+  const adminName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: playerId,
+    actorId: user.id,
+    actorName: adminName,
+    type: 'player_updated',
+    title: 'ทีมงานปรับข้อมูลของคุณ',
+    message: `ปรับปรุง: ${Object.keys(updates).join(', ')}`,
+    link: '/dashboard',
+  })
 
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/players')

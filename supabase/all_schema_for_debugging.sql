@@ -448,3 +448,22 @@ CREATE TABLE public.travel_roleplay_logs (
   CONSTRAINT travel_roleplay_logs_from_map_id_fkey FOREIGN KEY (from_map_id) REFERENCES public.maps(id),
   CONSTRAINT travel_roleplay_logs_to_map_id_fkey FOREIGN KEY (to_map_id) REFERENCES public.maps(id)
 );
+
+CREATE TABLE public.notifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  target_user_id uuid,
+  actor_id uuid NOT NULL,
+  actor_name text NOT NULL DEFAULT '',
+  type text NOT NULL DEFAULT 'info',
+  title text NOT NULL,
+  message text,
+  link text,
+  is_read boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT notifications_target_user_id_fkey FOREIGN KEY (target_user_id) REFERENCES public.profiles(id) ON DELETE CASCADE,
+  CONSTRAINT notifications_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES auth.users(id)
+);
+CREATE INDEX idx_notifications_target_user ON public.notifications(target_user_id, created_at DESC);
+CREATE INDEX idx_notifications_admin_feed ON public.notifications(created_at DESC) WHERE target_user_id IS NULL;
+CREATE INDEX idx_notifications_unread ON public.notifications(target_user_id, is_read) WHERE is_read = false;

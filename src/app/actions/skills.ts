@@ -2,6 +2,17 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { createNotification } from '@/app/actions/notifications'
+
+/* ── Helper: get display name ── */
+async function getDisplayName(supabase: any, userId: string) {
+  const { data } = await supabase
+    .from('profiles')
+    .select('display_name')
+    .eq('id', userId)
+    .single()
+  return data?.display_name || 'ผู้เล่น'
+}
 
 /* ── Helper: verify admin role ── */
 async function requireAdmin() {
@@ -427,7 +438,7 @@ export async function deleteSkill(id: string) {
    ══════════════════════════════════════════════ */
 
 export async function assignPlayerPathway(playerId: string, pathwayId: string, sequenceId: string | null) {
-  const { supabase } = await requireAdmin()
+  const { supabase, user } = await requireAdmin()
 
   // Upsert: update if exists, insert if not
   const { data: existing } = await supabase
@@ -449,6 +460,18 @@ export async function assignPlayerPathway(playerId: string, pathwayId: string, s
       .insert({ player_id: playerId, pathway_id: pathwayId, sequence_id: sequenceId })
     if (error) return { error: error.message }
   }
+
+  // Notification: player gets notified about pathway assignment
+  const adminName = await getDisplayName(supabase, user.id)
+  const { data: pw } = await supabase.from('skill_pathways').select('name').eq('id', pathwayId).single()
+  await createNotification(supabase, {
+    targetUserId: playerId,
+    actorId: user.id,
+    actorName: adminName,
+    type: 'pathway_granted',
+    title: `ทีมงานมอบเส้นทาง ${pw?.name || ''} ให้คุณ`,
+    link: '/dashboard/skills',
+  })
 
   revalidatePath('/dashboard/skills')
   revalidatePath('/dashboard/players')
@@ -572,6 +595,18 @@ export async function castSkill(skillId: string, successRate: number, roll: numb
       roll: normalizedRoll,
       outcome: outcomeLabel
     })
+
+  // Notification: admin sees skill usage
+  const playerName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: null,
+    actorId: user.id,
+    actorName: playerName,
+    type: 'skill_used',
+    title: `${playerName} ใช้สกิล "${skill.name}"`,
+    message: `ผลลัพธ์: ${outcomeLabel === 'success' ? 'สำเร็จ' : 'ล้มเหลว'} (${normalizedRoll}/${normalizedRate}) รหัส: ${referenceCode}`,
+    link: '/dashboard/skills',
+  })
 
   revalidatePath('/dashboard/skills')
   return {

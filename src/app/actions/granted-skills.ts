@@ -2,6 +2,17 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { createNotification } from '@/app/actions/notifications'
+
+/* ── Helper: get display name ── */
+async function getDisplayName(supabase: any, userId: string): Promise<string> {
+  const { data } = await supabase
+    .from('profiles')
+    .select('display_name')
+    .eq('id', userId)
+    .single()
+  return data?.display_name || 'ผู้เล่น'
+}
 
 /* ── Helper: verify admin/dm role ── */
 async function requireStaff() {
@@ -115,6 +126,17 @@ export async function grantSkillToPlayer(input: GrantSkillInput) {
       detail: input.detail?.trim() || null,
       effects_json: effects,
       note: `มอบพลัง "${skill.name}" ให้ ${player.display_name || 'ผู้เล่น'}`,
+    })
+
+    // Notification: player gets notified about receiving a skill
+    await createNotification(supabase, {
+      targetUserId: input.playerId,
+      actorId: user.id,
+      actorName: await getDisplayName(supabase, user.id),
+      type: 'skill_granted',
+      title: `คุณได้รับมอบพลัง "${input.title.trim()}"`,
+      message: `จากสกิล ${skill.name}`,
+      link: '/dashboard/skills',
     })
 
     revalidatePath('/dashboard/skills')
@@ -239,6 +261,17 @@ export async function deleteGrantedSkill(grantedSkillId: string) {
 
     if (delErr) return { error: delErr.message }
 
+    // Notification: player gets notified about revocation
+    await createNotification(supabase, {
+      targetUserId: gs.player_id,
+      actorId: user.id,
+      actorName: await getDisplayName(supabase, user.id),
+      type: 'skill_revoked',
+      title: `พลัง "${gs.title}" ถูกถอนออก`,
+      message: 'ทีมงานได้ถอนพลังของคุณ',
+      link: '/dashboard/skills',
+    })
+
     revalidatePath('/dashboard/skills')
     revalidatePath('/dashboard/grant-skills')
     return { success: true }
@@ -309,6 +342,16 @@ export async function transferGrantedSkill(grantedSkillId: string, targetPlayerI
       title: gs.title,
       detail: gs.detail,
       note: `โอนจาก ${sender?.display_name || 'ผู้เล่น'} ให้ ${target.display_name || 'ผู้เล่น'}`,
+    })
+
+    // Notification: target player gets notified about receiving transfer
+    await createNotification(supabase, {
+      targetUserId: targetPlayerId,
+      actorId: user.id,
+      actorName: sender?.display_name || 'ผู้เล่น',
+      type: 'skill_transferred',
+      title: `${sender?.display_name || 'ผู้เล่น'} ส่งมอบพลัง "${gs.title}" ให้คุณ`,
+      link: '/dashboard/skills',
     })
 
     revalidatePath('/dashboard/skills')
@@ -494,6 +537,18 @@ export async function useGrantedSkill(grantedSkillId: string, successRate: numbe
     success_rate: normalizedRate,
     roll: normalizedRoll,
     outcome,
+  })
+
+  // Notification: admin sees skill usage
+  const playerName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: null,
+    actorId: user.id,
+    actorName: playerName,
+    type: 'skill_used',
+    title: `${playerName} ใช้พลัง "${gs.title}"`,
+    message: `ผลลัพธ์: ${outcome === 'success' ? 'สำเร็จ' : 'ล้มเหลว'} (${normalizedRoll}/${normalizedRate}) รหัส: ${referenceCode}`,
+    link: '/dashboard/grant-skills',
   })
 
   revalidatePath('/dashboard/skills')

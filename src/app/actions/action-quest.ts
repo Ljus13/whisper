@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { createNotification, createNotifications } from '@/app/actions/notifications'
 
 const PAGE_SIZE = 20
 
@@ -27,6 +28,19 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>, 
     .eq('id', userId)
     .single()
   return data?.role === 'admin' || data?.role === 'dm'
+}
+
+/** Quick lookup: get display_name for a user */
+async function getDisplayName(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): Promise<string> {
+  const { data } = await supabase
+    .from('profiles')
+    .select('display_name')
+    .eq('id', userId)
+    .single()
+  return data?.display_name || 'ผู้เล่น'
 }
 
 function revalidateActionQuestPaths() {
@@ -188,6 +202,19 @@ export async function submitSleepRequest(mealUrl: string, sleepUrl: string) {
     .insert({ player_id: user.id, meal_url: mealUrl.trim(), sleep_url: sleepUrl.trim() })
 
   if (error) return { error: error.message }
+
+  // Notification: admin sees new sleep request
+  const actorName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: null,
+    actorId: user.id,
+    actorName,
+    type: 'sleep_submitted',
+    title: `${actorName} ส่งคำขอนอนหลับ`,
+    message: 'มีคำขอนอนหลับใหม่รอตรวจสอบ',
+    link: '/dashboard/action-quest/sleep',
+  })
+
   revalidateActionQuestPaths()
   return { success: true }
 }
@@ -246,6 +273,18 @@ export async function approveSleepRequest(requestId: string) {
     .update({ spirituality: playerProfile.max_spirituality })
     .eq('id', request.player_id)
 
+  // Notification: player sees sleep approved
+  const adminName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: request.player_id,
+    actorId: user.id,
+    actorName: adminName,
+    type: 'sleep_approved',
+    title: 'การนอนหลับได้รับการอนุมัติ',
+    message: 'พลังจิตวิญญาณถูกฟื้นฟูเต็มแล้ว',
+    link: '/dashboard/action-quest/sleep',
+  })
+
   revalidateActionQuestPaths()
   return { success: true }
 }
@@ -255,6 +294,16 @@ export async function rejectSleepRequest(requestId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
   if (!(await requireAdmin(supabase, user.id))) return { error: 'Admin/DM required' }
+
+  // Fetch request to get player_id for notification
+  const { data: sleepReq } = await supabase
+    .from('sleep_requests')
+    .select('id, player_id')
+    .eq('id', requestId)
+    .eq('status', 'pending')
+    .single()
+
+  if (!sleepReq) return { error: 'ไม่พบคำขอหรือคำขอถูกดำเนินการแล้ว' }
 
   const { error } = await supabase
     .from('sleep_requests')
@@ -266,6 +315,18 @@ export async function rejectSleepRequest(requestId: string) {
     .eq('id', requestId)
 
   if (error) return { error: error.message }
+
+  // Notification: player sees sleep rejected
+  const adminName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: sleepReq.player_id,
+    actorId: user.id,
+    actorName: adminName,
+    type: 'sleep_rejected',
+    title: 'การนอนหลับถูกปฏิเสธ',
+    link: '/dashboard/action-quest/sleep',
+  })
+
   revalidateActionQuestPaths()
   return { success: true }
 }
@@ -571,6 +632,18 @@ export async function submitAction(codeStr: string, evidenceUrls: string[]) {
   // Broadcast so admin sees new submission instantly
   await broadcastAQRefresh(supabase, 'actions', { player_id: user.id })
 
+  // Notification: admin sees new action submission
+  const actorName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: null,
+    actorId: user.id,
+    actorName,
+    type: 'action_submitted',
+    title: `${actorName} ส่งแอคชั่น "${codeRow.name}"`,
+    message: 'มีแอคชั่นใหม่รอตรวจสอบ',
+    link: '/dashboard/action-quest/actions',
+  })
+
   revalidateActionQuestPaths()
   return { success: true, actionName: codeRow.name }
 }
@@ -740,6 +813,18 @@ export async function approveActionSubmission(id: string) {
     broadcastPunishmentRefresh(supabase, [submission.player_id]),
   ])
 
+  // Notification: player sees action approved
+  const adminName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: submission.player_id,
+    actorId: user.id,
+    actorName: adminName,
+    type: 'action_approved',
+    title: 'แอคชั่นได้รับการอนุมัติแล้ว!',
+    message: 'ได้รับรางวัลจากแอคชั่นที่ส่ง',
+    link: '/dashboard/action-quest/actions',
+  })
+
   revalidateActionQuestPaths()
   return { success: true }
 }
@@ -776,6 +861,18 @@ export async function rejectActionSubmission(id: string, reason: string) {
 
   // Broadcast so player sees rejection instantly
   await broadcastAQRefresh(supabase, 'actions', { player_id: submission.player_id })
+
+  // Notification: player sees action rejected
+  const adminName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: submission.player_id,
+    actorId: user.id,
+    actorName: adminName,
+    type: 'action_rejected',
+    title: 'แอคชั่นถูกปฏิเสธ',
+    message: `เหตุผล: ${reason.trim()}`,
+    link: '/dashboard/action-quest/actions',
+  })
 
   revalidateActionQuestPaths()
   return { success: true }
@@ -894,6 +991,18 @@ export async function submitQuest(codeStr: string, evidenceUrls: string[]) {
   // Broadcast so admin sees new submission instantly
   await broadcastAQRefresh(supabase, 'quests', { player_id: user.id })
 
+  // Notification: admin sees new quest submission
+  const actorName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: null,
+    actorId: user.id,
+    actorName,
+    type: 'quest_submitted',
+    title: `${actorName} ส่งภารกิจ "${codeRow.name}"`,
+    message: 'มีภารกิจใหม่รอตรวจสอบ',
+    link: '/dashboard/action-quest/quests',
+  })
+
   revalidateActionQuestPaths()
   return { success: true, questName: codeRow.name }
 }
@@ -989,6 +1098,17 @@ export async function approveQuestSubmission(id: string) {
     broadcastPunishmentRefresh(supabase, [submission.player_id]),
   ])
 
+  // Notification: player sees quest approved
+  const adminName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: submission.player_id,
+    actorId: user.id,
+    actorName: adminName,
+    type: 'quest_approved',
+    title: 'ภารกิจได้รับการอนุมัติแล้ว!',
+    link: '/dashboard/action-quest/quests',
+  })
+
   revalidateActionQuestPaths()
   return { success: true }
 }
@@ -1026,6 +1146,18 @@ export async function rejectQuestSubmission(id: string, reason: string) {
   // Broadcast so player sees rejection instantly
   await broadcastAQRefresh(supabase, 'quests', { player_id: qSub.player_id })
 
+  // Notification: player sees quest rejected
+  const adminName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: qSub.player_id,
+    actorId: user.id,
+    actorName: adminName,
+    type: 'quest_rejected',
+    title: 'ภารกิจถูกปฏิเสธ',
+    message: `เหตุผล: ${reason.trim()}`,
+    link: '/dashboard/action-quest/quests',
+  })
+
   revalidateActionQuestPaths()
   return { success: true }
 }
@@ -1059,6 +1191,18 @@ export async function submitRoleplayLinks(urls: string[]) {
   const linkRows = list.map(url => ({ submission_id: submission.id, url }))
   const { error: linkErr } = await supabase.from('roleplay_links').insert(linkRows)
   if (linkErr) return { error: linkErr.message }
+
+  // Notification: admin sees new roleplay submission
+  const actorName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: null,
+    actorId: user.id,
+    actorName,
+    type: 'roleplay_submitted',
+    title: `${actorName} ส่งสวมบทบาท (${list.length} ลิงก์)`,
+    message: 'มีสวมบทบาทใหม่รอตรวจสอบ',
+    link: '/dashboard/action-quest/roleplay',
+  })
 
   revalidateActionQuestPaths()
   return { success: true }
@@ -1210,6 +1354,21 @@ export async function reviewRoleplayLink(linkId: string, level: string, note: st
     }
   }
 
+  // Notification: player sees roleplay reviewed
+  if (playerId) {
+    const levelLabel = level === 'high' ? 'สูง' : level === 'medium' ? 'กลาง' : level === 'low' ? 'ต่ำ' : 'ไม่ผ่าน'
+    const adminName = await getDisplayName(supabase, user.id)
+    await createNotification(supabase, {
+      targetUserId: playerId,
+      actorId: user.id,
+      actorName: adminName,
+      type: 'roleplay_reviewed',
+      title: `สวมบทบาทได้รับการตรวจ (ระดับ${levelLabel})`,
+      message: percent > 0 ? `พลังย่อย +${percent}%` : undefined,
+      link: '/dashboard/action-quest/roleplay',
+    })
+  }
+
   revalidateActionQuestPaths()
   revalidatePath('/dashboard')
   return { success: true }
@@ -1269,6 +1428,18 @@ export async function promotePotionDigest() {
   if (!updatedRows || updatedRows.length === 0) return { error: 'ไม่สามารถอัปเดตลำดับได้ (สิทธิ์ไม่เพียงพอ)' }
 
   await supabase.from('profiles').update({ potion_digest_progress: 0 }).eq('id', user.id)
+
+  // Notification: admin sees player promoted sequence
+  const actorName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: null,
+    actorId: user.id,
+    actorName,
+    type: 'digest_promoted',
+    title: `${actorName} เลื่อนลำดับเป็น #${nextSequence.seq_number}`,
+    message: nextSequence.name ? `ลำดับใหม่: ${nextSequence.name}` : undefined,
+    link: '/dashboard/players',
+  })
 
   revalidatePath('/dashboard')
   revalidateActionQuestPaths()
@@ -1464,6 +1635,18 @@ export async function createPunishment(input: PunishmentInput) {
   // Broadcast instant notification to all assigned players
   await broadcastPunishmentRefresh(supabase, input.player_ids)
 
+  // Notification: each assigned player gets notified
+  const adminName = await getDisplayName(supabase, user.id)
+  await createNotifications(supabase, input.player_ids.map(pid => ({
+    targetUserId: pid,
+    actorId: user.id,
+    actorName: adminName,
+    type: 'punishment_assigned',
+    title: `คุณถูกมอบหมายเหตุการณ์ "${punishment.name}"`,
+    message: 'ทำภารกิจให้ครบเพื่อส่งเหตุการณ์',
+    link: '/dashboard/action-quest/punishments',
+  })))
+
   revalidateActionQuestPaths()
   return { success: true, punishmentId: punishment.id }
 }
@@ -1645,6 +1828,18 @@ export async function requestMercy(punishmentId: string) {
     created_by: user.id,
   })
 
+  // Notification: admin sees mercy request
+  const actorName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: null,
+    actorId: user.id,
+    actorName,
+    type: 'punishment_submitted',
+    title: `${actorName} ส่งเหตุการณ์เรียบร้อยแล้ว`,
+    message: 'ผู้เล่นทำภารกิจครบและส่งเหตุการณ์แล้ว',
+    link: '/dashboard/action-quest/punishments',
+  })
+
   revalidateActionQuestPaths()
   return { success: true }
 }
@@ -1749,6 +1944,18 @@ export async function applyPenalty(punishmentId: string, playerId: string) {
       penalty_max_spirituality: punishment.penalty_max_spirituality,
     },
     created_by: user.id,
+  })
+
+  // Notification: player sees penalty applied
+  const adminName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: playerId,
+    actorId: user.id,
+    actorName: adminName,
+    type: 'penalty_applied',
+    title: `ดำเนินการจากเหตุการณ์ "${punishment.name}"`,
+    message: 'สถานะของคุณถูกปรับแล้ว',
+    link: '/dashboard/action-quest/punishments',
   })
 
   revalidateActionQuestPaths()

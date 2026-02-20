@@ -2,6 +2,17 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { createNotification } from '@/app/actions/notifications'
+
+/* ── Helper: get display name ── */
+async function getDisplayName(supabase: any, userId: string): string {
+  const { data } = await supabase
+    .from('profiles')
+    .select('display_name')
+    .eq('id', userId)
+    .single()
+  return data?.display_name || 'ผู้เล่น'
+}
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -35,6 +46,18 @@ export async function grantPathwayChoices(playerId: string, pathwayIds: string[]
 
   const { error } = await supabase.from('pathway_grants').insert(rows)
   if (error) return { error: error.message }
+
+  // Notification: player gets notified about pathway grant
+  const adminName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: playerId,
+    actorId: user.id,
+    actorName: adminName,
+    type: 'pathway_granted',
+    title: 'คุณได้รับโอสถเส้นทางแล้ว!',
+    message: `ทีมงานมอบโอสถเส้นทาง ${pathwayIds.length} รายการให้เลือก`,
+    link: '/dashboard/skills',
+  })
 
   revalidatePath('/dashboard/pathways-grant')
   revalidatePath('/dashboard')
@@ -91,6 +114,17 @@ export async function acceptPathwayGrant(pathwayId: string) {
     .select('id, name, logo_url, bg_url, overview, description, video_url')
     .eq('id', pathwayId)
     .single()
+
+  // Notification: admin sees pathway acceptance
+  const playerName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: null,
+    actorId: user.id,
+    actorName: playerName,
+    type: 'pathway_accepted',
+    title: `${playerName} เลือกเส้นทาง ${pathway?.name || ''}`,
+    link: '/dashboard/skills',
+  })
 
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/skills')

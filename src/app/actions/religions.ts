@@ -2,6 +2,17 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { createNotification } from '@/app/actions/notifications'
+
+/* ── Helper: get display name ── */
+async function getDisplayName(supabase: any, userId: string) {
+  const { data } = await supabase
+    .from('profiles')
+    .select('display_name')
+    .eq('id', userId)
+    .single()
+  return data?.display_name || 'ผู้เล่น'
+}
 
 /* ── Helper: require admin/dm ── */
 async function requireAdmin() {
@@ -278,6 +289,18 @@ export async function submitPrayer(evidenceUrls: string[]) {
     .eq('id', user.id)
 
   if (updateError) return { error: updateError.message }
+
+  // Notification: admin sees prayer submission
+  const playerName = await getDisplayName(supabase, user.id)
+  await createNotification(supabase, {
+    targetUserId: null,
+    actorId: user.id,
+    actorName: playerName,
+    type: 'prayer_submitted',
+    title: `${playerName} สวดมนต์ที่โบสถ์`,
+    message: `สติเพิ่ม +${gain} (ลิงก์ ${urls.length} รายการ)`,
+    link: '/dashboard/action-quest',
+  })
 
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/action-quest')
