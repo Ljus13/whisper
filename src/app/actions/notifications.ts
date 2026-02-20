@@ -164,8 +164,13 @@ export async function getNotifications(page: number = 1) {
     .order('created_at', { ascending: false })
     .range(offset, offset + NOTIF_PAGE_SIZE - 1)
 
-  // Everyone sees only their own or null-target notifications
-  query = query.or(`target_user_id.eq.${user.id},target_user_id.is.null`)
+  if (isAdmin) {
+    // Admin/DM: เห็นการแจ้งเตือนของตัวเอง + broadcast (null target) ที่ส่งจากผู้เล่น
+    query = query.or(`target_user_id.eq.${user.id},target_user_id.is.null`)
+  } else {
+    // ผู้เล่น: เห็นเฉพาะการแจ้งเตือนที่ส่งตรงถึงตัวเองเท่านั้น
+    query = query.eq('target_user_id', user.id)
+  }
 
   const { data, count, error } = await query
 
@@ -188,11 +193,23 @@ export async function getUnreadNotificationCount() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return 0
 
-  const query = supabase
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
+
+  let query = supabase
     .from('notifications')
     .select('id', { count: 'exact', head: true })
     .eq('is_read', false)
-    .or(`target_user_id.eq.${user.id},target_user_id.is.null`)
+
+  if (isAdmin) {
+    query = query.or(`target_user_id.eq.${user.id},target_user_id.is.null`)
+  } else {
+    query = query.eq('target_user_id', user.id)
+  }
 
   const { count } = await query
   return count || 0
@@ -220,9 +237,23 @@ export async function markAllNotificationsRead() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
 
-  await supabase
+  const { data: userProfile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+  const isAdminUser = userProfile?.role === 'admin' || userProfile?.role === 'dm'
+
+  let markQuery = supabase
     .from('notifications')
     .update({ is_read: true })
     .eq('is_read', false)
-    .or(`target_user_id.eq.${user.id},target_user_id.is.null`)
+
+  if (isAdminUser) {
+    markQuery = markQuery.or(`target_user_id.eq.${user.id},target_user_id.is.null`)
+  } else {
+    markQuery = markQuery.eq('target_user_id', user.id)
+  }
+
+  await markQuery
 }

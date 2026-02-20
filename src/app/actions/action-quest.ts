@@ -783,7 +783,7 @@ export async function approveActionSubmission(id: string) {
 
   const { data: actionCode } = await supabase
     .from('action_codes')
-    .select('reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality')
+    .select('name, reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality')
     .eq('id', submission.action_code_id)
     .single()
 
@@ -858,14 +858,14 @@ export async function approveActionSubmission(id: string) {
     broadcastPunishmentRefresh(supabase, [submission.player_id]),
   ])
 
-  // Notification: player sees action approved
+  // Notification: ส่งให้ผู้เล่นเท่านั้น (admin ไม่รับการแจ้งเตือนนี้)
   const adminName = await getDisplayName(supabase, user.id)
   await createNotification(supabase, {
     targetUserId: submission.player_id,
     actorId: user.id,
     actorName: adminName,
     type: 'action_approved',
-    title: 'แอคชั่นได้รับการอนุมัติแล้ว!',
+    title: `แอคชั่น "${actionCode?.name ?? 'แอคชั่น'}" ได้รับการอนุมัติแล้ว!`,
     message: 'ได้รับรางวัลจากแอคชั่นที่ส่ง',
     link: '/dashboard/action-quest/quests',
   })
@@ -1138,7 +1138,7 @@ export async function approveQuestSubmission(id: string) {
 
   const { data: questCode } = await supabase
     .from('quest_codes')
-    .select('reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality')
+    .select('name, reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality')
     .eq('id', submission.quest_code_id)
     .single()
 
@@ -1213,14 +1213,14 @@ export async function approveQuestSubmission(id: string) {
     broadcastPunishmentRefresh(supabase, [submission.player_id]),
   ])
 
-  // Notification: player sees quest approved
+  // Notification: ส่งให้ผู้เล่นเท่านั้น (admin ไม่รับการแจ้งเตือนนี้)
   const adminName = await getDisplayName(supabase, user.id)
   await createNotification(supabase, {
     targetUserId: submission.player_id,
     actorId: user.id,
     actorName: adminName,
     type: 'quest_approved',
-    title: 'ภารกิจได้รับการอนุมัติแล้ว!',
+    title: `ภารกิจ "${questCode?.name ?? 'ภารกิจ'}" ได้รับการอนุมัติแล้ว!`,
     link: '/dashboard/action-quest/quests',
   })
 
