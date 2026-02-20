@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { createNotification } from '@/app/actions/notifications'
+import { notifyPathwayAccepted } from '@/lib/discord-notify'
 
 /* ── Helper: get display name ── */
 async function getDisplayName(supabase: any, userId: string) {
@@ -114,6 +115,13 @@ export async function acceptPathwayGrant(pathwayId: string) {
     .select('id, name, logo_url, bg_url, overview, description, video_url')
     .eq('id', pathwayId)
     .single()
+
+  // Discord notification — player chose a pathway
+  const playerName = await getDisplayName(supabase, user.id)
+  notifyPathwayAccepted({
+    playerName,
+    pathwayName: pathway?.name ?? 'เส้นทางที่เลือก',
+  }).catch(() => {})
 
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/skills')

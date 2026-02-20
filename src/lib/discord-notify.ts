@@ -108,10 +108,10 @@ export async function notifyNewPublicQuest(params: QuestNotifyParams): Promise<v
     username: 'ระบบภารกิจ',
     embeds: [{
       title: `📜 ภารกิจใหม่: ${params.questName}`,
-      description: '> มีภารกิจใหม่เปิดรับผู้กล้าแล้ว! ใช้รหัสด้านล่างเพื่อส่งหลักฐาน',
+      description: '> มีภารกิจใหม่ปรากฏแล้ว! ใช้รหัสด้านล่างเพื่อส่งหลักฐาน',
       color: 0xFFD700,
       fields,
-      footer: { text: 'Whisper TTRPG • ระบบภารกิจ' },
+      footer: { text: 'Whisper of the Shadow • ระบบภารกิจ' },
       timestamp: new Date().toISOString(),
     }],
   })
@@ -135,15 +135,15 @@ export async function notifyNewPunishment(params: PunishmentNotifyParams): Promi
 
   const fields: NonNullable<DiscordEmbed['fields']> = []
 
-  fields.push({ name: '👤 ผู้ถูกลงโทษ', value: params.targetPlayerName, inline: true })
-  fields.push({ name: '⚖️ ผู้ออกคำตัดสิน', value: params.creatorName, inline: true })
+  fields.push({ name: '👤 ผูร่วมอีเวนท์', value: params.targetPlayerName, inline: true })
+  fields.push({ name: '⚖️ ผู้กำหนดอีเวนท์', value: params.creatorName, inline: true })
   fields.push({ name: '📋 เหตุผล', value: params.reason, inline: false })
 
   const penalties: string[] = []
   if (params.penaltyHp)     penalties.push(`❤️ HP **-${Math.abs(params.penaltyHp)}**`)
   if (params.penaltySanity) penalties.push(`🧠 Sanity **-${Math.abs(params.penaltySanity)}**`)
   if (penalties.length > 0) {
-    fields.push({ name: '💢 บทลงโทษ', value: penalties.join('  ·  '), inline: false })
+    fields.push({ name: '💢 อีเวนท์', value: penalties.join('  ·  '), inline: false })
   }
 
   if (params.taskDescription) {
@@ -153,20 +153,47 @@ export async function notifyNewPunishment(params: PunishmentNotifyParams): Promi
   if (params.expiresAt) {
     const d = new Date(params.expiresAt)
     fields.push({
-      name: '⏰ กำหนดชำระ',
+      name: '⏰ กำหนด',
       value: d.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }),
       inline: true,
     })
   }
 
   await sendDiscordNotification(webhookUrl, {
-    username: 'ระบบการลงโทษ',
+    username: 'ระบบอีเวนท์',
     embeds: [{
-      title: `⚖️ คำตัดสิน — ${params.targetPlayerName}`,
-      description: '> คำตัดสินได้ประกาศแล้ว จงชำระให้ครบก่อนกำหนด',
+      title: `⚖️ อีเวนท์ — ${params.targetPlayerName}`,
+      description: '> มีอีเวนท์ โปรดเคลียร์ภารกิจให้ครบทุกรายการ',
       color: 0xDC143C,
       fields,
-      footer: { text: 'Whisper TTRPG • ระบบการลงโทษ' },
+      footer: { text: 'Whisper of the Shadow • ระบบการลงโทษ' },
+      timestamp: new Date().toISOString(),
+    }],
+  })
+}
+
+// ─── Pathway Notification ─────────────────────────────────────────────────────
+
+export interface PathwayNotifyParams {
+  playerName: string
+  pathwayName: string
+}
+
+export async function notifyPathwayAccepted(params: PathwayNotifyParams): Promise<void> {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_PATHWAY
+  if (!webhookUrl) return
+
+  await sendDiscordNotification(webhookUrl, {
+    username: 'เส้นทางโอสถ',
+    embeds: [{
+      title: `🌿 เลือกเส้นทางแล้ว`,
+      description: `> **${params.playerName}** ได้เลือกเส้นทาง **${params.pathwayName}** แล้ว!`,
+      color: 0x7C3AED,
+      fields: [
+        { name: '🧭 ผู้เล่น', value: params.playerName, inline: true },
+        { name: '🌟 เส้นทางที่เลือก', value: params.pathwayName, inline: true },
+      ],
+      footer: { text: 'Whisper of the Shadow • ระบบเส้นทาง' },
       timestamp: new Date().toISOString(),
     }],
   })
