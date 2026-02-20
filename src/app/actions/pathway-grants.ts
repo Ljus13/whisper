@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { createNotification } from '@/app/actions/notifications'
 
 /* ── Helper: get display name ── */
-async function getDisplayName(supabase: any, userId: string): string {
+async function getDisplayName(supabase: any, userId: string) {
   const { data } = await supabase
     .from('profiles')
     .select('display_name')
