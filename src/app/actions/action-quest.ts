@@ -1192,18 +1192,6 @@ export async function submitRoleplayLinks(urls: string[]) {
   const { error: linkErr } = await supabase.from('roleplay_links').insert(linkRows)
   if (linkErr) return { error: linkErr.message }
 
-  // Notification: admin sees new roleplay submission
-  const actorName = await getDisplayName(supabase, user.id)
-  await createNotification(supabase, {
-    targetUserId: null,
-    actorId: user.id,
-    actorName,
-    type: 'roleplay_submitted',
-    title: `${actorName} ส่งสวมบทบาท (${list.length} ลิงก์)`,
-    message: 'มีสวมบทบาทใหม่รอตรวจสอบ',
-    link: '/dashboard/action-quest/roleplay',
-  })
-
   revalidateActionQuestPaths()
   return { success: true }
 }
@@ -1428,18 +1416,6 @@ export async function promotePotionDigest() {
   if (!updatedRows || updatedRows.length === 0) return { error: 'ไม่สามารถอัปเดตลำดับได้ (สิทธิ์ไม่เพียงพอ)' }
 
   await supabase.from('profiles').update({ potion_digest_progress: 0 }).eq('id', user.id)
-
-  // Notification: admin sees player promoted sequence
-  const actorName = await getDisplayName(supabase, user.id)
-  await createNotification(supabase, {
-    targetUserId: null,
-    actorId: user.id,
-    actorName,
-    type: 'digest_promoted',
-    title: `${actorName} เลื่อนลำดับเป็น #${nextSequence.seq_number}`,
-    message: nextSequence.name ? `ลำดับใหม่: ${nextSequence.name}` : undefined,
-    link: '/dashboard/players',
-  })
 
   revalidatePath('/dashboard')
   revalidateActionQuestPaths()

@@ -115,17 +115,6 @@ export async function acceptPathwayGrant(pathwayId: string) {
     .eq('id', pathwayId)
     .single()
 
-  // Notification: admin sees pathway acceptance
-  const playerName = await getDisplayName(supabase, user.id)
-  await createNotification(supabase, {
-    targetUserId: null,
-    actorId: user.id,
-    actorName: playerName,
-    type: 'pathway_accepted',
-    title: `${playerName} เลือกเส้นทาง ${pathway?.name || ''}`,
-    link: '/dashboard/skills',
-  })
-
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/skills')
   revalidatePath('/dashboard/pathways-grant')

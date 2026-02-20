@@ -539,18 +539,6 @@ export async function useGrantedSkill(grantedSkillId: string, successRate: numbe
     outcome,
   })
 
-  // Notification: admin sees skill usage
-  const playerName = await getDisplayName(supabase, user.id)
-  await createNotification(supabase, {
-    targetUserId: null,
-    actorId: user.id,
-    actorName: playerName,
-    type: 'skill_used',
-    title: `${playerName} ใช้พลัง "${gs.title}"`,
-    message: `ผลลัพธ์: ${outcome === 'success' ? 'สำเร็จ' : 'ล้มเหลว'} (${normalizedRoll}/${normalizedRate}) รหัส: ${referenceCode}`,
-    link: '/dashboard/grant-skills',
-  })
-
   revalidatePath('/dashboard/skills')
   return {
     success: true,

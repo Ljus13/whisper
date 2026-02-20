@@ -596,18 +596,6 @@ export async function castSkill(skillId: string, successRate: number, roll: numb
       outcome: outcomeLabel
     })
 
-  // Notification: admin sees skill usage
-  const playerName = await getDisplayName(supabase, user.id)
-  await createNotification(supabase, {
-    targetUserId: null,
-    actorId: user.id,
-    actorName: playerName,
-    type: 'skill_used',
-    title: `${playerName} ใช้สกิล "${skill.name}"`,
-    message: `ผลลัพธ์: ${outcomeLabel === 'success' ? 'สำเร็จ' : 'ล้มเหลว'} (${normalizedRoll}/${normalizedRate}) รหัส: ${referenceCode}`,
-    link: '/dashboard/skills',
-  })
-
   revalidatePath('/dashboard/skills')
   return {
     success: true,
