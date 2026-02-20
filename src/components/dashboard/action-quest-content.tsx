@@ -770,6 +770,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   const [genQuestMaxRepeats, setGenQuestMaxRepeats] = useState<string>('')
   const [genQuestNoExpiry, setGenQuestNoExpiry] = useState(true)
   const [genQuestUnlimitedRepeats, setGenQuestUnlimitedRepeats] = useState(true)
+  // ─── Quest visibility ───
+  const [genQuestIsPublic, setGenQuestIsPublic] = useState(true)
 
   // ─── Submit action/quest modals ───
   const [showSubmitAction, setShowSubmitAction] = useState(false)
@@ -950,6 +952,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     setGenQuestMaxRepeats('')
     setGenQuestNoExpiry(true)
     setGenQuestUnlimitedRepeats(true)
+    setGenQuestIsPublic(true)
     if (isAdmin && mapOptions.length === 0) {
       getMapsForQuestDropdown().then(m => setMapOptions(m))
     }
@@ -1405,7 +1408,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
 
       const r = type === 'action'
         ? await generateActionCode(genName, genRewards, expiration)
-        : await generateQuestCode(genName, genMapId || null, genNpcId || null, expiration, genQuestRewards)
+        : await generateQuestCode(genName, genMapId || null, genNpcId || null, expiration, genQuestRewards, genQuestIsPublic)
       if (r.error) { setGenError(r.error) }
       else if (r.code && r.name) {
         setGenResult({ code: r.code, name: r.name })
@@ -2722,6 +2725,36 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
               <div>
                 <label className="block text-sm text-victorian-300 mb-1.5">ชื่อภารกิจ <span className="text-nouveau-ruby">*</span></label>
                 <input type="text" value={genName} onChange={e => setGenName(e.target.value)} placeholder="เช่น ส่งของลับไปยังหมู่บ้าน" className="input-victorian w-full !py-3 !text-sm" />
+              </div>
+
+              {/* ── Visibility toggle ── */}
+              <div className="flex items-center justify-between p-3 rounded-lg border border-victorian-700/50 bg-victorian-900/40">
+                <div className="flex items-center gap-2">
+                  {genQuestIsPublic
+                    ? <Sparkles className="w-4 h-4 text-gold-400" />
+                    : <Shield className="w-4 h-4 text-victorian-500" />}
+                  <div>
+                    <p className="text-sm font-semibold text-victorian-200">
+                      {genQuestIsPublic ? 'เผยแพร่' : 'ไพรเวท'}
+                    </p>
+                    <p className="text-xs text-victorian-500">
+                      {genQuestIsPublic
+                        ? 'แจ้งเตือนผ่าน Discord — ทุกคนเห็นภารกิจนี้'
+                        : 'ไม่แจ้งเตือน Discord — เฉพาะ Admin/DM เท่านั้น'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setGenQuestIsPublic(p => !p)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
+                    genQuestIsPublic ? 'bg-gold-500' : 'bg-victorian-700'
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    genQuestIsPublic ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
               </div>
               <div>
                 <label className="block text-sm text-victorian-300 mb-1.5">

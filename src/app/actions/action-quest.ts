@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { createNotification, createNotifications } from '@/app/actions/notifications'
+import { notifyNewPublicQuest, notifyNewPunishment } from '@/lib/discord-notify'
 
 const PAGE_SIZE = 20
 
@@ -476,7 +477,7 @@ export async function getActionCodes(page: number = 1) {
    QUEST CODES — สร้างโค้ดภารกิจ
    ══════════════════════════════════════════════ */
 
-export async function generateQuestCode(name: string, mapId?: string | null, npcTokenId?: string | null, expiration?: CodeExpiration, rewards?: ActionRewards) {
+export async function generateQuestCode(name: string, mapId?: string | null, npcTokenId?: string | null, expiration?: CodeExpiration, rewards?: ActionRewards, isPublic?: boolean) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
@@ -510,7 +511,8 @@ export async function generateQuestCode(name: string, mapId?: string | null, npc
   }
 
   const insertData: Record<string, unknown> = {
-    name: name.trim(), code, created_by: user.id
+    name: name.trim(), code, created_by: user.id,
+    is_public: isPublic !== false  // default true = เผยแพร่
   }
   if (resolvedMapId) insertData.map_id = resolvedMapId
   if (npcTokenId) insertData.npc_token_id = npcTokenId
@@ -537,7 +539,40 @@ export async function generateQuestCode(name: string, mapId?: string | null, npc
 
   if (error) return { error: error.message }
   revalidateActionQuestPaths()
-  return { success: true, code: data.code, name: data.name }
+
+  // 🔔 Discord notification — เฉพาะ quest ที่ is_public = true
+  if (data.is_public) {
+    const creatorName = await getDisplayName(supabase, user.id)
+    let mapName: string | null = null
+    let npcName: string | null = null
+    if (data.map_id) {
+      const { data: mapRow } = await supabase.from('maps').select('name').eq('id', data.map_id).maybeSingle()
+      mapName = mapRow?.name ?? null
+    }
+    if (data.npc_token_id) {
+      const { data: npcRow } = await supabase.from('map_tokens').select('label').eq('id', data.npc_token_id).maybeSingle()
+      npcName = npcRow?.label ?? null
+    }
+    notifyNewPublicQuest({
+      questName: data.name,
+      questCode: data.code,
+      creatorName,
+      mapName,
+      npcName,
+      expiresAt: data.expires_at ?? null,
+      rewards: {
+        hp: data.reward_hp,
+        sanity: data.reward_sanity,
+        travel: data.reward_travel,
+        spirituality: data.reward_spirituality,
+        maxSanity: data.reward_max_sanity,
+        maxTravel: data.reward_max_travel,
+        maxSpirituality: data.reward_max_spirituality,
+      },
+    }).catch(() => {})
+  }
+
+  return { success: true, code: data.code, name: data.name, is_public: data.is_public as boolean }
 }
 
 export async function getQuestCodes(page: number = 1) {
@@ -1704,6 +1739,26 @@ export async function createPunishment(input: PunishmentInput) {
   })))
 
   revalidateActionQuestPaths()
+
+  // 🔔 Discord notification — แจ้งเตือนการลงโทษ
+  if (input.player_ids.length > 0) {
+    // Fetch player names for the notification
+    const { data: playerProfiles } = await supabase
+      .from('profiles')
+      .select('display_name')
+      .in('id', input.player_ids)
+    const playerNames = (playerProfiles ?? []).map(p => p.display_name || 'ผู้เล่น').join(', ')
+    notifyNewPunishment({
+      targetPlayerName: playerNames,
+      reason: punishment.description || punishment.name,
+      creatorName: adminName,
+      penaltyHp: punishment.penalty_hp || null,
+      penaltySanity: punishment.penalty_sanity || null,
+      taskDescription: input.required_task_ids.length > 0 ? `ต้องทำภารกิจ ${input.required_task_ids.length} รายการ` : null,
+      expiresAt: punishment.deadline ?? null,
+    }).catch(() => {})
+  }
+
   return { success: true, punishmentId: punishment.id }
 }
 
