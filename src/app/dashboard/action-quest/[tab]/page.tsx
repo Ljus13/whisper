@@ -2,13 +2,15 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import ActionQuestContent from '@/components/dashboard/action-quest-content'
 
-const allowedTabs = ['actions', 'quests', 'sleep', 'prayer', 'punishments', 'roleplay'] as const
+const allowedTabs = ['quests', 'sleep', 'prayer', 'punishments', 'roleplay'] as const
 type TabKey = typeof allowedTabs[number]
 
 export default async function ActionQuestTabPage({ params }: { params: Promise<{ tab: string }> }) {
   const { tab } = await params
+  // Redirect legacy /actions URL to /quests
+  if (tab === 'actions') redirect('/dashboard/action-quest/quests')
   if (!allowedTabs.includes(tab as TabKey)) {
-    redirect('/dashboard/action-quest/actions')
+    redirect('/dashboard/action-quest/quests')
   }
 
   const supabase = await createClient()

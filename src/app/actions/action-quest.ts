@@ -476,7 +476,7 @@ export async function getActionCodes(page: number = 1) {
    QUEST CODES — สร้างโค้ดภารกิจ
    ══════════════════════════════════════════════ */
 
-export async function generateQuestCode(name: string, mapId?: string | null, npcTokenId?: string | null, expiration?: CodeExpiration) {
+export async function generateQuestCode(name: string, mapId?: string | null, npcTokenId?: string | null, expiration?: CodeExpiration, rewards?: ActionRewards) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
@@ -518,6 +518,16 @@ export async function generateQuestCode(name: string, mapId?: string | null, npc
     if (expiration.expires_at) insertData.expires_at = expiration.expires_at
     if (expiration.max_repeats !== undefined && expiration.max_repeats !== null) insertData.max_repeats = expiration.max_repeats
   }
+  if (rewards) {
+    // Quest rewards allow negative (penalty) — store regardless of sign
+    if (rewards.reward_hp !== undefined) insertData.reward_hp = rewards.reward_hp
+    if (rewards.reward_sanity !== undefined) insertData.reward_sanity = rewards.reward_sanity
+    if (rewards.reward_travel !== undefined) insertData.reward_travel = rewards.reward_travel
+    if (rewards.reward_spirituality !== undefined) insertData.reward_spirituality = rewards.reward_spirituality
+    if (rewards.reward_max_sanity !== undefined) insertData.reward_max_sanity = rewards.reward_max_sanity
+    if (rewards.reward_max_travel !== undefined) insertData.reward_max_travel = rewards.reward_max_travel
+    if (rewards.reward_max_spirituality !== undefined) insertData.reward_max_spirituality = rewards.reward_max_spirituality
+  }
 
   const { data, error } = await supabase
     .from('quest_codes')
@@ -544,7 +554,7 @@ export async function getQuestCodes(page: number = 1) {
 
   const { data, error } = await supabase
     .from('quest_codes')
-    .select('id, name, code, created_by, map_id, npc_token_id, expires_at, max_repeats, created_at')
+    .select('id, name, code, created_by, map_id, npc_token_id, reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality, expires_at, max_repeats, created_at')
     .or('archived.is.null,archived.eq.false')
     .order('created_at', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1)
@@ -1038,7 +1048,7 @@ export async function getQuestSubmissions(page: number = 1) {
     ? await supabase.from('profiles').select('id, display_name, avatar_url').in('id', profileIds)
     : { data: [] }
   const { data: questCodes } = questCodeIds.length > 0
-    ? await supabase.from('quest_codes').select('id, name, code').in('id', questCodeIds)
+    ? await supabase.from('quest_codes').select('id, name, code, reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality').in('id', questCodeIds)
     : { data: [] }
 
   const profileMap = new Map((profiles || []).map(p => [p.id, p]))
@@ -1062,6 +1072,13 @@ export async function getQuestSubmissions(page: number = 1) {
       reviewed_by_name: reviewer?.display_name || null,
       reviewed_at: r.reviewed_at,
       created_at: r.created_at,
+      reward_hp: code?.reward_hp || 0,
+      reward_sanity: code?.reward_sanity || 0,
+      reward_travel: code?.reward_travel || 0,
+      reward_spirituality: code?.reward_spirituality || 0,
+      reward_max_sanity: code?.reward_max_sanity || 0,
+      reward_max_travel: code?.reward_max_travel || 0,
+      reward_max_spirituality: code?.reward_max_spirituality || 0,
     }
   })
 
@@ -1074,15 +1091,21 @@ export async function approveQuestSubmission(id: string) {
   if (!user) return { error: 'Not authenticated' }
   if (!(await requireAdmin(supabase, user.id))) return { error: 'Admin/DM required' }
 
-  // Fetch submission first to get player_id for broadcast
+  // Fetch submission + quest_code rewards
   const { data: submission } = await supabase
     .from('quest_submissions')
-    .select('id, player_id')
+    .select('id, player_id, quest_code_id')
     .eq('id', id)
     .eq('status', 'pending')
     .single()
 
   if (!submission) return { error: 'ไม่พบคำขอหรือคำขอถูกดำเนินการแล้ว' }
+
+  const { data: questCode } = await supabase
+    .from('quest_codes')
+    .select('reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality')
+    .eq('id', submission.quest_code_id)
+    .single()
 
   const { error } = await supabase
     .from('quest_submissions')
@@ -1091,6 +1114,63 @@ export async function approveQuestSubmission(id: string) {
     .eq('status', 'pending')
 
   if (error) return { error: error.message }
+
+  // Apply quest rewards (allows negative = penalty)
+  if (questCode) {
+    const hasEffect = [
+      questCode.reward_hp, questCode.reward_sanity, questCode.reward_travel,
+      questCode.reward_spirituality, questCode.reward_max_sanity,
+      questCode.reward_max_travel, questCode.reward_max_spirituality,
+    ].some(v => (v || 0) !== 0)
+
+    if (hasEffect) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('hp, sanity, max_sanity, travel_points, max_travel_points, spirituality, max_spirituality')
+        .eq('id', submission.player_id)
+        .single()
+
+      if (profile) {
+        const updates: Record<string, number> = {}
+
+        // Adjust max caps first (supports negative — reduce cap)
+        let newMaxSanity = profile.max_sanity ?? 10
+        let newMaxTravel = profile.max_travel_points ?? 10
+        let newMaxSpirit = profile.max_spirituality ?? 10
+
+        if ((questCode.reward_max_sanity || 0) !== 0) {
+          newMaxSanity = Math.max(1, newMaxSanity + questCode.reward_max_sanity)
+          updates.max_sanity = newMaxSanity
+        }
+        if ((questCode.reward_max_travel || 0) !== 0) {
+          newMaxTravel = Math.max(1, newMaxTravel + questCode.reward_max_travel)
+          updates.max_travel_points = newMaxTravel
+        }
+        if ((questCode.reward_max_spirituality || 0) !== 0) {
+          newMaxSpirit = Math.max(1, newMaxSpirit + questCode.reward_max_spirituality)
+          updates.max_spirituality = newMaxSpirit
+        }
+
+        // Adjust current values (supports negative; clamp 0 .. max)
+        if ((questCode.reward_hp || 0) !== 0) {
+          updates.hp = Math.max(0, (profile.hp ?? 0) + questCode.reward_hp)
+        }
+        if ((questCode.reward_sanity || 0) !== 0) {
+          updates.sanity = Math.min(newMaxSanity, Math.max(0, (profile.sanity ?? 0) + questCode.reward_sanity))
+        }
+        if ((questCode.reward_travel || 0) !== 0) {
+          updates.travel_points = Math.min(newMaxTravel, Math.max(0, (profile.travel_points ?? 0) + questCode.reward_travel))
+        }
+        if ((questCode.reward_spirituality || 0) !== 0) {
+          updates.spirituality = Math.min(newMaxSpirit, Math.max(0, (profile.spirituality ?? 0) + questCode.reward_spirituality))
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await supabase.from('profiles').update(updates).eq('id', submission.player_id)
+        }
+      }
+    }
+  }
 
   // Broadcast instant refresh to player's submission list + punishment banner
   await Promise.all([
@@ -2053,7 +2133,8 @@ export async function updateQuestCode(
   name: string,
   mapId?: string | null,
   npcTokenId?: string | null,
-  expiration?: CodeExpiration
+  expiration?: CodeExpiration,
+  rewards?: ActionRewards
 ) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -2081,6 +2162,13 @@ export async function updateQuestCode(
     npc_token_id: npcTokenId || null,
     expires_at: expiration?.expires_at || null,
     max_repeats: expiration?.max_repeats ?? null,
+    reward_hp: rewards?.reward_hp ?? 0,
+    reward_sanity: rewards?.reward_sanity ?? 0,
+    reward_travel: rewards?.reward_travel ?? 0,
+    reward_spirituality: rewards?.reward_spirituality ?? 0,
+    reward_max_sanity: rewards?.reward_max_sanity ?? 0,
+    reward_max_travel: rewards?.reward_max_travel ?? 0,
+    reward_max_spirituality: rewards?.reward_max_spirituality ?? 0,
   }
 
   const { error } = await supabase

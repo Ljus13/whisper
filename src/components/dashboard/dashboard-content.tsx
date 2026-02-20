@@ -133,11 +133,11 @@ function PathwayChoiceCard({
   return (
     <div
       ref={cardRef}
-      className="snap-center shrink-0 w-72 md:w-96 rounded-2xl border border-gold-400/10 bg-victorian-900/70 overflow-hidden transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0_18px_50px_rgba(0,0,0,0.45)]"
+      className="snap-center shrink-0 w-44 sm:w-52 md:w-64 rounded-2xl border border-gold-400/10 bg-victorian-900/70 overflow-hidden transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0_18px_50px_rgba(0,0,0,0.45)]"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div className="relative aspect-square">
+      <div className="relative h-36 sm:h-44 md:h-56">
         {pathway.bg_url ? (
           <img src={pathway.bg_url} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" decoding="async" />
         ) : (
@@ -162,16 +162,16 @@ function PathwayChoiceCard({
           </div>
         )}
       </div>
-      <div className="p-5 space-y-3">
-        <div className="text-gold-200 text-xl font-semibold">{pathway.name}</div>
-        <div className="text-victorian-300 text-sm max-h-24 overflow-y-auto pr-2">
+      <div className="p-4 space-y-2.5">
+        <div className="text-gold-200 text-base font-semibold">{pathway.name}</div>
+        <div className="text-victorian-300 text-xs max-h-16 overflow-y-auto pr-1 leading-relaxed">
           {detailText}
         </div>
         <button
           type="button"
           onClick={() => onChoose(pathway.id)}
           disabled={isChoosingPathway}
-          className="btn-gold w-full !py-2 !text-sm disabled:opacity-50"
+          className="btn-gold w-full !py-1.5 !text-xs disabled:opacity-50"
         >
           {isChoosingPathway ? 'กำลังยืนยัน...' : 'เลือกเส้นทางนี้'}
         </button>
@@ -191,9 +191,9 @@ function RoleBadge({ role }: { role: string }) {
   const Icon = config.icon
 
   return (
-    <span className={`inline-flex items-center gap-2 md:gap-3 px-3 py-1.5 md:px-6 md:py-3 text-sm md:text-xl font-display 
+    <span className={`inline-flex items-center gap-2 md:gap-2.5 px-3 py-1.5 md:px-4 md:py-2 text-sm md:text-base font-display 
                       tracking-wider border rounded-md ${config.color}`}>
-      <Icon className="w-5 h-5 md:w-8 md:h-8" />
+      <Icon className="w-4 h-4 md:w-5 md:h-5" />
       {config.label}
     </span>
   )
@@ -322,39 +322,39 @@ export default function DashboardContent({
       `}} />
       {/* Top nav bar */}
       <header className="border-b border-gold-400/10 bg-victorian-950/80 backdrop-blur-sm">
-        <div className="max-w-screen-2xl mx-auto px-4 py-4 md:px-8 md:py-8 flex items-center justify-between">
+        <div className="max-w-screen-2xl mx-auto px-4 py-3 pr-14 sm:pr-4 md:px-8 md:py-4 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-3 md:gap-6">
             <span className="text-gold-400 text-3xl md:text-5xl">⚜</span>
-            <h1 className="heading-victorian text-2xl md:text-5xl">Whisper</h1>
+            <h1 className="heading-victorian text-lg md:text-2xl">Whisper</h1>
           </div>
 
           {/* User info */}
-          <div className="flex items-center gap-3 md:gap-8">
+          <div className="flex items-center gap-2 md:gap-5">
             <RoleBadge role={role} />
 
             {/* Click avatar to open profile popup */}
             <button 
               type="button"
               onClick={() => setShowProfile(true)}
-              className="flex items-center gap-3 md:gap-6 cursor-pointer hover:opacity-70 transition-opacity"
+              className="flex items-center gap-2 md:gap-3 cursor-pointer hover:opacity-70 transition-opacity"
             >
               {currentAvatarUrl ? (
                 <img
                   src={currentAvatarUrl}
                   alt={displayName}
-                  className="w-10 h-10 md:w-20 md:h-20 rounded-full border-2 border-gold-400/30 object-cover"
+                  className="w-9 h-9 md:w-12 md:h-12 rounded-full border-2 border-gold-400/30 object-cover"
                   decoding="async"
                 />
               ) : (
-                <div className="w-10 h-10 md:w-20 md:h-20 rounded-full border-2 border-gold-400/30 
+                <div className="w-9 h-9 md:w-12 md:h-12 rounded-full border-2 border-gold-400/30 
                                 bg-victorian-800 flex items-center justify-center">
-                  <span className="text-gold-400 text-base md:text-2xl font-display">
+                  <span className="text-gold-400 text-sm md:text-lg font-display">
                     {displayName[0]?.toUpperCase()}
                   </span>
                 </div>
               )}
-              <span className="text-nouveau-cream/80 text-base md:text-2xl font-body hidden sm:block">
+              <span className="text-nouveau-cream/80 text-sm md:text-base font-body hidden sm:block">
                 {displayName}
               </span>
             </button>
@@ -363,34 +363,35 @@ export default function DashboardContent({
       </header>
 
       {/* Main content */}
-      <main className="max-w-screen-2xl mx-auto px-4 py-6 md:px-8 md:py-10 space-y-8 md:space-y-12">
+      <main className="max-w-screen-2xl mx-auto px-4 py-4 md:px-8 md:py-6 space-y-5 md:space-y-8">
         
         {/* 1. Character Info Section */}
-        <OrnamentedCard className="p-4 md:p-10 lg:p-14 animate-fade-in relative">
-        <section className="flex flex-col xl:flex-row items-center xl:items-start gap-6 md:gap-12 xl:gap-20">
+        <div className="w-4/5 mx-auto">
+        <OrnamentedCard className="p-4 md:p-6 lg:p-8 animate-fade-in relative">
+        <section className="flex flex-col xl:flex-row items-center xl:items-start gap-4 md:gap-8 xl:gap-12">
           {/* Left: Avatar + Name */}
           <div className="flex flex-col items-center text-center w-full xl:w-auto shrink-0">
-            <div className="relative group mb-4 md:mb-6">
+            <div className="relative group mb-3 md:mb-4">
               <div className="absolute -inset-1 rounded-xl bg-gold-400/20 blur-md group-hover:bg-gold-400/30 transition-all duration-500" />
               {currentAvatarUrl ? (
                 <img
                   src={currentAvatarUrl}
                   alt={displayName}
-                  className="relative w-32 h-32 md:w-64 md:h-64 lg:w-80 lg:h-80 xl:w-96 xl:h-96 rounded-xl border-4 border-gold-400/50 object-cover shadow-gold"
+                  className="relative w-28 h-28 md:w-44 md:h-44 lg:w-52 lg:h-52 xl:w-64 xl:h-64 rounded-xl border-4 border-gold-400/50 object-cover shadow-gold"
                   fetchPriority="high"
                   decoding="async"
                 />
               ) : (
-                <div className="relative w-32 h-32 md:w-64 md:h-64 lg:w-80 lg:h-80 xl:w-96 xl:h-96 rounded-xl border-4 border-gold-400/50 
+                <div className="relative w-28 h-28 md:w-44 md:h-44 lg:w-52 lg:h-52 xl:w-64 xl:h-64 rounded-xl border-4 border-gold-400/50 
                                 bg-victorian-800 flex items-center justify-center shadow-gold">
-                  <span className="text-gold-400 text-5xl md:text-8xl font-body font-semibold">
+                  <span className="text-gold-400 text-4xl md:text-6xl font-body font-semibold">
                     {displayName[0]?.toUpperCase()}
                   </span>
                 </div>
               )}
             </div>
             <div className="flex items-center gap-3 justify-center">
-              <h2 className="heading-victorian text-2xl md:text-3xl lg:text-4xl">
+              <h2 className="heading-victorian text-xl md:text-2xl lg:text-3xl">
                 {displayName}
               </h2>
               {isAdmin && (
@@ -437,46 +438,46 @@ export default function DashboardContent({
                 </div>
               </div>
             ) : (
-              <p className="text-victorian-300 font-body text-sm md:text-lg lg:text-xl tracking-wide mt-2 md:mt-3">
+              <p className="text-victorian-300 font-body text-xs md:text-sm tracking-wide mt-2 md:mt-3">
                 {rankDisplay}
               </p>
             )}
           </div>
 
           {/* Right: Stats Grid — fills remaining space */}
-          <div className="flex-1 w-full flex flex-col gap-3 md:gap-6 xl:gap-8">
-            <div className="w-full grid grid-cols-2 gap-3 md:gap-6 xl:gap-8">
+          <div className="flex-1 w-full flex flex-col gap-3 md:gap-4 xl:gap-5">
+            <div className="w-full grid grid-cols-2 gap-3 md:gap-4 xl:gap-5">
             {/* ตัวตายตัวแทน (HP) */}
-            <div className="p-3 md:p-6 bg-victorian-900/60 border border-red-500/20 rounded-md flex flex-col md:flex-row items-center md:justify-between gap-2 md:gap-4">
-              <div className="flex items-center gap-2 md:gap-4">
-                <div className="p-2 md:p-3 bg-red-500/10 rounded-full">
-                  <Heart className="w-6 h-6 md:w-10 md:h-10 text-red-400" />
+            <div className="p-3 md:p-4 bg-victorian-900/60 border border-red-500/20 rounded-md flex flex-col md:flex-row items-center md:justify-between gap-2 md:gap-3">
+              <div className="flex items-center gap-2 md:gap-3">
+                <div className="p-1.5 md:p-2 bg-red-500/10 rounded-full">
+                  <Heart className="w-5 h-5 md:w-7 md:h-7 text-red-400" />
                 </div>
-                <span className="text-red-300 font-display text-xs md:text-xl tracking-wider uppercase">HP</span>
+                <span className="text-red-300 font-display text-xs md:text-sm tracking-wider uppercase">HP</span>
               </div>
               <div className="flex items-baseline gap-1 md:gap-2">
-                <span className="font-display text-3xl md:text-7xl text-red-200 tabular-nums">{profile?.hp ?? 5}</span>
-                <span className="text-red-400/50 text-sm md:text-xl font-display">ครั้ง</span>
+                <span className="font-display text-2xl md:text-5xl text-red-200 tabular-nums">{profile?.hp ?? 5}</span>
+                <span className="text-red-400/50 text-xs md:text-base font-display">ครั้ง</span>
               </div>
             </div>
 
             {/* สติ (Sanity) */}
-            <div className="p-3 md:p-6 bg-victorian-900/60 border border-cyan-500/20 rounded-md flex flex-col justify-center">
-              <div className="flex items-center justify-between mb-2 md:mb-4">
-                <div className="flex items-center gap-2 md:gap-4">
-                  <div className="p-2 md:p-3 bg-cyan-500/10 rounded-full">
-                    <Brain className="w-6 h-6 md:w-10 md:h-10 text-cyan-400" />
+            <div className="p-3 md:p-4 bg-victorian-900/60 border border-cyan-500/20 rounded-md flex flex-col justify-center">
+              <div className="flex items-center justify-between mb-1.5 md:mb-3">
+                <div className="flex items-center gap-2 md:gap-3">
+                  <div className="p-1.5 md:p-2 bg-cyan-500/10 rounded-full">
+                    <Brain className="w-5 h-5 md:w-7 md:h-7 text-cyan-400" />
                   </div>
                   <div>
-                    <span className="block text-cyan-300 font-display text-xs md:text-xl tracking-wider uppercase">สติ</span>
-                    <span className="text-cyan-500/50 text-[10px] md:text-sm hidden md:inline">(-2/วัน)</span>
+                    <span className="block text-cyan-300 font-display text-xs md:text-sm tracking-wider uppercase">สติ</span>
+                    <span className="text-cyan-500/50 text-[10px] md:text-xs hidden md:inline">(-2/วัน)</span>
                   </div>
                 </div>
-                <span className="font-display text-lg md:text-4xl text-cyan-200">
-                  {profile?.sanity ?? 10} <span className="text-cyan-400/60 text-xs md:text-xl">/ {profile?.max_sanity ?? 10}</span>
+                <span className="font-display text-base md:text-2xl text-cyan-200">
+                  {profile?.sanity ?? 10} <span className="text-cyan-400/60 text-xs md:text-base">/ {profile?.max_sanity ?? 10}</span>
                 </span>
               </div>
-              <div className="w-full h-2 md:h-4 bg-victorian-950 rounded-full overflow-hidden border border-cyan-500/10">
+              <div className="w-full h-1.5 md:h-2.5 bg-victorian-950 rounded-full overflow-hidden border border-cyan-500/10">
                 <div 
                   className="h-full rounded-full transition-all duration-700 ease-out"
                   style={{ 
@@ -489,19 +490,19 @@ export default function DashboardContent({
             </div>
 
             {/* พลังวิญญาณ (Spirituality) */}
-            <div className="p-3 md:p-6 bg-victorian-900/60 border border-purple-500/20 rounded-md flex flex-col justify-center">
-              <div className="flex items-center justify-between mb-2 md:mb-4">
-                <div className="flex items-center gap-2 md:gap-4">
-                  <div className="p-2 md:p-3 bg-purple-500/10 rounded-full">
-                    <Flame className="w-6 h-6 md:w-10 md:h-10 text-purple-400" />
+            <div className="p-3 md:p-4 bg-victorian-900/60 border border-purple-500/20 rounded-md flex flex-col justify-center">
+              <div className="flex items-center justify-between mb-1.5 md:mb-3">
+                <div className="flex items-center gap-2 md:gap-3">
+                  <div className="p-1.5 md:p-2 bg-purple-500/10 rounded-full">
+                    <Flame className="w-5 h-5 md:w-7 md:h-7 text-purple-400" />
                   </div>
-                  <span className="text-purple-300 font-display text-xs md:text-xl tracking-wider uppercase">วิญญาณ</span>
+                  <span className="text-purple-300 font-display text-xs md:text-sm tracking-wider uppercase">วิญญาณ</span>
                 </div>
-                <span className="font-display text-lg md:text-4xl text-purple-200">
-                  {profile?.spirituality ?? 15} <span className="text-purple-400/60 text-xs md:text-xl">/ {profile?.max_spirituality ?? 15}</span>
+                <span className="font-display text-base md:text-2xl text-purple-200">
+                  {profile?.spirituality ?? 15} <span className="text-purple-400/60 text-xs md:text-base">/ {profile?.max_spirituality ?? 15}</span>
                 </span>
               </div>
-              <div className="w-full h-2 md:h-4 bg-victorian-950 rounded-full overflow-hidden border border-purple-500/10">
+              <div className="w-full h-1.5 md:h-2.5 bg-victorian-950 rounded-full overflow-hidden border border-purple-500/10">
                 <div 
                   className="h-full rounded-full transition-all duration-700 ease-out"
                   style={{ 
@@ -514,19 +515,19 @@ export default function DashboardContent({
             </div>
 
             {/* หน่วยการเดินทาง (Travel Points) */}
-            <div className="p-3 md:p-6 bg-victorian-900/60 border border-emerald-500/20 rounded-md flex flex-col justify-center">
-              <div className="flex items-center justify-between mb-2 md:mb-4">
-                <div className="flex items-center gap-2 md:gap-4">
-                  <div className="p-2 md:p-3 bg-emerald-500/10 rounded-full">
-                    <Footprints className="w-6 h-6 md:w-10 md:h-10 text-emerald-400" />
+            <div className="p-3 md:p-4 bg-victorian-900/60 border border-emerald-500/20 rounded-md flex flex-col justify-center">
+              <div className="flex items-center justify-between mb-1.5 md:mb-3">
+                <div className="flex items-center gap-2 md:gap-3">
+                  <div className="p-1.5 md:p-2 bg-emerald-500/10 rounded-full">
+                    <Footprints className="w-5 h-5 md:w-7 md:h-7 text-emerald-400" />
                   </div>
-                  <span className="text-emerald-300 font-display text-xs md:text-xl tracking-wider uppercase">เดินทาง</span>
+                  <span className="text-emerald-300 font-display text-xs md:text-sm tracking-wider uppercase">เดินทาง</span>
                 </div>
-                <span className="font-display text-lg md:text-4xl text-emerald-200">
-                  {profile?.travel_points ?? 9} <span className="text-emerald-400/60 text-xs md:text-xl">/ {profile?.max_travel_points ?? 9}</span>
+                <span className="font-display text-base md:text-2xl text-emerald-200">
+                  {profile?.travel_points ?? 9} <span className="text-emerald-400/60 text-xs md:text-base">/ {profile?.max_travel_points ?? 9}</span>
                 </span>
               </div>
-              <div className="w-full h-2 md:h-4 bg-victorian-950 rounded-full overflow-hidden border border-emerald-500/10">
+              <div className="w-full h-1.5 md:h-2.5 bg-victorian-950 rounded-full overflow-hidden border border-emerald-500/10">
                 <div 
                   className="h-full rounded-full transition-all duration-700 ease-out"
                   style={{ 
@@ -538,19 +539,19 @@ export default function DashboardContent({
               </div>
             </div>
 
-            <div className="p-3 md:p-6 bg-victorian-900/60 border border-amber-500/20 rounded-md flex flex-col justify-center">
-              <div className="flex items-center justify-between mb-2 md:mb-4">
-                <div className="flex items-center gap-2 md:gap-4">
-                  <div className="p-2 md:p-3 bg-amber-500/10 rounded-full">
-                    <Flame className="w-6 h-6 md:w-10 md:h-10 text-amber-400" />
+            <div className="p-3 md:p-4 bg-victorian-900/60 border border-amber-500/20 rounded-md flex flex-col justify-center">
+              <div className="flex items-center justify-between mb-1.5 md:mb-3">
+                <div className="flex items-center gap-2 md:gap-3">
+                  <div className="p-1.5 md:p-2 bg-amber-500/10 rounded-full">
+                    <Flame className="w-5 h-5 md:w-7 md:h-7 text-amber-400" />
                   </div>
-                  <span className="text-amber-300 font-display text-xs md:text-xl tracking-wider uppercase">ย่อยโอสถ</span>
+                  <span className="text-amber-300 font-display text-xs md:text-sm tracking-wider uppercase">ย่อยโอสถ</span>
                 </div>
-                <span className="font-display text-lg md:text-4xl text-amber-200 tabular-nums">
+                <span className="font-display text-base md:text-2xl text-amber-200 tabular-nums">
                   {Math.min(100, Math.max(0, digestProgress))}%
                 </span>
               </div>
-              <div className="w-full h-2 md:h-4 bg-victorian-950 rounded-full overflow-hidden border border-amber-500/10">
+              <div className="w-full h-1.5 md:h-2.5 bg-victorian-950 rounded-full overflow-hidden border border-amber-500/10">
                 <div
                   className="h-full rounded-full transition-all duration-700 ease-out"
                   style={{
@@ -575,22 +576,22 @@ export default function DashboardContent({
               )}
             </div>
             </div>
-            <div className="p-3 md:p-5 bg-victorian-900/60 border border-gold-400/20 rounded-md flex items-center gap-3 md:gap-4">
-              <div className="p-2 md:p-3 bg-gold-500/10 rounded-full">
+            <div className="p-3 md:p-4 bg-victorian-900/60 border border-gold-400/20 rounded-md flex items-center gap-2 md:gap-3">
+              <div className="p-1.5 md:p-2 bg-gold-500/10 rounded-full">
                 {profile?.religions?.logo_url ? (
                   <img
                     src={profile.religions.logo_url}
                     alt=""
-                    className="w-6 h-6 md:w-9 md:h-9 rounded-full object-cover"
+                    className="w-5 h-5 md:w-7 md:h-7 rounded-full object-cover"
                     decoding="async"
                   />
                 ) : (
-                  <Church className="w-6 h-6 md:w-9 md:h-9 text-gold-400" />
+                  <Church className="w-5 h-5 md:w-7 md:h-7 text-gold-400" />
                 )}
               </div>
               <div className="flex flex-col">
                 <span className="text-gold-400/80 font-display text-[10px] md:text-xs uppercase tracking-wider">ศาสนาที่สังกัด</span>
-                <span className="text-nouveau-cream text-sm md:text-lg font-display">
+                <span className="text-nouveau-cream text-xs md:text-sm font-display">
                   {profile?.religions?.name_th || 'ยังไม่เลือกศาสนา'}
                 </span>
               </div>
@@ -599,31 +600,32 @@ export default function DashboardContent({
         </section>
 
         </OrnamentedCard>
+        </div>
 
         {/* 2. Grid Menu */}
-        <section className="grid grid-cols-2 md:grid-cols-2 gap-4 md:gap-8 lg:gap-12">
+        <section className="w-4/5 mx-auto grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-5">
           <Link 
             href={isSanityLocked ? "#" : "/dashboard/maps"} 
-            className={`group relative overflow-hidden card-victorian p-6 md:p-12 lg:p-16 flex flex-col items-center justify-center gap-4 md:gap-8 
-                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[180px] md:min-h-[350px]
+            className={`group relative overflow-hidden card-victorian p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center gap-3 md:gap-5 
+                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[140px] md:min-h-[200px]
                         ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
             title={isSanityLocked ? "ถูกล็อค: สติของคุณเหลือ 0" : ""}
           >
-            <CornerOrnament className="absolute top-0 left-0 w-12 h-12 md:w-24 md:h-24" />
-            <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-12 h-12 md:w-24 md:h-24" />
-            <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-12 h-12 md:w-24 md:h-24" />
-            <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] w-12 h-12 md:w-24 md:h-24" />
-            <div className="relative z-10 flex flex-col items-center gap-3 md:gap-8">
-              <div className="w-16 h-16 md:w-32 md:h-32 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
+            <CornerOrnament className="absolute top-0 left-0 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] w-8 h-8 md:w-14 md:h-14" />
+            <div className="relative z-10 flex flex-col items-center gap-2 md:gap-4">
+              <div className="w-12 h-12 md:w-18 md:h-18 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
                               flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
                 {isSanityLocked ? (
-                  <Lock className="w-8 h-8 md:w-16 md:h-16 text-red-500" />
+                  <Lock className="w-6 h-6 md:w-9 md:h-9 text-red-500" />
                 ) : (
-                  <Map className="w-8 h-8 md:w-16 md:h-16 text-gold-400" />
+                  <Map className="w-6 h-6 md:w-9 md:h-9 text-gold-400" />
                 )}
               </div>
-              <h3 className="heading-victorian text-2xl md:text-5xl">แผนที่</h3>
-              <p className="text-victorian-400 text-center text-sm md:text-2xl font-body hidden md:block">
+              <h3 className="heading-victorian text-lg md:text-2xl">แผนที่</h3>
+              <p className="text-victorian-400 text-center text-xs md:text-sm font-body hidden md:block">
                 สำรวจโลกกว้างและสถานที่สำคัญ
               </p>
             </div>
@@ -631,26 +633,26 @@ export default function DashboardContent({
 
           <a 
             href={isSanityLocked ? "#" : "/dashboard/skills"} 
-            className={`group relative overflow-hidden card-victorian p-6 md:p-12 lg:p-16 flex flex-col items-center justify-center gap-4 md:gap-8 
-                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[180px] md:min-h-[350px]
+            className={`group relative overflow-hidden card-victorian p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center gap-3 md:gap-5 
+                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[140px] md:min-h-[200px]
                         ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
             title={isSanityLocked ? "ถูกล็อค: สติของคุณเหลือ 0" : ""}
           >
-            <CornerOrnament className="absolute top-0 left-0 w-12 h-12 md:w-24 md:h-24" />
-            <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-12 h-12 md:w-24 md:h-24" />
-            <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-12 h-12 md:w-24 md:h-24" />
-            <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] w-12 h-12 md:w-24 md:h-24" />
-            <div className="relative z-10 flex flex-col items-center gap-3 md:gap-8">
-              <div className="w-16 h-16 md:w-32 md:h-32 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
+            <CornerOrnament className="absolute top-0 left-0 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] w-8 h-8 md:w-14 md:h-14" />
+            <div className="relative z-10 flex flex-col items-center gap-2 md:gap-4">
+              <div className="w-12 h-12 md:w-18 md:h-18 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
                               flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
                 {isSanityLocked ? (
-                  <Lock className="w-8 h-8 md:w-16 md:h-16 text-red-500" />
+                  <Lock className="w-6 h-6 md:w-9 md:h-9 text-red-500" />
                 ) : (
-                  <Zap className="w-8 h-8 md:w-16 md:h-16 text-gold-400" />
+                  <Zap className="w-6 h-6 md:w-9 md:h-9 text-gold-400" />
                 )}
               </div>
-              <h3 className="heading-victorian text-2xl md:text-5xl">สกิล</h3>
-              <p className="text-victorian-400 text-center text-sm md:text-2xl font-body hidden md:block">
+              <h3 className="heading-victorian text-lg md:text-2xl">สกิล</h3>
+              <p className="text-victorian-400 text-center text-xs md:text-sm font-body hidden md:block">
                 จัดการทักษะและความสามารถพิเศษ
               </p>
             </div>
@@ -658,26 +660,26 @@ export default function DashboardContent({
 
           <a 
             href={isSanityLocked ? "#" : "/dashboard/action-quest/actions"} 
-            className={`group relative overflow-hidden card-victorian p-6 md:p-12 lg:p-16 flex flex-col items-center justify-center gap-4 md:gap-8 
-                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[180px] md:min-h-[350px]
+            className={`group relative overflow-hidden card-victorian p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center gap-3 md:gap-5 
+                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[140px] md:min-h-[200px]
                         ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
             title={isSanityLocked ? "ถูกล็อค: สติของคุณเหลือ 0" : ""}
           >
-            <CornerOrnament className="absolute top-0 left-0 w-12 h-12 md:w-24 md:h-24" />
-            <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-12 h-12 md:w-24 md:h-24" />
-            <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-12 h-12 md:w-24 md:h-24" />
-            <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] w-12 h-12 md:w-24 md:h-24" />
-            <div className="relative z-10 flex flex-col items-center gap-3 md:gap-8">
-              <div className="w-16 h-16 md:w-32 md:h-32 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
+            <CornerOrnament className="absolute top-0 left-0 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] w-8 h-8 md:w-14 md:h-14" />
+            <div className="relative z-10 flex flex-col items-center gap-2 md:gap-4">
+              <div className="w-12 h-12 md:w-18 md:h-18 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
                               flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
                 {isSanityLocked ? (
-                  <Lock className="w-8 h-8 md:w-16 md:h-16 text-red-500" />
+                  <Lock className="w-6 h-6 md:w-9 md:h-9 text-red-500" />
                 ) : (
-                  <Swords className="w-8 h-8 md:w-16 md:h-16 text-gold-400" />
+                  <Swords className="w-6 h-6 md:w-9 md:h-9 text-gold-400" />
                 )}
               </div>
-              <h3 className="heading-victorian text-2xl md:text-5xl">แอคชั่น</h3>
-              <p className="text-victorian-400 text-center text-sm md:text-2xl font-body hidden md:block">
+              <h3 className="heading-victorian text-lg md:text-2xl">แอคชั่น</h3>
+              <p className="text-victorian-400 text-center text-xs md:text-sm font-body hidden md:block">
                 ส่งการกระทำ / ภารกิจ
               </p>
             </div>
@@ -685,26 +687,26 @@ export default function DashboardContent({
 
           <a 
             href={isSanityLocked ? "#" : "/dashboard/players"} 
-            className={`group relative overflow-hidden card-victorian p-6 md:p-12 lg:p-16 flex flex-col items-center justify-center gap-4 md:gap-8 
-                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[180px] md:min-h-[350px]
+            className={`group relative overflow-hidden card-victorian p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center gap-3 md:gap-5 
+                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[140px] md:min-h-[200px]
                         ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
             title={isSanityLocked ? "ถูกล็อค: สติของคุณเหลือ 0" : ""}
           >
-            <CornerOrnament className="absolute top-0 left-0 w-12 h-12 md:w-24 md:h-24" />
-            <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-12 h-12 md:w-24 md:h-24" />
-            <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-12 h-12 md:w-24 md:h-24" />
-            <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] w-12 h-12 md:w-24 md:h-24" />
-            <div className="relative z-10 flex flex-col items-center gap-3 md:gap-8">
-              <div className="w-16 h-16 md:w-32 md:h-32 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
+            <CornerOrnament className="absolute top-0 left-0 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] w-8 h-8 md:w-14 md:h-14" />
+            <div className="relative z-10 flex flex-col items-center gap-2 md:gap-4">
+              <div className="w-12 h-12 md:w-18 md:h-18 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
                               flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
                 {isSanityLocked ? (
-                  <Lock className="w-8 h-8 md:w-16 md:h-16 text-red-500" />
+                  <Lock className="w-6 h-6 md:w-9 md:h-9 text-red-500" />
                 ) : (
-                  <Users className="w-8 h-8 md:w-16 md:h-16 text-gold-400" />
+                  <Users className="w-6 h-6 md:w-9 md:h-9 text-gold-400" />
                 )}
               </div>
-              <h3 className="heading-victorian text-2xl md:text-5xl">ทำเนียบผู้เล่น</h3>
-              <p className="text-victorian-400 text-center text-sm md:text-2xl font-body hidden md:block">
+              <h3 className="heading-victorian text-lg md:text-2xl">ทำเนียบผู้เล่น</h3>
+              <p className="text-victorian-400 text-center text-xs md:text-sm font-body hidden md:block">
                 รายชื่อนักผจญภัยและสหายร่วมรบ
               </p>
             </div>
@@ -712,21 +714,21 @@ export default function DashboardContent({
           {isAdmin && (
             <Link
               href="/dashboard/pathways-grant"
-              className="group relative overflow-hidden card-victorian p-6 md:p-12 lg:p-16 flex flex-col items-center justify-center gap-4 md:gap-8 
-                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[180px] md:min-h-[350px]
+              className="group relative overflow-hidden card-victorian p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center gap-3 md:gap-5 
+                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[140px] md:min-h-[200px]
                         cursor-pointer"
             >
-              <CornerOrnament className="absolute top-0 left-0 w-12 h-12 md:w-24 md:h-24" />
-              <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-12 h-12 md:w-24 md:h-24" />
-              <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-12 h-12 md:w-24 md:h-24" />
-              <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] w-12 h-12 md:w-24 md:h-24" />
-              <div className="relative z-10 flex flex-col items-center gap-3 md:gap-8">
-                <div className="w-16 h-16 md:w-32 md:h-32 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
+              <CornerOrnament className="absolute top-0 left-0 w-8 h-8 md:w-14 md:h-14" />
+              <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-8 h-8 md:w-14 md:h-14" />
+              <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-8 h-8 md:w-14 md:h-14" />
+              <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] w-8 h-8 md:w-14 md:h-14" />
+              <div className="relative z-10 flex flex-col items-center gap-2 md:gap-4">
+                <div className="w-12 h-12 md:w-18 md:h-18 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
                               flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
-                  <BookOpen className="w-8 h-8 md:w-16 md:h-16 text-gold-400" />
+                  <BookOpen className="w-6 h-6 md:w-9 md:h-9 text-gold-400" />
                 </div>
-                <h3 className="heading-victorian text-2xl md:text-5xl">มอบโอสถ</h3>
-                <p className="text-victorian-400 text-center text-sm md:text-2xl font-body hidden md:block">
+                <h3 className="heading-victorian text-lg md:text-2xl">มอบโอสถ</h3>
+                <p className="text-victorian-400 text-center text-xs md:text-sm font-body hidden md:block">
                   มอบเส้นทางและติดตามการตัดสินใจ
                 </p>
               </div>
@@ -735,21 +737,21 @@ export default function DashboardContent({
           {isAdmin && (
             <Link
               href="/dashboard/grant-skills"
-              className="group relative overflow-hidden card-victorian p-6 md:p-12 lg:p-16 flex flex-col items-center justify-center gap-4 md:gap-8 
-                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[180px] md:min-h-[350px]
+              className="group relative overflow-hidden card-victorian p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center gap-3 md:gap-5 
+                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[140px] md:min-h-[200px]
                         cursor-pointer"
             >
-              <CornerOrnament className="absolute top-0 left-0 w-12 h-12 md:w-24 md:h-24" />
-              <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-12 h-12 md:w-24 md:h-24" />
-              <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-12 h-12 md:w-24 md:h-24" />
-              <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] w-12 h-12 md:w-24 md:h-24" />
-              <div className="relative z-10 flex flex-col items-center gap-3 md:gap-8">
-                <div className="w-16 h-16 md:w-32 md:h-32 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
+              <CornerOrnament className="absolute top-0 left-0 w-8 h-8 md:w-14 md:h-14" />
+              <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-8 h-8 md:w-14 md:h-14" />
+              <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-8 h-8 md:w-14 md:h-14" />
+              <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] w-8 h-8 md:w-14 md:h-14" />
+              <div className="relative z-10 flex flex-col items-center gap-2 md:gap-4">
+                <div className="w-12 h-12 md:w-18 md:h-18 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
                               flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
-                  <Flame className="w-8 h-8 md:w-16 md:h-16 text-gold-400" />
+                  <Flame className="w-6 h-6 md:w-9 md:h-9 text-gold-400" />
                 </div>
-                <h3 className="heading-victorian text-2xl md:text-5xl">มอบพลัง</h3>
-                <p className="text-victorian-400 text-center text-sm md:text-2xl font-body hidden md:block">
+                <h3 className="heading-victorian text-lg md:text-2xl">มอบพลัง</h3>
+                <p className="text-victorian-400 text-center text-xs md:text-sm font-body hidden md:block">
                   มอบสกิลพิเศษให้ผู้เล่น
                 </p>
               </div>
@@ -1079,26 +1081,26 @@ export default function DashboardContent({
       )}
 
       {mustChoosePathway && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-          <div className="relative w-full max-w-6xl">
+          <div className="relative w-full max-w-4xl my-auto">
             <div className="border border-gold-400/20 rounded-2xl overflow-hidden bg-victorian-950/90 shadow-[0_0_60px_rgba(212,175,55,0.15)]">
-              <div className="p-6 md:p-8 border-b border-gold-400/10">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="p-3 md:p-5 border-b border-gold-400/10">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <div className="heading-victorian text-2xl md:text-3xl text-gold-200">กรุณาเลือกเส้นทางของคุณ</div>
-                    <div className="text-victorian-400 text-sm mt-1">สถานะ: กำลังรอตัดสินใจ</div>
+                    <div className="heading-victorian text-base md:text-xl text-gold-200">กรุณาเลือกเส้นทางของคุณ</div>
+                    <div className="text-victorian-400 text-xs mt-0.5">สถานะ: กำลังรอตัดสินใจ</div>
                   </div>
-                  <div className="px-3 py-1.5 text-xs rounded-full border border-amber-400/40 text-amber-200 bg-amber-500/10">
+                  <div className="px-3 py-1 text-xs rounded-full border border-amber-400/40 text-amber-200 bg-amber-500/10">
                     เลื่อนซ้าย/ขวาเพื่อดูตัวเลือกทั้งหมด
                   </div>
                 </div>
                 {choiceError && (
-                  <div className="mt-3 text-red-400 text-sm">{choiceError}</div>
+                  <div className="mt-2 text-red-400 text-xs">{choiceError}</div>
                 )}
               </div>
-              <div className="p-6 md:p-8">
-                <div className="flex gap-5 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-4">
+              <div className="p-3 md:p-5">
+                <div className="flex gap-3 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2">
                   {availablePathways.map(pathway => {
                     const detailText = pathway.overview || pathway.description || 'ไม่มีรายละเอียด'
                     return (

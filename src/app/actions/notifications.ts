@@ -141,7 +141,7 @@ export async function createNotifications(
 
 /**
  * Get notifications for the current user.
- * - Admin/DM: sees ALL notifications (feed of everything)
+ * - Admin/DM: sees only null-target (broadcast) or notifications targeted to themselves
  * - Player: sees only notifications targeted to them
  */
 export async function getNotifications(page: number = 1) {
@@ -164,11 +164,8 @@ export async function getNotifications(page: number = 1) {
     .order('created_at', { ascending: false })
     .range(offset, offset + NOTIF_PAGE_SIZE - 1)
 
-  // RLS handles filtering: admin sees all, player sees own
-  // But we also need to handle is_read correctly for admins
-  if (!isAdmin) {
-    query = query.eq('target_user_id', user.id)
-  }
+  // Everyone sees only their own or null-target notifications
+  query = query.or(`target_user_id.eq.${user.id},target_user_id.is.null`)
 
   const { data, count, error } = await query
 
@@ -191,22 +188,11 @@ export async function getUnreadNotificationCount() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return 0
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
-
-  let query = supabase
+  const query = supabase
     .from('notifications')
     .select('id', { count: 'exact', head: true })
     .eq('is_read', false)
-
-  if (!isAdmin) {
-    query = query.eq('target_user_id', user.id)
-  }
+    .or(`target_user_id.eq.${user.id},target_user_id.is.null`)
 
   const { count } = await query
   return count || 0
@@ -234,22 +220,9 @@ export async function markAllNotificationsRead() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
-
-  let query = supabase
+  await supabase
     .from('notifications')
     .update({ is_read: true })
     .eq('is_read', false)
-
-  if (!isAdmin) {
-    query = query.eq('target_user_id', user.id)
-  }
-
-  await query
+    .or(`target_user_id.eq.${user.id},target_user_id.is.null`)
 }

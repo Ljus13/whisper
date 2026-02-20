@@ -42,6 +42,8 @@ interface LogEntry {
   action: string
   title: string
   detail: string | null
+  skill_id: string
+  player_id: string
   player_name: string
   player_avatar: string | null
   granter_name: string
@@ -50,6 +52,19 @@ interface LogEntry {
   reference_code: string | null
   note: string | null
   created_at: string
+}
+
+interface GrantFormInitialValues {
+  title: string
+  detail: string
+  effectHp: number
+  effectSanity: number
+  effectMaxSanity: number
+  effectTravel: number
+  effectMaxTravel: number
+  effectSpirituality: number
+  effectMaxSpirituality: number
+  effectPotionDigest: number
 }
 
 /* ─── Helpers ─── */
@@ -215,18 +230,19 @@ function SkillSelector({
    GRANT FORM
    ═══════════════════════════════════════ */
 function GrantForm({
-  player, skill, onClose, onSuccess
+  players, skill, initialValues, onClose, onSuccess
 }: {
-  player: PlayerRow
+  players: PlayerRow[]
   skill: SkillOption
+  initialValues?: GrantFormInitialValues
   onClose: () => void
   onSuccess: () => void
 }) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
-  const [title, setTitle] = useState('')
-  const [detail, setDetail] = useState('')
+  const [title, setTitle] = useState(initialValues?.title ?? '')
+  const [detail, setDetail] = useState(initialValues?.detail ?? '')
   const [imageUrl, setImageUrl] = useState('')
   const [isTransferable, setIsTransferable] = useState(false)
   const [reusePolicy, setReusePolicy] = useState<'once' | 'cooldown' | 'unlimited'>('once')
@@ -236,14 +252,14 @@ function GrantForm({
   const [expiryDate, setExpiryDate] = useState('')
   const [expiryTime, setExpiryTime] = useState('23:59')
 
-  const [effectHp, setEffectHp] = useState(0)
-  const [effectSanity, setEffectSanity] = useState(0)
-  const [effectMaxSanity, setEffectMaxSanity] = useState(0)
-  const [effectTravel, setEffectTravel] = useState(0)
-  const [effectMaxTravel, setEffectMaxTravel] = useState(0)
-  const [effectSpirituality, setEffectSpirituality] = useState(0)
-  const [effectMaxSpirituality, setEffectMaxSpirituality] = useState(0)
-  const [effectPotionDigest, setEffectPotionDigest] = useState(0)
+  const [effectHp, setEffectHp] = useState(initialValues?.effectHp ?? 0)
+  const [effectSanity, setEffectSanity] = useState(initialValues?.effectSanity ?? 0)
+  const [effectMaxSanity, setEffectMaxSanity] = useState(initialValues?.effectMaxSanity ?? 0)
+  const [effectTravel, setEffectTravel] = useState(initialValues?.effectTravel ?? 0)
+  const [effectMaxTravel, setEffectMaxTravel] = useState(initialValues?.effectMaxTravel ?? 0)
+  const [effectSpirituality, setEffectSpirituality] = useState(initialValues?.effectSpirituality ?? 0)
+  const [effectMaxSpirituality, setEffectMaxSpirituality] = useState(initialValues?.effectMaxSpirituality ?? 0)
+  const [effectPotionDigest, setEffectPotionDigest] = useState(initialValues?.effectPotionDigest ?? 0)
 
   function handleSubmit() {
     setError(null)
@@ -260,8 +276,7 @@ function GrantForm({
       cooldownMinutes = cooldownUnit === 'hr' ? val * 60 : val
     }
 
-    const input: GrantSkillInput = {
-      playerId: player.id,
+    const baseInput = {
       skillId: skill.id,
       title: title.trim(),
       detail: detail.trim() || undefined,
@@ -281,8 +296,12 @@ function GrantForm({
     }
 
     startTransition(async () => {
-      const r = await grantSkillToPlayer(input)
-      if (r.error) setError(r.error)
+      const errors: string[] = []
+      for (const p of players) {
+        const r = await grantSkillToPlayer({ ...baseInput, playerId: p.id })
+        if (r.error) errors.push(`${p.display_name || '?'}: ${r.error}`)
+      }
+      if (errors.length) setError(errors.join(' | '))
       else onSuccess()
     })
   }
@@ -305,24 +324,45 @@ function GrantForm({
     <Modal onClose={onClose}>
       <div className="flex items-center justify-between">
         <h3 className="heading-victorian text-xl flex items-center gap-2">
-          <Gift className="w-5 h-5 text-gold-400" /> มอบพลัง
+          <Gift className="w-5 h-5 text-gold-400" />
+          {players.length > 1 ? `มอบพลัง (${players.length} คน)` : 'มอบพลัง'}
         </h3>
         <button onClick={onClose} className="text-victorian-400 hover:text-gold-400"><X className="w-5 h-5" /></button>
       </div>
 
       {/* Target info */}
-      <div className="flex items-center gap-3 p-3 rounded-lg bg-victorian-900/50 border border-gold-400/10">
-        {player.avatar_url ? (
-          <img src={player.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover border border-gold-400/20" />
-        ) : (
-          <div className="w-10 h-10 rounded-full bg-victorian-800 border border-gold-400/20 flex items-center justify-center">
-            <Users className="w-5 h-5 text-victorian-500" />
+      {players.length === 1 ? (
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-victorian-900/50 border border-gold-400/10">
+          {players[0].avatar_url ? (
+            <img src={players[0].avatar_url} alt="" className="w-10 h-10 rounded-full object-cover border border-gold-400/20" />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-victorian-800 border border-gold-400/20 flex items-center justify-center">
+              <Users className="w-5 h-5 text-victorian-500" />
+            </div>
+          )}
+          <div>
+            <div className="text-gold-200 font-semibold">{players[0].display_name || 'ไม่ระบุชื่อ'}</div>
           </div>
-        )}
-        <div>
-          <div className="text-gold-200 font-semibold">{player.display_name || 'ไม่ระบุชื่อ'}</div>
         </div>
-      </div>
+      ) : (
+        <div className="p-3 rounded-lg bg-victorian-900/50 border border-gold-400/10 space-y-2">
+          <div className="text-xs text-victorian-400 font-semibold uppercase tracking-wider">ผู้รับพลัง {players.length} คน</div>
+          <div className="flex flex-wrap gap-2">
+            {players.map(p => (
+              <div key={p.id} className="flex items-center gap-1.5 bg-victorian-800/60 border border-gold-400/15 rounded-full px-2 py-1">
+                {p.avatar_url ? (
+                  <img src={p.avatar_url} alt="" className="w-5 h-5 rounded-full object-cover" />
+                ) : (
+                  <div className="w-5 h-5 rounded-full bg-victorian-700 flex items-center justify-center">
+                    <Users className="w-3 h-3 text-victorian-500" />
+                  </div>
+                )}
+                <span className="text-xs text-gold-200">{p.display_name || 'ไม่ระบุชื่อ'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Skill info (full) */}
       <div className="p-4 rounded-lg bg-victorian-800/60 border border-gold-400/15 space-y-2">
@@ -499,7 +539,7 @@ function GrantForm({
           className="btn-gold px-6 py-2 text-sm flex items-center gap-2"
         >
           <Gift className="w-4 h-4" />
-          {isPending ? 'กำลังมอบ...' : 'ยืนยันมอบพลัง'}
+          {isPending ? 'กำลังมอบ...' : players.length > 1 ? `ยืนยันมอบ (${players.length} คน)` : 'ยืนยันมอบพลัง'}
         </button>
       </div>
     </Modal>
@@ -778,10 +818,19 @@ export default function GrantSkillsContent({ userId }: { userId: string }) {
   } | null>(null)
 
   // Grant flow
-  const [grantingPlayer, setGrantingPlayer] = useState<PlayerRow | null>(null)
+  const [grantingPlayers, setGrantingPlayers] = useState<PlayerRow[]>([])
   const [showSkillSelector, setShowSkillSelector] = useState(false)
   const [selectedSkill, setSelectedSkill] = useState<SkillOption | null>(null)
+  const [grantInitialValues, setGrantInitialValues] = useState<GrantFormInitialValues | undefined>(undefined)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+
+  // Multi-select (players tab)
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(new Set())
+
+  // Repeat from history
+  const [repeatLog, setRepeatLog] = useState<LogEntry | null>(null)
+  const [repeatPlayerIds, setRepeatPlayerIds] = useState<Set<string>>(new Set())
+  const [showRepeatPlayerSelect, setShowRepeatPlayerSelect] = useState(false)
 
   // Logs
   const [logs, setLogs] = useState<LogEntry[]>([])
@@ -843,10 +892,22 @@ export default function GrantSkillsContent({ userId }: { userId: string }) {
     )
   }, [players, playerSearch])
 
-  // Start grant flow
+  // Start grant flow for a single player
   function handleGrantClick(player: PlayerRow) {
-    setGrantingPlayer(player)
+    setGrantingPlayers([player])
     setSelectedSkill(null)
+    setGrantInitialValues(undefined)
+    setSuccessMsg(null)
+    ensureSkillData().then(() => setShowSkillSelector(true))
+  }
+
+  // Start grant flow for all currently selected players
+  function handleBatchGrantClick() {
+    const selected = players.filter(p => selectedPlayerIds.has(p.id))
+    if (selected.length === 0) return
+    setGrantingPlayers(selected)
+    setSelectedSkill(null)
+    setGrantInitialValues(undefined)
     setSuccessMsg(null)
     ensureSkillData().then(() => setShowSkillSelector(true))
   }
@@ -858,10 +919,50 @@ export default function GrantSkillsContent({ userId }: { userId: string }) {
 
   function handleGrantSuccess() {
     setSelectedSkill(null)
-    setGrantingPlayer(null)
+    setGrantingPlayers([])
+    setGrantInitialValues(undefined)
+    setSelectedPlayerIds(new Set())
+    setRepeatLog(null)
     setSuccessMsg('มอบพลังสำเร็จ!')
     setTimeout(() => setSuccessMsg(null), 3000)
     if (activeTab === 'logs') fetchLogs(1, logSearch)
+  }
+
+  // Open repeat player-select for a log entry
+  function handleRepeatClick(log: LogEntry) {
+    setRepeatLog(log)
+    setRepeatPlayerIds(new Set())
+    setShowRepeatPlayerSelect(true)
+    ensureSkillData()
+  }
+
+  // Confirm player selection for repeat → open GrantForm pre-filled
+  function handleRepeatConfirm() {
+    if (!repeatLog || repeatPlayerIds.size === 0) return
+    const selected = players.filter(p => repeatPlayerIds.has(p.id))
+    const skill = skillData?.skills.find(s => s.id === repeatLog.skill_id)
+    if (!skill) {
+      setShowRepeatPlayerSelect(false)
+      setSuccessMsg('ไม่พบสกิลต้นฉบับในระบบ')
+      setTimeout(() => setSuccessMsg(null), 3000)
+      return
+    }
+    const fx = repeatLog.effects_json || {}
+    setGrantInitialValues({
+      title: repeatLog.title,
+      detail: repeatLog.detail || '',
+      effectHp: fx.effect_hp || 0,
+      effectSanity: fx.effect_sanity || 0,
+      effectMaxSanity: fx.effect_max_sanity || 0,
+      effectTravel: fx.effect_travel || 0,
+      effectMaxTravel: fx.effect_max_travel || 0,
+      effectSpirituality: fx.effect_spirituality || 0,
+      effectMaxSpirituality: fx.effect_max_spirituality || 0,
+      effectPotionDigest: fx.effect_potion_digest || 0,
+    })
+    setGrantingPlayers(selected)
+    setSelectedSkill(skill)
+    setShowRepeatPlayerSelect(false)
   }
 
   function handleManagePlayer(player: PlayerRow) {
@@ -966,16 +1067,41 @@ export default function GrantSkillsContent({ userId }: { userId: string }) {
         {/* ═══ Players Tab ═══ */}
         {activeTab === 'players' && (
           <div className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-victorian-500" />
-              <input
-                type="text"
-                placeholder="ค้นหาผู้เล่น..."
-                value={playerSearch}
-                onChange={e => setPlayerSearch(e.target.value)}
-                className="input-victorian w-full !pl-10"
-              />
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-victorian-500" />
+                <input
+                  type="text"
+                  placeholder="ค้นหาผู้เล่น..."
+                  value={playerSearch}
+                  onChange={e => { setPlayerSearch(e.target.value); setSelectedPlayerIds(new Set()) }}
+                  className="input-victorian w-full !pl-10"
+                />
+              </div>
             </div>
+
+            {/* Batch action bar */}
+            {selectedPlayerIds.size > 0 && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-gold-400/10 border border-gold-400/30">
+                <span className="text-gold-300 text-sm font-semibold flex items-center gap-2">
+                  <Users className="w-4 h-4" /> เลือกแล้ว {selectedPlayerIds.size} คน
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSelectedPlayerIds(new Set())}
+                    className="px-3 py-1.5 rounded-lg text-xs border border-victorian-600 text-victorian-400 hover:border-victorian-500"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    onClick={handleBatchGrantClick}
+                    className="btn-gold px-4 py-1.5 text-xs flex items-center gap-1.5"
+                  >
+                    <Gift className="w-3.5 h-3.5" /> มอบพลัง ({selectedPlayerIds.size} คน)
+                  </button>
+                </div>
+              </div>
+            )}
 
             {loading ? (
               <div className="space-y-3">
@@ -989,6 +1115,17 @@ export default function GrantSkillsContent({ userId }: { userId: string }) {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-victorian-900/80 text-victorian-400 text-xs uppercase tracking-wider">
+                        <th className="px-3 py-3 text-center w-10">
+                          <input
+                            type="checkbox"
+                            className="accent-gold-400 cursor-pointer"
+                            checked={filteredPlayers.length > 0 && filteredPlayers.every(p => selectedPlayerIds.has(p.id))}
+                            onChange={e => {
+                              if (e.target.checked) setSelectedPlayerIds(new Set(filteredPlayers.map(p => p.id)))
+                              else setSelectedPlayerIds(new Set())
+                            }}
+                          />
+                        </th>
                         <th className="px-4 py-3 text-left">ผู้เล่น</th>
                         <th className="px-4 py-3 text-left hidden md:table-cell">เส้นทาง</th>
                         <th className="px-4 py-3 text-left hidden md:table-cell">ลำดับ</th>
@@ -996,51 +1133,78 @@ export default function GrantSkillsContent({ userId }: { userId: string }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gold-400/5">
-                      {filteredPlayers.map(player => (
-                        <tr key={player.id} className="hover:bg-victorian-900/40 transition-colors">
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-3">
-                              {player.avatar_url ? (
-                                <img src={player.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover border border-gold-400/20" />
-                              ) : (
-                                <div className="w-8 h-8 rounded-full bg-victorian-800 border border-gold-400/20 flex items-center justify-center">
-                                  <Users className="w-4 h-4 text-victorian-500" />
-                                </div>
-                              )}
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <RoleIcon role={player.role} />
-                                  <span className="text-gold-200 font-medium truncate">{player.display_name || 'ไม่ระบุชื่อ'}</span>
-                                </div>
-                                {/* Mobile: show pathway inline */}
-                                <div className="md:hidden text-xs text-victorian-500 mt-0.5">
-                                  {player.pathways.length > 0
-                                    ? player.pathways.map(pw => `${pw.pathwayName} (ลำดับ ${pw.seqNumber})`).join(', ')
-                                    : 'ยังไม่มีเส้นทาง'}
+                      {filteredPlayers.map(player => {
+                        const isChecked = selectedPlayerIds.has(player.id)
+                        return (
+                          <tr
+                            key={player.id}
+                            className={`transition-colors cursor-pointer ${isChecked ? 'bg-gold-400/5' : 'hover:bg-victorian-900/40'}`}
+                            onClick={() => {
+                              setSelectedPlayerIds(prev => {
+                                const next = new Set(prev)
+                                isChecked ? next.delete(player.id) : next.add(player.id)
+                                return next
+                              })
+                            }}
+                          >
+                            <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                className="accent-gold-400 cursor-pointer"
+                                checked={isChecked}
+                                onChange={() => {
+                                  setSelectedPlayerIds(prev => {
+                                    const next = new Set(prev)
+                                    isChecked ? next.delete(player.id) : next.add(player.id)
+                                    return next
+                                  })
+                                }}
+                              />
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                {player.avatar_url ? (
+                                  <img src={player.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover border border-gold-400/20" />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-victorian-800 border border-gold-400/20 flex items-center justify-center">
+                                    <Users className="w-4 h-4 text-victorian-500" />
+                                  </div>
+                                )}
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <RoleIcon role={player.role} />
+                                    <span className="text-gold-200 font-medium truncate">{player.display_name || 'ไม่ระบุชื่อ'}</span>
+                                  </div>
+                                  {/* Mobile: show pathway inline */}
+                                  <div className="md:hidden text-xs text-victorian-500 mt-0.5">
+                                    {player.pathways.length > 0
+                                      ? player.pathways.map(pw => `${pw.pathwayName} (ลำดับ ${pw.seqNumber})`).join(', ')
+                                      : 'ยังไม่มีเส้นทาง'}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 hidden md:table-cell text-victorian-300">
-                            {player.pathways.length > 0
-                              ? player.pathways.map(pw => pw.pathwayName).join(', ')
-                              : <span className="text-victorian-600">—</span>}
-                          </td>
-                          <td className="px-4 py-3 hidden md:table-cell text-victorian-300">
-                            {player.pathways.length > 0
-                              ? player.pathways.map(pw => `${pw.seqNumber}: ${pw.seqName}`).join(', ')
-                              : <span className="text-victorian-600">—</span>}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <button
-                              onClick={() => handleGrantClick(player)}
-                              className="btn-gold px-3 py-1.5 text-xs flex items-center gap-1.5 mx-auto"
-                            >
-                              <Gift className="w-3.5 h-3.5" /> มอบพลัง
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="px-4 py-3 hidden md:table-cell text-victorian-300">
+                              {player.pathways.length > 0
+                                ? player.pathways.map(pw => pw.pathwayName).join(', ')
+                                : <span className="text-victorian-600">—</span>}
+                            </td>
+                            <td className="px-4 py-3 hidden md:table-cell text-victorian-300">
+                              {player.pathways.length > 0
+                                ? player.pathways.map(pw => `${pw.seqNumber}: ${pw.seqName}`).join(', ')
+                                : <span className="text-victorian-600">—</span>}
+                            </td>
+                            <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                              <button
+                                onClick={() => handleGrantClick(player)}
+                                className="btn-gold px-3 py-1.5 text-xs flex items-center gap-1.5 mx-auto"
+                              >
+                                <Gift className="w-3.5 h-3.5" /> มอบพลัง
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1088,6 +1252,7 @@ export default function GrantSkillsContent({ userId }: { userId: string }) {
                         <th className="px-4 py-2.5 text-left">ชื่อ / สกิล</th>
                         <th className="px-4 py-2.5 text-left">โดย</th>
                         <th className="px-4 py-2.5 text-left">หมายเหตุ / โค้ด</th>
+                        <th className="px-4 py-2.5 text-center w-20">ทำซ้ำ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gold-400/5">
@@ -1125,6 +1290,17 @@ export default function GrantSkillsContent({ userId }: { userId: string }) {
                             {log.note && <p className="text-victorian-400 text-xs truncate">{log.note}</p>}
                             {log.reference_code && <p className="text-victorian-600 text-xs font-mono truncate">{log.reference_code}</p>}
                           </td>
+                          <td className="px-4 py-2.5 text-center">
+                            {log.action === 'grant' && (
+                              <button
+                                onClick={() => handleRepeatClick(log)}
+                                className="px-2 py-1 text-xs rounded-lg border border-gold-400/25 text-gold-400 hover:bg-gold-400/10 transition-colors flex items-center gap-1 mx-auto"
+                                title="ทำซ้ำการมอบพลังนี้"
+                              >
+                                <Repeat className="w-3 h-3" /> ทำซ้ำ
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1147,7 +1323,17 @@ export default function GrantSkillsContent({ userId }: { userId: string }) {
                           </span>
                           <span className="text-gold-300 text-xs font-medium truncate">{log.title}</span>
                         </div>
-                        <span className="text-victorian-600 text-xs flex-shrink-0">{fmtDate(log.created_at)}</span>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {log.action === 'grant' && (
+                            <button
+                              onClick={() => handleRepeatClick(log)}
+                              className="px-2 py-0.5 text-xs rounded border border-gold-400/25 text-gold-400 hover:bg-gold-400/10 transition-colors flex items-center gap-1"
+                            >
+                              <Repeat className="w-3 h-3" /> ซ้ำ
+                            </button>
+                          )}
+                          <span className="text-victorian-600 text-xs">{fmtDate(log.created_at)}</span>
+                        </div>
                       </div>
                       <div className="flex items-center gap-3 text-xs text-victorian-400">
                         <span>{log.player_name}</span>
@@ -1292,25 +1478,106 @@ export default function GrantSkillsContent({ userId }: { userId: string }) {
       {/* ═══ Modals ═══ */}
 
       {/* Skill Selector Modal */}
-      {showSkillSelector && skillData && grantingPlayer && (
+      {showSkillSelector && skillData && grantingPlayers.length > 0 && (
         <SkillSelector
           types={skillData.types}
           pathways={skillData.pathways}
           sequences={skillData.sequences}
           skills={skillData.skills}
           onSelect={handleSkillSelected}
-          onClose={() => { setShowSkillSelector(false); setGrantingPlayer(null) }}
+          onClose={() => { setShowSkillSelector(false); setGrantingPlayers([]) }}
         />
       )}
 
       {/* Grant Form Modal */}
-      {selectedSkill && grantingPlayer && (
+      {selectedSkill && grantingPlayers.length > 0 && (
         <GrantForm
-          player={grantingPlayer}
+          players={grantingPlayers}
           skill={selectedSkill}
-          onClose={() => { setSelectedSkill(null); setGrantingPlayer(null) }}
+          initialValues={grantInitialValues}
+          onClose={() => { setSelectedSkill(null); setGrantingPlayers([]); setGrantInitialValues(undefined) }}
           onSuccess={handleGrantSuccess}
         />
+      )}
+
+      {/* Repeat: Player Select Modal */}
+      {showRepeatPlayerSelect && repeatLog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}
+          onClick={() => setShowRepeatPlayerSelect(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border-2 border-gold-400/15 p-6 space-y-4 max-h-[80vh] flex flex-col"
+            style={{ backgroundColor: '#1A1612' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="heading-victorian text-lg flex items-center gap-2">
+                <Repeat className="w-5 h-5 text-gold-400" /> ทำซ้ำ — เลือกผู้รับ
+              </h3>
+              <button onClick={() => setShowRepeatPlayerSelect(false)} className="text-victorian-400 hover:text-gold-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Source info */}
+            <div className="p-3 rounded-lg bg-victorian-900/50 border border-gold-400/10 text-sm space-y-0.5">
+              <div className="text-gold-200 font-semibold">{repeatLog.title}</div>
+              <div className="text-victorian-500 text-xs">{repeatLog.skill_name}</div>
+            </div>
+
+            {/* Player checklist */}
+            <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+              {players.filter(p => p.role === 'player' || p.role === 'dm').map(p => {
+                const sel = repeatPlayerIds.has(p.id)
+                return (
+                  <label
+                    key={p.id}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all border ${
+                      sel ? 'border-gold-400/30 bg-gold-400/8' : 'border-victorian-800 hover:border-victorian-600'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="accent-gold-400"
+                      checked={sel}
+                      onChange={() => {
+                        setRepeatPlayerIds(prev => {
+                          const next = new Set(prev)
+                          sel ? next.delete(p.id) : next.add(p.id)
+                          return next
+                        })
+                      }}
+                    />
+                    {p.avatar_url ? (
+                      <img src={p.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-victorian-800 flex items-center justify-center flex-shrink-0">
+                        <Users className="w-4 h-4 text-victorian-500" />
+                      </div>
+                    )}
+                    <span className="text-sm text-victorian-200">{p.display_name || 'ไม่ระบุชื่อ'}</span>
+                  </label>
+                )
+              })}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-1">
+              <button onClick={() => setShowRepeatPlayerSelect(false)} className="btn-victorian px-4 py-2 text-sm">
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleRepeatConfirm}
+                disabled={repeatPlayerIds.size === 0}
+                className="btn-gold px-5 py-2 text-sm flex items-center gap-2 disabled:opacity-40"
+              >
+                <Gift className="w-4 h-4" />
+                {repeatPlayerIds.size > 0 ? `ดำเนินการ (${repeatPlayerIds.size} คน)` : 'เลือกผู้รับก่อน'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Edit Grant Modal */}

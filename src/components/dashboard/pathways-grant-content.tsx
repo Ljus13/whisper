@@ -67,7 +67,7 @@ function GrantModal({
   const DetailPanel = preview ? (
     <>
       {/* Image */}
-      <div className="relative h-56 md:h-96 flex-shrink-0 overflow-hidden">
+      <div className="relative h-44 md:h-64 flex-shrink-0 overflow-hidden">
         {preview.bg_url ? (
           <img src={preview.bg_url} alt={preview.name} className="w-full h-full object-cover object-top" />
         ) : (
@@ -141,23 +141,39 @@ function GrantModal({
           const isSelected = selectedPathwayIds.includes(p.id)
           const isActive = previewId === p.id
           return (
-            <button
+            <div
               key={p.id}
-              onClick={() => handleSelectItem(p.id)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-all border-l-2 ${
+              className={`w-full flex items-center gap-2 px-2 py-2 text-left transition-all border-l-2 ${
                 isActive
-                  ? 'border-gold-400 bg-gold-400/8 text-gold-200'
-                  : 'border-transparent hover:bg-victorian-800/40 text-victorian-300'
+                  ? 'border-gold-400 bg-gold-400/8'
+                  : 'border-transparent hover:bg-victorian-800/40'
               }`}
             >
-              {p.bg_url ? (
-                <img src={p.bg_url} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0 opacity-80" />
-              ) : (
-                <div className="w-8 h-8 rounded bg-victorian-800 flex-shrink-0" />
-              )}
-              <span className="text-xs font-medium truncate flex-1">{p.name}</span>
-              {isSelected && <CheckCircle2 className="w-4 h-4 text-amber-400 flex-shrink-0" />}
-            </button>
+              {/* Preview area */}
+              <button
+                onClick={() => handleSelectItem(p.id)}
+                className="flex items-center gap-2 flex-1 min-w-0 text-left"
+              >
+                {p.bg_url ? (
+                  <img src={p.bg_url} alt="" className="w-7 h-7 rounded object-cover flex-shrink-0 opacity-80" />
+                ) : (
+                  <div className="w-7 h-7 rounded bg-victorian-800 flex-shrink-0" />
+                )}
+                <span className={`text-xs font-medium truncate ${isActive ? 'text-gold-200' : 'text-victorian-300'}`}>{p.name}</span>
+              </button>
+              {/* Direct toggle checkbox */}
+              <button
+                onClick={e => { e.stopPropagation(); onToggle(p.id) }}
+                title={isSelected ? 'ยกเลิกการเลือก' : 'เลือก'}
+                className={`flex-shrink-0 w-6 h-6 rounded border flex items-center justify-center transition-all ${
+                  isSelected
+                    ? 'bg-amber-500/20 border-amber-400/60 text-amber-300 hover:bg-amber-500/30'
+                    : 'border-victorian-600 text-transparent hover:border-gold-400/40 hover:bg-victorian-800'
+                }`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
           )
         })}
       </div>
@@ -171,8 +187,8 @@ function GrantModal({
       style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}
     >
       <div
-        className="w-full sm:max-w-4xl sm:rounded-xl rounded-t-xl border-2 border-gold-400/20 flex flex-col"
-        style={{ backgroundColor: '#1A1612', height: '100dvh', maxHeight: '100dvh' }}
+        className="w-full sm:max-w-3xl sm:rounded-xl rounded-t-xl border-2 border-gold-400/20 flex flex-col h-[100dvh] sm:h-[82vh]"
+        style={{ backgroundColor: '#1A1612' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}

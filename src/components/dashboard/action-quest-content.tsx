@@ -358,6 +358,17 @@ const QuestCodeRow = memo(function QuestCodeRow({ c, isPending, onCopy, onEdit, 
   onArchive: (id: string, name: string) => void
 }) {
   const isExpired = c.expires_at && new Date(c.expires_at) < new Date()
+  const grants = [
+    c.reward_hp ? `❤️${c.reward_hp > 0 ? '+' : ''}${c.reward_hp}` : '',
+    c.reward_sanity ? `🧠${c.reward_sanity > 0 ? '+' : ''}${c.reward_sanity}` : '',
+    c.reward_travel ? `🗺️${c.reward_travel > 0 ? '+' : ''}${c.reward_travel}` : '',
+    c.reward_spirituality ? `✨${c.reward_spirituality > 0 ? '+' : ''}${c.reward_spirituality}` : '',
+  ].filter(Boolean)
+  const caps = [
+    c.reward_max_sanity ? `🧠↑${c.reward_max_sanity > 0 ? '+' : ''}${c.reward_max_sanity}` : '',
+    c.reward_max_travel ? `🗺️↑${c.reward_max_travel > 0 ? '+' : ''}${c.reward_max_travel}` : '',
+    c.reward_max_spirituality ? `✨↑${c.reward_max_spirituality > 0 ? '+' : ''}${c.reward_max_spirituality}` : '',
+  ].filter(Boolean)
   return (
     <tr className={`border-b border-victorian-800/50 hover:bg-victorian-800/20 ${isExpired ? 'opacity-50' : ''}`}>
       <td className="py-2 pr-3 text-victorian-200">{c.name}{isExpired && <span className="text-red-400 text-[10px] ml-1">(หมดอายุ)</span>}</td>
@@ -377,6 +388,24 @@ const QuestCodeRow = memo(function QuestCodeRow({ c, isPending, onCopy, onEdit, 
       <td className="py-2 pr-3">
         {c.npc_name ? (
           <span className="inline-flex items-center gap-1 text-nouveau-ruby text-xs"><Ghost className="w-3 h-3" /> {c.npc_name}</span>
+        ) : (
+          <span className="text-victorian-600 text-xs">—</span>
+        )}
+      </td>
+      <td className="py-2 pr-3">
+        {grants.length > 0 || caps.length > 0 ? (
+          <div className="flex flex-wrap gap-0.5">
+            {grants.map((g, i) => (
+              <span key={i} className={`text-[10px] px-1 py-0.5 rounded ${
+                g.includes('-') ? 'bg-red-900/40 text-red-300' : 'bg-emerald-900/40 text-emerald-300'
+              }`}>{g}</span>
+            ))}
+            {caps.map((g, i) => (
+              <span key={i} className={`text-[10px] px-1 py-0.5 rounded ${
+                g.includes('-') ? 'bg-red-900/40 text-red-300' : 'bg-amber-900/40 text-amber-300'
+              }`}>{g}</span>
+            ))}
+          </div>
         ) : (
           <span className="text-victorian-600 text-xs">—</span>
         )}
@@ -424,11 +453,11 @@ const SubmissionRow = memo(function SubmissionRow({ s, type, isAdmin, isPending,
 }) {
   const name = type === 'action' ? s.action_name : s.quest_name
   const code = type === 'action' ? s.action_code : s.quest_code
-  const grants = type === 'action' && s.status === 'approved' ? [
-    s.reward_hp ? `❤️+${s.reward_hp}` : '',
-    s.reward_sanity ? `🧠+${s.reward_sanity}` : '',
-    s.reward_travel ? `🗺️+${s.reward_travel}` : '',
-    s.reward_spirituality ? `✨+${s.reward_spirituality}` : '',
+  const grants = s.status === 'approved' ? [
+    s.reward_hp ? `❤️${(s.reward_hp ?? 0) > 0 ? '+' : ''}${s.reward_hp}` : '',
+    s.reward_sanity ? `🧠${(s.reward_sanity ?? 0) > 0 ? '+' : ''}${s.reward_sanity}` : '',
+    s.reward_travel ? `🗺️${(s.reward_travel ?? 0) > 0 ? '+' : ''}${s.reward_travel}` : '',
+    s.reward_spirituality ? `✨${(s.reward_spirituality ?? 0) > 0 ? '+' : ''}${s.reward_spirituality}` : '',
   ].filter(Boolean) : []
   return (
     <tr className="border-b border-victorian-800/50 hover:bg-victorian-800/20">
@@ -461,17 +490,19 @@ const SubmissionRow = memo(function SubmissionRow({ s, type, isAdmin, isPending,
           ))}
         </div>
       </td>
-      {type === 'action' && (
-        <td className="py-2.5 pr-3">
-          {grants.length === 0 ? (
-            <span className="text-victorian-600 text-xs">—</span>
-          ) : (
-            <div className="flex flex-wrap gap-1">
-              {grants.map((g, i) => <span key={i} className="text-[10px] bg-emerald-900/40 text-emerald-300 px-1 py-0.5 rounded">{g}</span>)}
-            </div>
-          )}
-        </td>
-      )}
+      <td className="py-2.5 pr-3">
+        {grants.length === 0 ? (
+          <span className="text-victorian-600 text-xs">—</span>
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {grants.map((g, i) => (
+              <span key={i} className={`text-[10px] px-1 py-0.5 rounded ${
+                g.includes('-') ? 'bg-red-900/40 text-red-300' : 'bg-emerald-900/40 text-emerald-300'
+              }`}>{g}</span>
+            ))}
+          </div>
+        )}
+      </td>
       <td className="py-2.5 pr-3 text-victorian-500 text-xs">{fmtDate(s.created_at)}</td>
       {isAdmin && (
         <td className="py-2.5">
@@ -725,6 +756,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   const [npcOptions, setNpcOptions] = useState<NpcOption[]>([])
   // ─── Action rewards state ───
   const [genRewards, setGenRewards] = useState<ActionRewards>({})
+  // ─── Quest rewards state ───
+  const [genQuestRewards, setGenQuestRewards] = useState<ActionRewards>({})
   // ─── Expiration state ───
   const [genExpiresDate, setGenExpiresDate] = useState<string>('')
   const [genExpiresTime, setGenExpiresTime] = useState<string>('')
@@ -863,6 +896,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   const [editQuestName, setEditQuestName] = useState('')
   const [editQuestMapId, setEditQuestMapId] = useState('')
   const [editQuestNpcId, setEditQuestNpcId] = useState('')
+  const [editQuestRewards, setEditQuestRewards] = useState<ActionRewards>({})
   const [editQuestNoExpiry, setEditQuestNoExpiry] = useState(true)
   const [editQuestUnlimitedRepeats, setEditQuestUnlimitedRepeats] = useState(true)
   const [editQuestExpiresDate, setEditQuestExpiresDate] = useState('')
@@ -910,6 +944,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     resetGenCommon()
     setGenMapId('')
     setGenNpcId('')
+    setGenQuestRewards({})
     setGenQuestExpiresDate('')
     setGenQuestExpiresTime('')
     setGenQuestMaxRepeats('')
@@ -1370,7 +1405,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
 
       const r = type === 'action'
         ? await generateActionCode(genName, genRewards, expiration)
-        : await generateQuestCode(genName, genMapId || null, genNpcId || null, expiration)
+        : await generateQuestCode(genName, genMapId || null, genNpcId || null, expiration, genQuestRewards)
       if (r.error) { setGenError(r.error) }
       else if (r.code && r.name) {
         setGenResult({ code: r.code, name: r.name })
@@ -1673,6 +1708,15 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     setEditQuestName(c.name)
     setEditQuestMapId(c.map_id || '')
     setEditQuestNpcId(c.npc_token_id || '')
+    setEditQuestRewards({
+      reward_hp: c.reward_hp || 0,
+      reward_sanity: c.reward_sanity || 0,
+      reward_travel: c.reward_travel || 0,
+      reward_spirituality: c.reward_spirituality || 0,
+      reward_max_sanity: c.reward_max_sanity || 0,
+      reward_max_travel: c.reward_max_travel || 0,
+      reward_max_spirituality: c.reward_max_spirituality || 0,
+    })
     const hasExpiry = !!c.expires_at
     setEditQuestNoExpiry(!hasExpiry)
     if (hasExpiry) {
@@ -1700,7 +1744,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       if (!editQuestUnlimitedRepeats && editQuestMaxRepeats) expiration.max_repeats = parseInt(editQuestMaxRepeats) || null
       else expiration.max_repeats = null
 
-      const r = await updateQuestCode(editQuest!.id, editQuestName, editQuestMapId || null, editQuestNpcId || null, expiration)
+      const r = await updateQuestCode(editQuest!.id, editQuestName, editQuestMapId || null, editQuestNpcId || null, expiration, editQuestRewards)
       if (r.error) { setEditQuestError(r.error) }
       else {
         toast('success', 'แก้ไขโค้ดภารกิจสำเร็จ')
@@ -1777,7 +1821,6 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
 
   /* ═══════════════════ RENDER ═══════════════════ */
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; href: string }[] = useMemo(() => ([
-    { key: 'actions', label: 'แอคชั่น', icon: <Swords className="w-4 h-4" />, href: '/dashboard/action-quest/actions' },
     { key: 'quests', label: 'ภารกิจ', icon: <Target className="w-4 h-4" />, href: '/dashboard/action-quest/quests' },
     { key: 'prayer', label: 'ภาวนา', icon: <Church className="w-4 h-4" />, href: '/dashboard/action-quest/prayer' },
     { key: 'sleep', label: 'นอนหลับ', icon: <Moon className="w-4 h-4" />, href: '/dashboard/action-quest/sleep' },
@@ -1851,12 +1894,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
             <h2 className="heading-victorian text-xl md:text-2xl flex items-center gap-3 mb-5">
               <Shield className="w-5 h-5 text-gold-400" /> เครื่องมือ DM / Admin
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-              <button type="button"
-                onClick={openGenActionModal}
-                className="btn-gold !px-5 !py-4 !text-sm flex items-center justify-center gap-2 cursor-pointer">
-                <Swords className="w-5 h-5" /> สร้างโค้ดแอคชั่น
-              </button>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <button type="button"
                 onClick={openGenQuestModal}
                 className="btn-gold !px-5 !py-4 !text-sm flex items-center justify-center gap-2 cursor-pointer">
@@ -1905,7 +1943,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
           <h2 className="heading-victorian text-xl md:text-2xl flex items-center gap-3 mb-5">
             <Swords className="w-5 h-5 text-gold-400" /> การกระทำ
           </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {/* นอนหลับ */}
             <button type="button"
               onClick={() => { if (!sleepSubmitted) setShowSleepForm(true) }}
@@ -1946,19 +1984,6 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                   : 'border-emerald-500/30 bg-emerald-500/5 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-500/10 cursor-pointer'}`}>
               <Target className={`w-8 h-8 ${isSleepPending ? 'text-victorian-600' : 'text-emerald-400'}`} />
               <span>ส่งภารกิจ</span>
-              {isSleepPending && <span className="text-[10px] text-indigo-400">💤 กำลังหลับ</span>}
-            </button>
-
-            {/* ส่งแอคชั่น */}
-            <button type="button"
-              onClick={openSubmitActionModal}
-              disabled={isSleepPending}
-              className={`px-5 py-4 rounded-lg border-2 text-base font-bold flex flex-col items-center gap-2 transition-all
-                ${isSleepPending
-                  ? 'border-victorian-700/30 bg-victorian-900/40 text-victorian-500 cursor-not-allowed'
-                  : 'border-amber-500/30 bg-amber-500/5 text-amber-300 hover:border-amber-400/50 hover:bg-amber-500/10 cursor-pointer'}`}>
-              <Send className={`w-8 h-8 ${isSleepPending ? 'text-victorian-600' : 'text-amber-400'}`} />
-              <span>ส่งแอคชั่น</span>
               {isSleepPending && <span className="text-[10px] text-indigo-400">💤 กำลังหลับ</span>}
             </button>
 
@@ -2014,9 +2039,9 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
         </div>
 
         {/* ═══════════════════════════════════════ */}
-        {/*  TAB: ACTIONS                           */}
+        {/*  TAB: ACTIONS (hidden — merged into quests)  */}
         {/* ═══════════════════════════════════════ */}
-        {activeTab === 'actions' && (
+        {activeTab === 'actions' && false && (
           <div className="space-y-6">
             {/* Admin: code history */}
             {isAdmin && actionCodes.length > 0 && (
@@ -2095,6 +2120,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                         <th className="pb-2 pr-3">โค้ด</th>
                         <th className="pb-2 pr-3">สถานที่</th>
                         <th className="pb-2 pr-3">NPC</th>
+                        <th className="pb-2 pr-3">รางวัล</th>
                         <th className="pb-2 pr-3">หมดอายุ</th>
                         <th className="pb-2 pr-3">ทำซ้ำ</th>
                         <th className="pb-2 pr-3">สร้างโดย</th>
@@ -2747,6 +2773,40 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                 </select>
               </div>
 
+              {/* ── Quest rewards (allow negative) ── */}
+              <div className="space-y-2">
+                <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+                  <Gift className="w-3.5 h-3.5 text-emerald-400" /> มอบรางวัล <span className="text-victorian-600 text-xs font-normal">(เพิ่ม/ลดค่าปัจจุบัน — ติดลบได้)</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {actionRewardFields.map(({ key, label, icon }) => (
+                    <div key={key} className="flex items-center gap-1.5">
+                      <span className="text-sm">{icon}</span>
+                      <input type="number" placeholder={label}
+                        value={genQuestRewards[key] || ''}
+                        onChange={e => setGenQuestRewards(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))}
+                        className="input-victorian w-full !py-1.5 !text-xs" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+                  <Gift className="w-3.5 h-3.5 text-amber-400" /> เพิ่ม/ลดค่าสูงสุด <span className="text-victorian-600 text-xs font-normal">(ขยาย/ลด ลิมิต)</span>
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {actionMaxRewardFields.map(({ key, label, icon }) => (
+                    <div key={key} className="flex items-center gap-1.5">
+                      <span className="text-sm">{icon}</span>
+                      <input type="number" placeholder={label}
+                        value={genQuestRewards[key] || ''}
+                        onChange={e => setGenQuestRewards(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))}
+                        className="input-victorian w-full !py-1.5 !text-xs" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {/* ── Expiration ── */}
               <div className="space-y-2">
                 <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
@@ -3362,6 +3422,39 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
               {npcOptions.map(n => <option key={n.id} value={n.id}>{n.npc_name}{n.map_name ? ` (${n.map_name})` : ''}</option>)}
             </select>
           </div>
+          {/* ── Quest rewards (allow negative) ── */}
+          <div className="space-y-2">
+            <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+              <Gift className="w-3.5 h-3.5 text-emerald-400" /> มอบรางวัล <span className="text-victorian-600 text-xs font-normal">(เพิ่ม/ลดค่าปัจจุบัน — ติดลบได้)</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {actionRewardFields.map(({ key, label, icon }) => (
+                <div key={key} className="flex items-center gap-1.5">
+                  <span className="text-sm">{icon}</span>
+                  <input type="number" placeholder={label}
+                    value={editQuestRewards[key] || ''}
+                    onChange={e => setEditQuestRewards(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))}
+                    className="input-victorian w-full !py-1.5 !text-xs" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+              <Gift className="w-3.5 h-3.5 text-amber-400" /> เพิ่ม/ลดค่าสูงสุด <span className="text-victorian-600 text-xs font-normal">(ขยาย/ลด ลิมิต)</span>
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {actionMaxRewardFields.map(({ key, label, icon }) => (
+                <div key={key} className="flex items-center gap-1.5">
+                  <span className="text-sm">{icon}</span>
+                  <input type="number" placeholder={label}
+                    value={editQuestRewards[key] || ''}
+                    onChange={e => setEditQuestRewards(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))}
+                    className="input-victorian w-full !py-1.5 !text-xs" />
+                </div>
+              ))}
+            </div>
+          </div>
           <div className="space-y-2">
             <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
               <CalendarClock className="w-3.5 h-3.5 text-cyan-400" /> วันหมดอายุ
@@ -3544,7 +3637,7 @@ function SubmissionTable({ subs, type, isAdmin, isPending, onApprove, onReject, 
             <th className="pb-2 pr-3">โค้ด</th>
             <th className="pb-2 pr-3">สถานะ</th>
             <th className="pb-2 pr-3">หลักฐาน</th>
-            {type === 'action' && <th className="pb-2 pr-3">รางวัล</th>}
+            <th className="pb-2 pr-3">รางวัล</th>
             <th className="pb-2 pr-3">วันที่</th>
             <th className="pb-2 pr-3">ตรวจโดย</th>
             {isAdmin && <th className="pb-2">จัดการ</th>}

@@ -93,7 +93,7 @@ export default function PlayerDetailView({ profile, playerPathways, pathways, se
     <div className="min-h-screen bg-[#0F0D0A]">
       {/* Header */}
       <header className="border-b border-gold-400/10 bg-victorian-950/80 backdrop-blur-sm sticky top-0 z-40">
-        <div className="max-w-5xl mx-auto px-4 py-4 md:px-8 flex items-center gap-4">
+        <div className="w-[90%] mx-auto px-4 py-4 md:px-8 flex items-center gap-4">
           <button
             onClick={() => router.back()}
             className="p-2 -ml-2 text-victorian-400 hover:text-gold-400 hover:bg-gold-400/5 rounded-full transition-all"
@@ -106,7 +106,7 @@ export default function PlayerDetailView({ profile, playerPathways, pathways, se
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8 md:px-8">
+      <main className="w-[90%] mx-auto px-4 py-8 md:px-8">
         <div className="card-victorian relative overflow-hidden bg-[#1A1612]">
           {/* Banner Background */}
           {profile.background_url && (
