@@ -651,7 +651,7 @@ export async function submitAction(codeStr: string, evidenceUrls: string[]) {
     type: 'action_submitted',
     title: `${actorName} ส่งแอคชั่น "${codeRow.name}"`,
     message: 'มีแอคชั่นใหม่รอตรวจสอบ',
-    link: '/dashboard/action-quest/actions',
+    link: '/dashboard/action-quest/quests',
   })
 
   revalidateActionQuestPaths()
@@ -832,7 +832,7 @@ export async function approveActionSubmission(id: string) {
     type: 'action_approved',
     title: 'แอคชั่นได้รับการอนุมัติแล้ว!',
     message: 'ได้รับรางวัลจากแอคชั่นที่ส่ง',
-    link: '/dashboard/action-quest/actions',
+    link: '/dashboard/action-quest/quests',
   })
 
   revalidateActionQuestPaths()
@@ -881,7 +881,7 @@ export async function rejectActionSubmission(id: string, reason: string) {
     type: 'action_rejected',
     title: 'แอคชั่นถูกปฏิเสธ',
     message: `เหตุผล: ${reason.trim()}`,
-    link: '/dashboard/action-quest/actions',
+    link: '/dashboard/action-quest/quests',
   })
 
   revalidateActionQuestPaths()

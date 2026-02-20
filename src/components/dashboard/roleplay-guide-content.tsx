@@ -81,7 +81,7 @@ Output Format:
       <div className="relative z-10 max-w-6xl mx-auto p-6 md:p-10 space-y-6">
         <div className="flex items-center gap-4">
           <Link
-            href="/dashboard/action-quest/actions"
+            href="/dashboard/action-quest/quests"
             className="p-2 rounded-lg border border-gold-400/10 text-gold-400 hover:bg-victorian-800/50 transition-colors"
           >
             ←
