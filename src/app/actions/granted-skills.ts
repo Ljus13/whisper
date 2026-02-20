@@ -369,25 +369,25 @@ export async function useGrantedSkill(grantedSkillId: string, successRate: numbe
     .eq('player_id', user.id)
     .single()
 
-  if (!gs) return { error: 'ไม่พบสกิลที่มอบให้' }
-  if (!gs.is_active) return { error: 'สกิลนี้ถูกปิดใช้งานแล้ว' }
+  if (!gs) return { error: 'ไม่พบสิ่งที่มอบให้' }
+  if (!gs.is_active) return { error: 'สิ่งนี้ถูกปิดใช้งานแล้ว' }
 
   // 2) Check expiration
   if (gs.expires_at && new Date(gs.expires_at) < new Date()) {
     await supabase.from('granted_skills').update({ is_active: false }).eq('id', gs.id)
-    return { error: 'สกิลนี้หมดอายุแล้ว' }
+    return { error: 'สิ่งนี้หมดอายุแล้ว' }
   }
 
   // 3) Check reuse policy
   if (gs.reuse_policy === 'once' && gs.times_used > 0) {
-    return { error: 'สกิลนี้ใช้ได้ครั้งเดียวและถูกใช้แล้ว' }
+    return { error: 'สิ่งนี้ใช้ได้ครั้งเดียวและถูกใช้แล้ว' }
   }
   if (gs.reuse_policy === 'cooldown' && gs.last_used_at && gs.cooldown_minutes) {
     const cooldownEnd = new Date(gs.last_used_at)
     cooldownEnd.setMinutes(cooldownEnd.getMinutes() + gs.cooldown_minutes)
     if (new Date() < cooldownEnd) {
       const remaining = Math.ceil((cooldownEnd.getTime() - Date.now()) / 60000)
-      return { error: `สกิลอยู่ในช่วงพักตัว อีก ${remaining} นาที` }
+      return { error: `ติดคูลดาวน์ อีก ${remaining} นาที` }
     }
   }
 
@@ -398,7 +398,7 @@ export async function useGrantedSkill(grantedSkillId: string, successRate: numbe
     .eq('id', gs.skill_id)
     .single()
 
-  if (!skill) return { error: 'ไม่พบข้อมูลสกิล' }
+  if (!skill) return { error: 'ไม่พบข้อมูล' }
 
   // 5) Fetch player profile & check spirituality
   const { data: profile } = await supabase

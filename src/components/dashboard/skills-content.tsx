@@ -835,7 +835,7 @@ function PlayerSkillView({
                 </div>
                 <div className="rounded-xl border border-gold-400/20 bg-victorian-900/60 p-4 text-victorian-200 text-sm space-y-1">
                   <p className="text-gold-300 font-semibold">คำแนะนำสำคัญ</p>
-                  <p>โปรดระบุอัตราสำเร็จตามที่ได้รับแจ้งจากทีมงาน แล้วกดยืนยันเพื่อสุ่มผลลัพธ์</p>
+                  <p>โปรดระบุอัตราสำเร็จตามที่ได้รับแจ้งจากทีมงาน หรือระบุ 1 หากทีมงานไม่มีเงื่อนไขพิเศาอะไร แล้วกดยืนยันเพื่อสุ่มผลลัพธ์</p>
                   <p>ระบบจะตัดแต้มทุกครั้ง ไม่ว่าจะสำเร็จหรือไม่</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1258,7 +1258,7 @@ function PlayerSkillView({
                     >
                       {isPending ? '...' : !canUse
                         ? (gs.reuse_policy === 'once' && gs.times_used > 0 ? 'ใช้แล้ว' : remainingMin > 0 ? `พัก ${remainingMin} นาที` : 'ไม่สามารถใช้ได้')
-                        : 'ใช้สกิล'}
+                        : 'ใช้งาน'}
                     </button>
 
                     {/* Transfer / Bound */}
@@ -1313,7 +1313,7 @@ function PlayerSkillView({
                 {/* Grant title & detail */}
                 <div className="text-center space-y-2">
                   <div className="flex items-center justify-center gap-2 text-gold-300 text-lg font-semibold">
-                    <Gift className="w-5 h-5" /> ใช้สกิลที่ได้รับมอบ
+                    <Gift className="w-5 h-5" /> ใช้งาน
                   </div>
                   <h3 className="heading-victorian text-3xl">{selectedGranted.title}</h3>
                   {selectedGranted.detail && <p className="text-victorian-300 text-sm">{selectedGranted.detail}</p>}
@@ -1362,7 +1362,7 @@ function PlayerSkillView({
 
                 <div className="rounded-xl border border-gold-400/20 bg-victorian-900/60 p-4 text-victorian-200 text-sm space-y-1">
                   <p className="text-gold-300 font-semibold">คำแนะนำ</p>
-                  <p>โปรดระบุอัตราสำเร็จตามที่ได้รับแจ้งจากทีมงาน แล้วกดยืนยันเพื่อสุ่มผลลัพธ์</p>
+                  <p>โปรดระบุอัตราสำเร็จตามที่ได้รับแจ้งจากทีมงาน แล้วกดยืนยันเพื่อสุ่มผลลัพธ์ หรือระบุ 1 หากทีมงานไม่มีเงื่อนไขพิเศษอะไร</p>
                   <p>พลังวิญญาณจะถูกหักตามค่าสกิลต้นฉบับ และผลกระทบเพิ่มเติมจะถูกนำไปใช้ทันที</p>
                 </div>
 

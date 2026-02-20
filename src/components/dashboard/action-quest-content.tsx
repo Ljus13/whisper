@@ -1795,7 +1795,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
 
   return (
     <div className="min-h-screen bg-victorian-950 text-victorian-100">
-      <div className="fixed inset-0 opacity-5" style={{
+      <div className="fixed inset-0 opacity-5 pointer-events-none" style={{
         backgroundImage: `radial-gradient(circle at 25% 25%, #D4AF37 1px, transparent 1px),
                           radial-gradient(circle at 75% 75%, #D4AF37 1px, transparent 1px)`,
         backgroundSize: '60px 60px'
