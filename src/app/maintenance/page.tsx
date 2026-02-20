@@ -1,23 +1,18 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { getMaintenanceStatus } from '@/app/actions/maintenance'
-import { Wrench, ShieldOff } from 'lucide-react'
+import { Wrench } from 'lucide-react'
 import Link from 'next/link'
 
 export default async function MaintenancePage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Logged-in users go to dashboard (layout handles the wall/banner)
-  if (user) {
-    redirect('/dashboard')
-  }
-
   const maintenance = await getMaintenanceStatus()
 
-  // If maintenance is off, no reason to be here → go to login
+  // If maintenance is off, no reason to be here → go to appropriate page
   if (!maintenance.enabled) {
-    redirect('/')
+    redirect(user ? '/dashboard' : '/')
   }
 
   return (
@@ -88,20 +83,12 @@ export default async function MaintenancePage() {
           </div>
         )}
 
-        {/* Login Disabled Notice */}
-        <div className="flex items-center justify-center gap-3 p-4 rounded-xl border border-red-500/20 bg-red-950/30">
-          <ShieldOff className="w-5 h-5 text-red-400 shrink-0" />
-          <p className="text-red-300/90 text-sm font-body">
-            การเข้าสู่ระบบถูกปิดชั่วคราว
-          </p>
-        </div>
-
-        {/* Refresh Button */}
+        {/* Login Button */}
         <Link
           href="/"
           className="inline-flex items-center gap-2 btn-victorian px-6 py-3 text-sm"
         >
-          ลองอีกครั้ง
+          เข้าสู่ระบบ
         </Link>
       </div>
 
