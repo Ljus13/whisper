@@ -38,6 +38,56 @@ function revalidateActionQuestPaths() {
   revalidatePath('/dashboard/action-quest/roleplay')
 }
 
+/**
+ * Broadcast refresh signal via Supabase Realtime (Dual Communication Strategy).
+ * - channelName: which realtime channel to use
+ * - eventName: event type (e.g. 'pun_refresh', 'aq_refresh')
+ * - payload: data to send
+ *
+ * Fire-and-forget with 500ms timeout — never blocks the server action.
+ */
+async function broadcastRefresh(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  channelName: string,
+  eventName: string,
+  payload: Record<string, unknown>
+) {
+  try {
+    await Promise.race([
+      new Promise<void>((resolve) => {
+        const channel = supabase.channel(channelName)
+        channel.subscribe(async (status: string) => {
+          if (status !== 'SUBSCRIBED') return
+          try {
+            await channel.send({ type: 'broadcast', event: eventName, payload })
+          } catch {}
+          try { supabase.removeChannel(channel) } catch {}
+          resolve()
+        })
+      }),
+      new Promise<void>((resolve) => setTimeout(resolve, 500))
+    ])
+  } catch {}
+}
+
+/** Broadcast punishment banner refresh to specific players */
+async function broadcastPunishmentRefresh(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  playerIds: string[]
+) {
+  if (playerIds.length === 0) return
+  await broadcastRefresh(supabase, 'punishment_banner_realtime', 'pun_refresh', { player_ids: playerIds, ts: Date.now() })
+}
+
+/** Broadcast action-quest tab refresh (new submission, status change, etc.) */
+async function broadcastAQRefresh(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  tab: 'actions' | 'quests',
+  detail?: Record<string, unknown>
+) {
+  await broadcastRefresh(supabase, 'aq_realtime_broadcast', 'aq_refresh', { tab, ts: Date.now(), ...detail })
+}
+
 /* ══════════════════════════════════════════════
    SLEEP REQUESTS — นอนหลับ (Rest)
    ══════════════════════════════════════════════ */
@@ -517,6 +567,10 @@ export async function submitAction(codeStr: string, evidenceUrls: string[]) {
     })
 
   if (error) return { error: error.message }
+
+  // Broadcast so admin sees new submission instantly
+  await broadcastAQRefresh(supabase, 'actions', { player_id: user.id })
+
   revalidateActionQuestPaths()
   return { success: true, actionName: codeRow.name }
 }
@@ -680,6 +734,12 @@ export async function approveActionSubmission(id: string) {
     }
   }
 
+  // Broadcast instant refresh to player's submission list + punishment banner
+  await Promise.all([
+    broadcastAQRefresh(supabase, 'actions', { player_id: submission.player_id }),
+    broadcastPunishmentRefresh(supabase, [submission.player_id]),
+  ])
+
   revalidateActionQuestPaths()
   return { success: true }
 }
@@ -690,6 +750,16 @@ export async function rejectActionSubmission(id: string, reason: string) {
   if (!user) return { error: 'Not authenticated' }
   if (!(await requireAdmin(supabase, user.id))) return { error: 'Admin/DM required' }
   if (!reason?.trim()) return { error: 'กรุณาระบุเหตุผลการปฏิเสธ' }
+
+  // Fetch submission to get player_id for broadcast
+  const { data: submission } = await supabase
+    .from('action_submissions')
+    .select('id, player_id')
+    .eq('id', id)
+    .eq('status', 'pending')
+    .single()
+
+  if (!submission) return { error: 'ไม่พบคำขอหรือคำขอถูกดำเนินการแล้ว' }
 
   const { error } = await supabase
     .from('action_submissions')
@@ -703,6 +773,10 @@ export async function rejectActionSubmission(id: string, reason: string) {
     .eq('status', 'pending')
 
   if (error) return { error: error.message }
+
+  // Broadcast so player sees rejection instantly
+  await broadcastAQRefresh(supabase, 'actions', { player_id: submission.player_id })
+
   revalidateActionQuestPaths()
   return { success: true }
 }
@@ -816,6 +890,10 @@ export async function submitQuest(codeStr: string, evidenceUrls: string[]) {
     })
 
   if (error) return { error: error.message }
+
+  // Broadcast so admin sees new submission instantly
+  await broadcastAQRefresh(supabase, 'quests', { player_id: user.id })
+
   revalidateActionQuestPaths()
   return { success: true, questName: codeRow.name }
 }
@@ -887,6 +965,16 @@ export async function approveQuestSubmission(id: string) {
   if (!user) return { error: 'Not authenticated' }
   if (!(await requireAdmin(supabase, user.id))) return { error: 'Admin/DM required' }
 
+  // Fetch submission first to get player_id for broadcast
+  const { data: submission } = await supabase
+    .from('quest_submissions')
+    .select('id, player_id')
+    .eq('id', id)
+    .eq('status', 'pending')
+    .single()
+
+  if (!submission) return { error: 'ไม่พบคำขอหรือคำขอถูกดำเนินการแล้ว' }
+
   const { error } = await supabase
     .from('quest_submissions')
     .update({ status: 'approved', reviewed_by: user.id, reviewed_at: new Date().toISOString() })
@@ -894,6 +982,13 @@ export async function approveQuestSubmission(id: string) {
     .eq('status', 'pending')
 
   if (error) return { error: error.message }
+
+  // Broadcast instant refresh to player's submission list + punishment banner
+  await Promise.all([
+    broadcastAQRefresh(supabase, 'quests', { player_id: submission.player_id }),
+    broadcastPunishmentRefresh(supabase, [submission.player_id]),
+  ])
+
   revalidateActionQuestPaths()
   return { success: true }
 }
@@ -904,6 +999,16 @@ export async function rejectQuestSubmission(id: string, reason: string) {
   if (!user) return { error: 'Not authenticated' }
   if (!(await requireAdmin(supabase, user.id))) return { error: 'Admin/DM required' }
   if (!reason?.trim()) return { error: 'กรุณาระบุเหตุผลการปฏิเสธ' }
+
+  // Fetch submission to get player_id for broadcast
+  const { data: qSub } = await supabase
+    .from('quest_submissions')
+    .select('id, player_id')
+    .eq('id', id)
+    .eq('status', 'pending')
+    .single()
+
+  if (!qSub) return { error: 'ไม่พบคำขอหรือคำขอถูกดำเนินการแล้ว' }
 
   const { error } = await supabase
     .from('quest_submissions')
@@ -917,6 +1022,10 @@ export async function rejectQuestSubmission(id: string, reason: string) {
     .eq('status', 'pending')
 
   if (error) return { error: error.message }
+
+  // Broadcast so player sees rejection instantly
+  await broadcastAQRefresh(supabase, 'quests', { player_id: qSub.player_id })
+
   revalidateActionQuestPaths()
   return { success: true }
 }
@@ -1351,6 +1460,9 @@ export async function createPunishment(input: PunishmentInput) {
       created_by: user.id,
     })
   }
+
+  // Broadcast instant notification to all assigned players
+  await broadcastPunishmentRefresh(supabase, input.player_ids)
 
   revalidateActionQuestPaths()
   return { success: true, punishmentId: punishment.id }

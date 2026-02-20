@@ -1263,7 +1263,39 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   // ─── Lazy Realtime subscriptions (subscribe only to tables for the active tab) ───
   const pageRefs = useRef({ acPage, qcPage, asPage, qsPage, slPage, punPage, punLogPage, rpPage, plPage })
   pageRefs.current = { acPage, qcPage, asPage, qsPage, slPage, punPage, punLogPage, rpPage, plPage }
+  const activeTabRef = useRef(activeTab)
+  activeTabRef.current = activeTab
 
+  // ── Broadcast channel (primary — instant, persistent across tab switches) ──
+  useEffect(() => {
+    const supabase = createClient()
+
+    function instantRefreshForTab(tab: 'actions' | 'quests') {
+      const cur = pageRefs.current
+      if (tab === 'actions') {
+        invalidateCache('aq:actionSubs')
+        fetchActionSubs(cur.asPage)
+      } else if (tab === 'quests') {
+        invalidateCache('aq:questSubs')
+        fetchQuestSubs(cur.qsPage)
+      }
+    }
+
+    const broadcastChannel = supabase
+      .channel('aq_realtime_broadcast', { config: { broadcast: { self: true } } })
+      .on('broadcast', { event: 'aq_refresh' }, ({ payload }) => {
+        const tab = payload?.tab as string | undefined
+        const curTab = activeTabRef.current
+        if (tab === curTab && (tab === 'actions' || tab === 'quests')) {
+          instantRefreshForTab(tab)
+        }
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(broadcastChannel) }
+  }, [fetchActionSubs, fetchQuestSubs])
+
+  // ── Postgres changes channel (backup — debounced, per-tab) ──
   useEffect(() => {
     const supabase = createClient()
 
@@ -1289,10 +1321,9 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
           invalidateCache('aq:roleplaySubs')
           fetchRoleplaySubs(cur.rpPage)
         }
-      }, 400)
+      }, 300)
     }
 
-    // Build a channel with only the tables relevant to the current tab
     const tabTables: Record<TabKey, string[]> = {
       actions:     ['action_codes', 'action_submissions'],
       quests:      ['quest_codes', 'quest_submissions'],
@@ -1308,9 +1339,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     }
     channel.subscribe()
 
-    return () => {
-      supabase.removeChannel(channel)
-    }
+    return () => { supabase.removeChannel(channel) }
   }, [activeTab, fetchActionCodes, fetchActionSubs, fetchQuestCodes, fetchQuestSubs, fetchSleepLogs, fetchPrayerLogs, fetchPunishments, fetchPunishmentLogs, fetchRoleplaySubs])
 
   // ─── Handlers ───

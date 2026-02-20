@@ -37,6 +37,8 @@ export default function PunishmentBanner() {
   const mountedRef = useRef(true)
   useEffect(() => {
     mountedRef.current = true
+    let userId: string | null = null
+
     const fetchData = () => {
       getPlayerActivePunishments().then(r => {
         if (mountedRef.current) setPunishments(r)
@@ -44,11 +46,29 @@ export default function PunishmentBanner() {
     }
     fetchData()
 
-    const debouncedFetch = () => debouncedCall('pun-banner', fetchData, 500)
+    // Debounced fetch for postgres_changes backup (reduced from 500ms → 200ms)
+    const debouncedFetch = () => debouncedCall('pun-banner', fetchData, 200)
 
     const supabase = createClient()
+
+    // Get user ID for broadcast filtering
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) userId = user.id
+    })
+
+    // ── Dual Communication Strategy (same pattern as map-viewer) ──
+    // 1. Broadcast (primary): instant notification from server actions
+    // 2. Postgres changes (backup): reliable fallback
     const channel = supabase
-      .channel('punishment_banner_realtime')
+      .channel('punishment_banner_realtime', { config: { broadcast: { self: true } } })
+      // Broadcast: instant refresh — no debounce
+      .on('broadcast', { event: 'pun_refresh' }, ({ payload }) => {
+        if (!userId) { fetchData(); return }
+        if (payload?.player_ids?.includes(userId)) {
+          fetchData() // immediate refresh
+        }
+      })
+      // Postgres changes: backup with debounce
       .on('postgres_changes', { event: '*', schema: 'public', table: 'punishments' }, debouncedFetch)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'punishment_players' }, debouncedFetch)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'punishment_required_tasks' }, debouncedFetch)
@@ -97,7 +117,7 @@ export default function PunishmentBanner() {
                       <span>{current}/{total}</span>
                     </div>
                     <div className="h-1.5 rounded-full bg-red-950/60 border border-red-500/20 overflow-hidden">
-                      <div className="h-full bg-red-400/80" style={{ width: `${pct}%` }} />
+                      <div className="h-full bg-red-400/80 transition-all duration-700 ease-out" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 </div>
@@ -144,7 +164,7 @@ export default function PunishmentBanner() {
               </div>
               <div className="mt-2 h-2 rounded-full bg-red-950/60 border border-red-500/20 overflow-hidden">
                 <div
-                  className="h-full bg-red-400/80"
+                  className="h-full bg-red-400/80 transition-all duration-700 ease-out"
                   style={{
                     width: `${(detail.progress_total ?? 0) > 0 ? Math.min(100, Math.round((detail.progress_current / detail.progress_total) * 100)) : 0}%`,
                   }}
