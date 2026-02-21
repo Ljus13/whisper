@@ -4,6 +4,7 @@ import NotificationBell from '@/components/dashboard/notification-bell'
 import MaintenanceBanner from '@/components/dashboard/maintenance-banner'
 import MaintenanceToggle from '@/components/dashboard/maintenance-toggle'
 import MaintenanceWall from '@/components/dashboard/maintenance-wall'
+import DiscordLinkBanner from '@/components/dashboard/discord-link-banner'
 import { getMaintenanceStatus } from '@/app/actions/maintenance'
 
 export default async function DashboardLayout({
@@ -16,14 +17,16 @@ export default async function DashboardLayout({
 
   let isAdmin = false
   let isDM = false
+  let discordLinked = false
   if (user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, discord_user_id')
       .eq('id', user.id)
       .single()
     isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
     isDM = profile?.role === 'dm'
+    discordLinked = !!profile?.discord_user_id
   }
 
   const maintenance = await getMaintenanceStatus()
@@ -56,8 +59,9 @@ export default async function DashboardLayout({
       )}
 
       {!isAdmin && user && (
-        <div className="max-w-screen-2xl mx-auto px-4 md:px-8 pt-4">
+        <div className="max-w-screen-2xl mx-auto px-4 md:px-8 pt-4 space-y-3">
           <PunishmentBanner />
+          <DiscordLinkBanner discordLinked={discordLinked} />
         </div>
       )}
       {children}

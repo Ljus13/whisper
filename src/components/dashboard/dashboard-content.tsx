@@ -1,6 +1,6 @@
 'use client'
 
-import { signOut, updateProfile } from '@/app/actions/auth'
+import { signOut, updateProfile, linkDiscordIdentity } from '@/app/actions/auth'
 import { promotePotionDigest } from '@/app/actions/action-quest'
 import { acceptPathwayGrant } from '@/app/actions/pathway-grants'
 import { applySanityDecay } from '@/app/actions/players'
@@ -33,6 +33,7 @@ interface Profile {
   travel_points: number
   max_travel_points: number
   potion_digest_progress: number
+  discord_user_id?: string | null
   religion_id?: string | null
   religions?: {
     id: string
@@ -230,6 +231,13 @@ export default function DashboardContent({
   const [digestProgress, setDigestProgress] = useState(profile?.potion_digest_progress ?? 0)
   const [isPromotingDigest, setIsPromotingDigest] = useState(false)
   const [promoteResult, setPromoteResult] = useState<{ seqNumber: number; seqName: string | null } | null>(null)
+  const [isLinkingDiscord, startLinkDiscordTransition] = useTransition()
+
+  function handleLinkDiscord() {
+    startLinkDiscordTransition(async () => {
+      await linkDiscordIdentity()
+    })
+  }
   const [availablePathways, setAvailablePathways] = useState<GrantPathway[]>(grantPathways)
   const [hasChosenPathway, setHasChosenPathway] = useState(hasPathway)
   const [choiceError, setChoiceError] = useState<string | null>(null)
@@ -595,6 +603,42 @@ export default function DashboardContent({
                   {profile?.religions?.name_th || 'ยังไม่เลือกศาสนา'}
                 </span>
               </div>
+            </div>
+
+            {/* Discord Connection Row */}
+            <div className="p-3 md:p-4 bg-victorian-900/60 border border-[#5865F2]/20 rounded-md flex items-center gap-2 md:gap-3">
+              <div className="p-1.5 md:p-2 bg-[#5865F2]/10 rounded-full shrink-0">
+                <svg className="w-5 h-5 md:w-7 md:h-7 text-[#5865F2]" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.947 2.418-2.157 2.418z" />
+                </svg>
+              </div>
+              <div className="flex flex-col flex-1 min-w-0">
+                <span className="text-[#5865F2]/80 font-display text-[10px] md:text-xs uppercase tracking-wider">Discord</span>
+                <span className="text-nouveau-cream text-xs md:text-sm font-display">
+                  {profile?.discord_user_id ? 'เชื่อมต่อแล้ว' : 'ยังไม่ได้เชื่อมต่อ'}
+                </span>
+              </div>
+              {profile?.discord_user_id ? (
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/25 text-emerald-300 text-[10px] md:text-xs font-semibold shrink-0">
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  Linked
+                </span>
+              ) : (
+                <button
+                  onClick={handleLinkDiscord}
+                  disabled={isLinkingDiscord}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold
+                             bg-[#5865F2] hover:bg-[#4752C4] text-white
+                             transition-colors duration-200 disabled:opacity-50 disabled:cursor-wait shrink-0"
+                >
+                  {isLinkingDiscord ? (
+                    <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                  )}
+                  Connect
+                </button>
+              )}
             </div>
           </div>
         </section>

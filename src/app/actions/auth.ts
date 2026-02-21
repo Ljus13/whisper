@@ -134,6 +134,26 @@ export async function updateDisplayName(displayName: string) {
   return { success: true }
 }
 
+export async function linkDiscordIdentity() {
+  const supabase = await createClient()
+  const origin = (await headers()).get('origin')
+
+  const { data, error } = await supabase.auth.linkIdentity({
+    provider: 'discord',
+    options: {
+      redirectTo: `${origin}/auth/callback`,
+    },
+  })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  if (data.url) {
+    redirect(data.url)
+  }
+}
+
 export async function signOut() {
   const supabase = await createClient()
   await supabase.auth.signOut()
