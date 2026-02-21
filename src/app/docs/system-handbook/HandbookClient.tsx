@@ -227,6 +227,69 @@ const TOC = [
 ]
 
 /* ─────────────────────────────────────────────────────────────
+   Font-size control bar
+───────────────────────────────────────────────────────────── */
+const FONT_SIZES = [12, 13, 14, 15, 16, 17, 18, 20, 22, 24] as const
+type FontSize = typeof FONT_SIZES[number]
+const DEFAULT_FONT_SIZE: FontSize = 14
+const LS_KEY = 'handbook-font-size'
+
+/** Injects scoped CSS so Tailwind rem-based text classes scale correctly */
+function HbFontStyle({ px }: { px: number }) {
+  const f = (r: number) => `${(r * px).toFixed(2)}px`
+  return (
+    <style>{`
+      .hb-doc .text-xs   { font-size: ${f(0.75)}  !important }
+      .hb-doc .text-sm   { font-size: ${f(0.875)} !important }
+      .hb-doc .text-base { font-size: ${f(1)}     !important }
+      .hb-doc .text-lg   { font-size: ${f(1.125)} !important }
+      .hb-doc .text-xl   { font-size: ${f(1.25)}  !important }
+      .hb-doc .text-2xl  { font-size: ${f(1.5)}   !important }
+      .hb-doc .text-3xl  { font-size: ${f(1.875)} !important }
+      .hb-doc .text-4xl  { font-size: ${f(2.25)}  !important }
+    `}</style>
+  )
+}
+
+function FontSizeBar({ size, onChange }: { size: FontSize; onChange: (s: FontSize) => void }) {
+  const idx = FONT_SIZES.indexOf(size)
+  const canDec = idx > 0
+  const canInc = idx < FONT_SIZES.length - 1
+
+  return (
+    <div className="sticky top-0 z-40 flex items-center justify-end gap-1.5 py-1.5 px-2
+                    bg-victorian-950/80 backdrop-blur-sm border-b border-gold-subtle/30 -mx-1 mb-4">
+      <span className="text-[10px] text-victorian-500 font-display tracking-widest uppercase mr-1">ขนาดตัวอักษร</span>
+      <button
+        type="button"
+        disabled={!canDec}
+        onClick={() => canDec && onChange(FONT_SIZES[idx - 1])}
+        className="w-6 h-6 rounded-sm border border-gold-subtle/40 flex items-center justify-center
+                   text-gold-400 hover:bg-gold-900/40 hover:border-gold-400/40 transition-colors
+                   disabled:opacity-30 disabled:cursor-not-allowed text-sm leading-none"
+        title="ลดขนาดตัวอักษร"
+      >
+        −
+      </button>
+      <span className="text-[10px] text-gold-400/70 font-display w-6 text-center tabular-nums">
+        {size}
+      </span>
+      <button
+        type="button"
+        disabled={!canInc}
+        onClick={() => canInc && onChange(FONT_SIZES[idx + 1])}
+        className="w-6 h-6 rounded-sm border border-gold-subtle/40 flex items-center justify-center
+                   text-gold-400 hover:bg-gold-900/40 hover:border-gold-400/40 transition-colors
+                   disabled:opacity-30 disabled:cursor-not-allowed text-sm leading-none"
+        title="เพิ่มขนาดตัวอักษร"
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
    Main Client Component
 ───────────────────────────────────────────────────────────── */
 export default function HandbookClient() {
@@ -234,9 +297,28 @@ export default function HandbookClient() {
   const openLightbox = useCallback((s: LightboxState) => setLightbox(s), [])
   const closeLightbox = useCallback(() => setLightbox(null), [])
 
+  const [fontSize, setFontSize] = useState<FontSize>(DEFAULT_FONT_SIZE)
+
+  // Load from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(LS_KEY)
+    const parsed = stored ? Number(stored) : NaN
+    if (FONT_SIZES.includes(parsed as FontSize)) {
+      setFontSize(parsed as FontSize)
+    }
+  }, [])
+
+  const handleFontSize = useCallback((s: FontSize) => {
+    setFontSize(s)
+    localStorage.setItem(LS_KEY, String(s))
+  }, [])
+
   return (
-    <div className="space-y-2">
+    <>
+      <HbFontStyle px={fontSize} />
+      <div className="hb-doc space-y-2">
       <Lightbox state={lightbox} onClose={closeLightbox} />
+      <FontSizeBar size={fontSize} onChange={handleFontSize} />
 
       {/* ── Hero ───────────────────────────────────────────────── */}
       <div className="relative mb-2">
@@ -1091,6 +1173,7 @@ export default function HandbookClient() {
         </p>
       </div>
 
-    </div>
+      </div>
+    </>
   )
 }
