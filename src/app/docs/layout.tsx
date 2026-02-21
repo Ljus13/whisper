@@ -13,6 +13,18 @@ const NAV_ITEMS = [
       { href: '/docs/bot-handbook', label: '🤖 Bot Handbook' },
     ],
   },
+  {
+    section: 'คู่มือระบบ',
+    links: [
+      { href: '/docs/system-handbook', label: '📘 System Handbook' },
+    ],
+  },
+  {
+    section: 'เรื่องราว',
+    links: [
+      { href: '/world-setting', label: '🌑 World Setting' },
+    ],
+  },
 ]
 
 export const metadata = {

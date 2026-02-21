@@ -15,6 +15,22 @@ const DOC_CARDS = [
     tags: ['Player', 'Admin', 'DM'],
     status: 'ready' as const,
   },
+  {
+    href: '/docs/system-handbook',
+    icon: '📘',
+    title: 'System Handbook',
+    description: 'คู่มือการใช้งานระบบฉบับสมบูรณ์ — ตั้งแต่ล็อคอิน, แผนที่, สกิล, แอคชั่น, อีเวนท์ และทำเนียบผู้เล่น',
+    tags: ['Player'],
+    status: 'ready' as const,
+  },
+  {
+    href: '/world-setting',
+    icon: '🌑',
+    title: 'World Setting',
+    description: 'เรื่องราวและฉากหลังของโลก — ทิศทางเนื้อหาและบรรยากาศของกิจกรรม Whisper of the Shadow',
+    tags: ['Lore', 'Setting'],
+    status: 'wip' as const,
+  },
 ]
 
 const STATUS_CONFIG = {
