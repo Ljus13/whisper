@@ -1,5 +1,5 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js'
-import { requireLinkedProfile } from '../../lib/supabase'
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from 'discord.js'
+import { requireLinkedProfile, getPlayerPathway } from '../../lib/supabase'
 import { buildStatusEmbed } from '../../lib/embeds'
 
 export const data = new SlashCommandBuilder()
@@ -7,11 +7,12 @@ export const data = new SlashCommandBuilder()
   .setDescription('ดูสถานะตัวละครของคุณ')
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-  await interaction.deferReply({ ephemeral: true })
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral })
 
   const profile = await requireLinkedProfile(interaction)
   if (!profile) return
 
-  const embed = buildStatusEmbed(profile)
+  const pathway = await getPlayerPathway(profile.id)
+  const embed = buildStatusEmbed(profile, pathway)
   await interaction.editReply({ embeds: [embed] })
 }

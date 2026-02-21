@@ -1,4 +1,4 @@
-import { Client, Collection, GatewayIntentBits, Interaction, Events } from 'discord.js'
+import { Client, Collection, GatewayIntentBits, Interaction, Events, MessageFlags } from 'discord.js'
 import * as fs from 'fs'
 import * as path from 'path'
 import { config } from './config'
@@ -87,17 +87,23 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
       await handleSelect(interaction)
       return
     }
-  } catch (error) {
+  } catch (error: any) {
+    // 10062 = Unknown interaction (token expired / duplicate bot instance) — ไม่ต้องทำอะไร
+    if (error?.code === 10062) {
+      console.warn('[InteractionCreate] Interaction expired (10062) — อาจมี bot รันซ้ำกัน')
+      return
+    }
+
     console.error('[InteractionCreate] Unhandled error:', error)
 
-    const errorMessage = { content: '❌ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง', ephemeral: true }
+    const errorReply = { content: '❌ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง' }
 
     try {
       if (interaction.isRepliable()) {
         if ((interaction as any).deferred || (interaction as any).replied) {
-          await (interaction as any).editReply(errorMessage)
+          await (interaction as any).editReply(errorReply)
         } else {
-          await (interaction as any).reply(errorMessage)
+          await (interaction as any).reply({ ...errorReply, flags: MessageFlags.Ephemeral })
         }
       }
     } catch {}

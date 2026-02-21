@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js'
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, MessageFlags } from 'discord.js'
 import { requireLinkedProfile, supabase } from '../../lib/supabase'
 import { COLORS } from '../../lib/embeds'
 
@@ -7,7 +7,7 @@ export const data = new SlashCommandBuilder()
   .setDescription('ดูการแจ้งเตือน 5 รายการล่าสุดของคุณ')
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-  await interaction.deferReply({ ephemeral: true })
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral })
 
   const profile = await requireLinkedProfile(interaction)
   if (!profile) return

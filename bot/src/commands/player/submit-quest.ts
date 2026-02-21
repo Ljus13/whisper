@@ -9,6 +9,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   TextChannel,
+  MessageFlags,
 } from 'discord.js'
 import { requireLinkedProfile, supabase } from '../../lib/supabase'
 import { COLORS, buildApprovalEmbed } from '../../lib/embeds'
@@ -33,7 +34,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   const evidenceInput = new TextInputBuilder()
     .setCustomId('evidence_urls')
-    .setLabel('URL หลักฐาน (1 ลิงก์ต่อบรรทัด, สูงสุด 3 ลิงก์)')
+    .setLabel('URL หลักฐาน (บรรทัดละ 1 ลิงก์, สูงสุด 3)')
     .setStyle(TextInputStyle.Paragraph)
     .setPlaceholder('https://example.com/image1.jpg\nhttps://example.com/image2.jpg')
     .setRequired(true)
@@ -52,7 +53,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
  * เรียกจาก modal-handler.ts
  */
 export async function handleSubmitQuestModal(interaction: import('discord.js').ModalSubmitInteraction) {
-  await interaction.deferReply({ ephemeral: true })
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral })
 
   const profile = await requireLinkedProfile(interaction)
   if (!profile) return
@@ -77,12 +78,13 @@ export async function handleSubmitQuestModal(interaction: import('discord.js').M
   // ── ตรวจสอบ code ──
   const { data: codeRow } = await supabase
     .from('quest_codes')
-    .select('id, name, code, map_id, npc_token_id, expires_at, max_repeats')
+    .select('id, name, code, map_id, npc_token_id, expires_at, max_repeats, archived')
     .eq('code', codeStr)
+    .eq('archived', false)   // ❌ archived quest ส่งไม่ได้
     .maybeSingle()
 
   if (!codeRow) {
-    await interaction.editReply({ content: '❌ ไม่พบรหัส Quest นี้ กรุณาตรวจสอบรหัสอีกครั้ง' })
+    await interaction.editReply({ content: '❌ ไม่พบรหัส Quest นี้ หรือภารกิจนี้ถูกปิดไปแล้ว' })
     return
   }
   if (codeRow.expires_at && new Date(codeRow.expires_at) < new Date()) {
@@ -90,11 +92,13 @@ export async function handleSubmitQuestModal(interaction: import('discord.js').M
     return
   }
   if (codeRow.max_repeats !== null && codeRow.max_repeats !== undefined) {
+    // นับเฉพาะ pending/approved — rejected ไม่นับ (ให้ส่งใหม่ได้)
     const { count } = await supabase
       .from('quest_submissions')
       .select('id', { count: 'exact', head: true })
       .eq('player_id', profile.id)
       .eq('quest_code_id', codeRow.id)
+      .neq('status', 'rejected')
     if ((count || 0) >= codeRow.max_repeats) {
       await interaction.editReply({
         content: `❌ คุณส่ง Quest นี้ครบ ${codeRow.max_repeats} ครั้งแล้ว ไม่สามารถส่งซ้ำได้อีก`,
@@ -167,21 +171,25 @@ export async function handleSubmitQuestModal(interaction: import('discord.js').M
     .single()
 
   if (error || !inserted) {
+    console.error('[submit-quest] Insert error:', error)
     await interaction.editReply({ content: `❌ เกิดข้อผิดพลาด: ${error?.message ?? 'unknown'}` })
     return
   }
 
   // ── สร้าง in-app notification ให้ admin ──
-  await supabase.from('notifications').insert({
-    target_user_id: null,
-    actor_id: profile.id,
-    actor_name: profile.display_name,
-    type: 'quest_submitted',
-    title: `${profile.display_name} ส่ง Quest "${codeRow.name}"`,
-    message: 'มีภารกิจใหม่รอตรวจสอบ',
-    link: '/dashboard/action-quest/quests',
-    is_read: false,
-  })
+  try {
+    await supabase.from('notifications').insert({
+      target_user_id: null,
+      actor_id: profile.id,
+      actor_name: profile.display_name,
+      type: 'quest_submitted',
+      title: `${profile.display_name} ส่ง Quest "${codeRow.name}"`,
+      message: 'มีภารกิจใหม่รอตรวจสอบ',
+      link: '/dashboard/action-quest/quests',
+    })
+  } catch (notifErr) {
+    console.error('[submit-quest] Notification error (non-fatal):', notifErr)
+  }
 
   // ── reply ผู้ส่ง ──
   const successEmbed = new EmbedBuilder()

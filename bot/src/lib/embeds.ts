@@ -24,19 +24,26 @@ export function progressBar(current: number, max: number, length = 10): string {
 /**
  * Embed สถานะตัวละคร (ใช้ใน /status)
  */
-export function buildStatusEmbed(profile: {
-  display_name: string | null
-  avatar_url: string | null
-  role: string
-  hp: number
-  max_hp: number
-  sanity: number
-  max_sanity: number
-  travel_points: number
-  max_travel_points: number
-  spirituality: number
-  max_spirituality: number
-}): EmbedBuilder {
+export function buildStatusEmbed(
+  profile: {
+    display_name: string | null
+    avatar_url: string | null
+    role: string
+    hp: number
+    sanity: number
+    max_sanity: number
+    travel_points: number
+    max_travel_points: number
+    spirituality: number
+    max_spirituality: number
+    potion_digest_progress: number
+    religion: { name_th: string } | null
+  },
+  pathway: {
+    pathway: { name: string } | null
+    sequence: { name: string; seq_number: number } | null
+  } | null
+): EmbedBuilder {
   const name = profile.display_name || 'ผู้เล่น'
 
   const bar = (val: number, max: number) =>
@@ -48,15 +55,25 @@ export function buildStatusEmbed(profile: {
     dm: '👑 Dungeon Master',
   }
 
+  const pathwayName = pathway?.pathway?.name ?? 'ยังไม่มีเส้นทาง'
+  const sequenceText = pathway?.sequence
+    ? `ลำดับ ${pathway.sequence.seq_number} — ${pathway.sequence.name}`
+    : 'ยังไม่มีลำดับ'
+  const religionName = profile.religion?.name_th ?? 'ไม่มีศาสนา'
+
   return new EmbedBuilder()
     .setTitle(`🎭 ${name}`)
     .setThumbnail(profile.avatar_url || null)
     .setColor(COLORS.primary)
     .addFields(
-      { name: '❤️ HP', value: bar(profile.hp, profile.max_hp), inline: false },
-      { name: '🧠 Sanity', value: bar(profile.sanity, profile.max_sanity), inline: false },
-      { name: '👟 Travel Points', value: bar(profile.travel_points, profile.max_travel_points), inline: false },
-      { name: '✨ Spirituality', value: bar(profile.spirituality, profile.max_spirituality), inline: false },
+      { name: '❤️ ตัวตายตัวแทน (HP)', value: `**${profile.hp}** ❤️`, inline: true },
+      { name: '🧠 สติ (Sanity)', value: bar(profile.sanity, profile.max_sanity), inline: false },
+      { name: '👟 เส้นทาง (Travel)', value: bar(profile.travel_points, profile.max_travel_points), inline: false },
+      { name: '✨ จิตวิญญาณ (Spirituality)', value: bar(profile.spirituality, profile.max_spirituality), inline: false },
+      { name: '🧪 แถบย่อยโอสถ', value: `${progressBar(profile.potion_digest_progress, 100)}  **${profile.potion_digest_progress}%**`, inline: false },
+      { name: '🛤️ เส้นทาง', value: pathwayName, inline: true },
+      { name: '📊 ลำดับ', value: sequenceText, inline: true },
+      { name: '🙏 ศาสนา', value: religionName, inline: true },
     )
     .setFooter({ text: roleLabel[profile.role] || profile.role })
     .setTimestamp()

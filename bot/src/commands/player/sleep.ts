@@ -9,6 +9,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   TextChannel,
+  MessageFlags,
 } from 'discord.js'
 import { requireLinkedProfile, supabase } from '../../lib/supabase'
 import { COLORS, buildApprovalEmbed } from '../../lib/embeds'
@@ -52,7 +53,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
  * เรียกจาก modal-handler.ts
  */
 export async function handleSleepModal(interaction: import('discord.js').ModalSubmitInteraction) {
-  await interaction.deferReply({ ephemeral: true })
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral })
 
   const profile = await requireLinkedProfile(interaction)
   if (!profile) return

@@ -41,7 +41,7 @@ CREATE TABLE public.granted_skill_logs (
   player_id uuid NOT NULL,
   skill_id uuid NOT NULL,
   granted_by uuid NOT NULL,
-  action text NOT NULL CHECK (action = ANY (ARRAY['grant'::text, 'use'::text, 'expire'::text, 'revoke'::text])),
+  action text NOT NULL CHECK (action = ANY (ARRAY['grant'::text, 'use'::text, 'expire'::text, 'revoke'::text, 'transfer'::text])),
   title text NOT NULL,
   detail text,
   effects_json jsonb,
@@ -78,6 +78,7 @@ CREATE TABLE public.granted_skills (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   image_url text,
+  is_transferable boolean NOT NULL DEFAULT false,
   CONSTRAINT granted_skills_pkey PRIMARY KEY (id),
   CONSTRAINT granted_skills_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.profiles(id),
   CONSTRAINT granted_skills_skill_id_fkey FOREIGN KEY (skill_id) REFERENCES public.skills(id),
@@ -160,6 +161,21 @@ CREATE TABLE public.maps (
   CONSTRAINT maps_pkey PRIMARY KEY (id),
   CONSTRAINT maps_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
+CREATE TABLE public.notifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  target_user_id uuid,
+  actor_id uuid,
+  actor_name text,
+  type text NOT NULL,
+  title text NOT NULL,
+  message text,
+  link text,
+  is_read boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT notifications_target_user_id_fkey FOREIGN KEY (target_user_id) REFERENCES public.profiles(id),
+  CONSTRAINT notifications_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.pathway_grants (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   player_id uuid NOT NULL,
@@ -214,6 +230,7 @@ CREATE TABLE public.profiles (
   display_name_set boolean NOT NULL DEFAULT false,
   religion_id uuid,
   potion_digest_progress integer NOT NULL DEFAULT 0 CHECK (potion_digest_progress >= 0 AND potion_digest_progress <= 100),
+  discord_user_id text UNIQUE,
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id),
   CONSTRAINT profiles_religion_id_fkey FOREIGN KEY (religion_id) REFERENCES public.religions(id)
@@ -291,6 +308,14 @@ CREATE TABLE public.quest_codes (
   expires_at timestamp with time zone,
   max_repeats integer,
   archived boolean NOT NULL DEFAULT false,
+  reward_hp integer NOT NULL DEFAULT 0,
+  reward_sanity integer NOT NULL DEFAULT 0,
+  reward_travel integer NOT NULL DEFAULT 0,
+  reward_spirituality integer NOT NULL DEFAULT 0,
+  reward_max_sanity integer NOT NULL DEFAULT 0,
+  reward_max_travel integer NOT NULL DEFAULT 0,
+  reward_max_spirituality integer NOT NULL DEFAULT 0,
+  is_public boolean NOT NULL DEFAULT true,
   CONSTRAINT quest_codes_pkey PRIMARY KEY (id),
   CONSTRAINT quest_codes_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id),
   CONSTRAINT quest_codes_map_id_fkey FOREIGN KEY (map_id) REFERENCES public.maps(id),
@@ -348,6 +373,14 @@ CREATE TABLE public.roleplay_submissions (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT roleplay_submissions_pkey PRIMARY KEY (id),
   CONSTRAINT roleplay_submissions_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.site_settings (
+  key text NOT NULL,
+  value jsonb NOT NULL DEFAULT '{}'::jsonb,
+  updated_at timestamp with time zone DEFAULT now(),
+  updated_by uuid,
+  CONSTRAINT site_settings_pkey PRIMARY KEY (key),
+  CONSTRAINT site_settings_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.skill_pathways (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -448,22 +481,3 @@ CREATE TABLE public.travel_roleplay_logs (
   CONSTRAINT travel_roleplay_logs_from_map_id_fkey FOREIGN KEY (from_map_id) REFERENCES public.maps(id),
   CONSTRAINT travel_roleplay_logs_to_map_id_fkey FOREIGN KEY (to_map_id) REFERENCES public.maps(id)
 );
-
-CREATE TABLE public.notifications (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  target_user_id uuid,
-  actor_id uuid NOT NULL,
-  actor_name text NOT NULL DEFAULT '',
-  type text NOT NULL DEFAULT 'info',
-  title text NOT NULL,
-  message text,
-  link text,
-  is_read boolean NOT NULL DEFAULT false,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT notifications_pkey PRIMARY KEY (id),
-  CONSTRAINT notifications_target_user_id_fkey FOREIGN KEY (target_user_id) REFERENCES public.profiles(id) ON DELETE CASCADE,
-  CONSTRAINT notifications_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES auth.users(id)
-);
-CREATE INDEX idx_notifications_target_user ON public.notifications(target_user_id, created_at DESC);
-CREATE INDEX idx_notifications_admin_feed ON public.notifications(created_at DESC) WHERE target_user_id IS NULL;
-CREATE INDEX idx_notifications_unread ON public.notifications(target_user_id, is_read) WHERE is_read = false;

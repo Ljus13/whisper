@@ -652,11 +652,13 @@ export async function submitAction(codeStr: string, evidenceUrls: string[]) {
 
   // Check repeat limit
   if (codeRow.max_repeats !== null && codeRow.max_repeats !== undefined) {
+    // นับเฉพาะ pending/approved — rejected ไม่นับ (ให้ส่งใหม่ได้)
     const { count } = await supabase
       .from('action_submissions')
       .select('id', { count: 'exact', head: true })
       .eq('player_id', user.id)
       .eq('action_code_id', codeRow.id)
+      .neq('status', 'rejected')
     if ((count || 0) >= codeRow.max_repeats) {
       return { error: `คุณส่งแอคชั่นนี้ครบ ${codeRow.max_repeats} ครั้งแล้ว ไม่สามารถส่งซ้ำได้อีก` }
     }
@@ -953,11 +955,13 @@ export async function submitQuest(codeStr: string, evidenceUrls: string[]) {
 
   // Check repeat limit
   if (codeRow.max_repeats !== null && codeRow.max_repeats !== undefined) {
+    // นับเฉพาะ pending/approved — rejected ไม่นับ (ให้ส่งใหม่ได้)
     const { count } = await supabase
       .from('quest_submissions')
       .select('id', { count: 'exact', head: true })
       .eq('player_id', user.id)
       .eq('quest_code_id', codeRow.id)
+      .neq('status', 'rejected')
     if ((count || 0) >= codeRow.max_repeats) {
       return { error: `คุณส่งภารกิจนี้ครบ ${codeRow.max_repeats} ครั้งแล้ว ไม่สามารถส่งซ้ำได้อีก` }
     }

@@ -21,13 +21,19 @@ export type Profile = {
   role: 'player' | 'admin' | 'dm'
   discord_user_id: string | null
   hp: number
-  max_hp: number
   sanity: number
   max_sanity: number
   travel_points: number
   max_travel_points: number
   spirituality: number
   max_spirituality: number
+  potion_digest_progress: number
+  religion: { name_th: string } | null
+}
+
+export type PlayerPathway = {
+  pathway: { name: string } | null
+  sequence: { name: string; seq_number: number } | null
 }
 
 /**
@@ -37,12 +43,22 @@ export type Profile = {
 export async function getProfileByDiscordId(discordUserId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, display_name, avatar_url, role, discord_user_id, hp, max_hp, sanity, max_sanity, travel_points, max_travel_points, spirituality, max_spirituality')
+    .select('id, display_name, avatar_url, role, discord_user_id, hp, sanity, max_sanity, travel_points, max_travel_points, spirituality, max_spirituality, potion_digest_progress, religion:religions!religion_id(name_th)')
     .eq('discord_user_id', discordUserId)
     .single()
 
   if (error || !data) return null
-  return data as Profile
+  return data as unknown as Profile
+}
+
+export async function getPlayerPathway(profileId: string): Promise<PlayerPathway | null> {
+  const { data } = await supabase
+    .from('player_pathways')
+    .select('pathway:skill_pathways(name), sequence:skill_sequences(name, seq_number)')
+    .eq('player_id', profileId)
+    .maybeSingle()
+  if (!data) return null
+  return data as unknown as PlayerPathway
 }
 
 type AnyInteraction = ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction
