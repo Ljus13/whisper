@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { createNotification, createNotifications } from '@/app/actions/notifications'
-import { notifyNewPublicQuest, notifyNewPunishment } from '@/lib/discord-notify'
+import { notifyNewPublicQuest, notifyNewPunishment, notifyPunishmentUpdated, notifyQuestUpdated } from '@/lib/discord-notify'
 
 const PAGE_SIZE = 20
 
@@ -854,6 +854,65 @@ export async function approveActionSubmission(id: string) {
     }
   }
 
+  // Mark punishment_players.is_completed for any punishment that requires this action code
+  {
+    const { data: punTasks } = await supabase
+      .from('punishment_required_tasks')
+      .select('punishment_id')
+      .eq('action_code_id', submission.action_code_id)
+    if (punTasks && punTasks.length > 0) {
+      const now = new Date().toISOString()
+      const extraBroadcastPlayerIds: string[] = []
+      for (const { punishment_id } of punTasks) {
+        const { data: pp } = await supabase
+          .from('punishment_players')
+          .select('id')
+          .eq('punishment_id', punishment_id)
+          .eq('player_id', submission.player_id)
+          .eq('is_completed', false)
+          .eq('penalty_applied', false)
+          .maybeSingle()
+        if (!pp) continue
+        const { data: check } = await supabase.rpc('check_punishment_task_completion', {
+          p_punishment_id: punishment_id,
+          p_user_id: submission.player_id,
+        })
+        if (check?.allCompleted) {
+          // Check if shared mode → mark ALL players
+          const { data: pun } = await supabase
+            .from('punishments')
+            .select('group_mode')
+            .eq('id', punishment_id)
+            .single()
+          if (pun?.group_mode === 'shared') {
+            await supabase
+              .from('punishment_players')
+              .update({ is_completed: true, completed_at: now })
+              .eq('punishment_id', punishment_id)
+              .eq('is_completed', false)
+              .eq('penalty_applied', false)
+            // Collect all player IDs for broadcast
+            const { data: allPP } = await supabase
+              .from('punishment_players')
+              .select('player_id')
+              .eq('punishment_id', punishment_id)
+            if (allPP) extraBroadcastPlayerIds.push(...allPP.map(p => p.player_id))
+          } else {
+            await supabase
+              .from('punishment_players')
+              .update({ is_completed: true, completed_at: now })
+              .eq('id', pp.id)
+          }
+        }
+      }
+      // Broadcast to all shared-mode players
+      if (extraBroadcastPlayerIds.length > 0) {
+        const unique = [...new Set(extraBroadcastPlayerIds.filter(id => id !== submission.player_id))]
+        if (unique.length > 0) await broadcastPunishmentRefresh(supabase, unique)
+      }
+    }
+  }
+
   // Broadcast instant refresh to player's submission list + punishment banner
   await Promise.all([
     broadcastAQRefresh(supabase, 'actions', { player_id: submission.player_id }),
@@ -1207,6 +1266,65 @@ export async function approveQuestSubmission(id: string) {
         if (Object.keys(updates).length > 0) {
           await supabase.from('profiles').update(updates).eq('id', submission.player_id)
         }
+      }
+    }
+  }
+
+  // Mark punishment_players.is_completed for any punishment that requires this quest code
+  {
+    const { data: punTasks } = await supabase
+      .from('punishment_required_tasks')
+      .select('punishment_id')
+      .eq('quest_code_id', submission.quest_code_id)
+    if (punTasks && punTasks.length > 0) {
+      const now = new Date().toISOString()
+      const extraBroadcastPlayerIds: string[] = []
+      for (const { punishment_id } of punTasks) {
+        const { data: pp } = await supabase
+          .from('punishment_players')
+          .select('id')
+          .eq('punishment_id', punishment_id)
+          .eq('player_id', submission.player_id)
+          .eq('is_completed', false)
+          .eq('penalty_applied', false)
+          .maybeSingle()
+        if (!pp) continue
+        const { data: check } = await supabase.rpc('check_punishment_task_completion', {
+          p_punishment_id: punishment_id,
+          p_user_id: submission.player_id,
+        })
+        if (check?.allCompleted) {
+          // Check if shared mode → mark ALL players
+          const { data: pun } = await supabase
+            .from('punishments')
+            .select('group_mode')
+            .eq('id', punishment_id)
+            .single()
+          if (pun?.group_mode === 'shared') {
+            await supabase
+              .from('punishment_players')
+              .update({ is_completed: true, completed_at: now })
+              .eq('punishment_id', punishment_id)
+              .eq('is_completed', false)
+              .eq('penalty_applied', false)
+            // Collect all player IDs for broadcast
+            const { data: allPP } = await supabase
+              .from('punishment_players')
+              .select('player_id')
+              .eq('punishment_id', punishment_id)
+            if (allPP) extraBroadcastPlayerIds.push(...allPP.map(p => p.player_id))
+          } else {
+            await supabase
+              .from('punishment_players')
+              .update({ is_completed: true, completed_at: now })
+              .eq('id', pp.id)
+          }
+        }
+      }
+      // Broadcast to all shared-mode players
+      if (extraBroadcastPlayerIds.length > 0) {
+        const unique = [...new Set(extraBroadcastPlayerIds.filter(id => id !== submission.player_id))]
+        if (unique.length > 0) await broadcastPunishmentRefresh(supabase, unique)
       }
     }
   }
@@ -1749,7 +1867,7 @@ export async function createPunishment(input: PunishmentInput) {
     // Fetch player names for the notification
     const { data: playerProfiles } = await supabase
       .from('profiles')
-      .select('display_name')
+      .select('display_name, discord_user_id')
       .in('id', input.player_ids)
     const playerNames = (playerProfiles ?? []).map(p => p.display_name || 'ผู้เล่น').join(', ')
     notifyNewPunishment({
@@ -1760,6 +1878,7 @@ export async function createPunishment(input: PunishmentInput) {
       penaltySanity: punishment.penalty_sanity || null,
       taskDescription: input.required_task_ids.length > 0 ? `ต้องทำภารกิจ ${input.required_task_ids.length} รายการ` : null,
       expiresAt: punishment.deadline ?? null,
+      discordUserIds: (playerProfiles ?? []).map(p => p.discord_user_id),
     }).catch(() => {})
   }
 
@@ -1831,6 +1950,55 @@ export async function getPunishments(page: number = 1) {
     : { data: [] }
   const pMap = new Map((profiles ?? []).map(p => [p.id, p.display_name]))
 
+  // === Compute per-task completion for shared mode ===
+  const taskDoneMap = new Map<string, boolean>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sharedPuns = (data ?? []).filter((p: any) => p.event_mode === 'group' && p.group_mode === 'shared')
+  for (const sp of sharedPuns) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const spTasks = (tasks ?? []).filter((t: any) => t.punishment_id === sp.id)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const spPlayerIds = (players ?? []).filter((pp: any) => pp.punishment_id === sp.id).map((pp: any) => pp.player_id)
+    if (spPlayerIds.length === 0 || spTasks.length === 0) continue
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const actionTasks = spTasks.filter((t: any) => t.action_code_id)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const questTasks = spTasks.filter((t: any) => t.quest_code_id)
+
+    if (actionTasks.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const actionCodeIds = actionTasks.map((t: any) => t.action_code_id)
+      const { data: approvedActions } = await supabase
+        .from('action_submissions')
+        .select('action_code_id')
+        .in('action_code_id', actionCodeIds)
+        .in('player_id', spPlayerIds)
+        .eq('status', 'approved')
+        .gte('created_at', sp.created_at)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const doneActionCodes = new Set((approvedActions ?? []).map((a: any) => a.action_code_id))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const t of actionTasks) { taskDoneMap.set(t.id, doneActionCodes.has(t.action_code_id)) }
+    }
+
+    if (questTasks.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const questCodeIds = questTasks.map((t: any) => t.quest_code_id)
+      const { data: approvedQuests } = await supabase
+        .from('quest_submissions')
+        .select('quest_code_id')
+        .in('quest_code_id', questCodeIds)
+        .in('player_id', spPlayerIds)
+        .eq('status', 'approved')
+        .gte('created_at', sp.created_at)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const doneQuestCodes = new Set((approvedQuests ?? []).map((q: any) => q.quest_code_id))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const t of questTasks) { taskDoneMap.set(t.id, doneQuestCodes.has(t.quest_code_id)) }
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const punishments = (data ?? []).map((p: any) => ({
     ...p,
@@ -1844,6 +2012,7 @@ export async function getPunishments(page: number = 1) {
       action_code_str: t.action_code?.code || null,
       quest_name: t.quest_code?.name || null,
       quest_code_str: t.quest_code?.code || null,
+      is_done: taskDoneMap.get(t.id) ?? false,
     })),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     assigned_players: (players ?? []).filter((pp: any) => pp.punishment_id === p.id).map((pp: any) => ({
@@ -2237,6 +2406,46 @@ export async function updateQuestCode(
 
   if (error) return { error: error.message }
   revalidateActionQuestPaths()
+
+  // 🔔 Discord notification — แจ้งเตือนการแก้ไขภารกิจ (เฉพาะ public)
+  {
+    const { data: questData } = await supabase
+      .from('quest_codes')
+      .select('code, name, is_public, map_id, npc_token_id, expires_at, reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality')
+      .eq('id', id)
+      .single()
+    if (questData?.is_public) {
+      const editorName = await getDisplayName(supabase, user.id)
+      let mapName: string | null = null
+      let npcName: string | null = null
+      if (questData.map_id) {
+        const { data: mapRow } = await supabase.from('maps').select('name').eq('id', questData.map_id).maybeSingle()
+        mapName = mapRow?.name ?? null
+      }
+      if (questData.npc_token_id) {
+        const { data: npcRow } = await supabase.from('map_tokens').select('label').eq('id', questData.npc_token_id).maybeSingle()
+        npcName = npcRow?.label ?? null
+      }
+      notifyQuestUpdated({
+        questName: questData.name,
+        questCode: questData.code,
+        creatorName: editorName,
+        mapName,
+        npcName,
+        expiresAt: questData.expires_at ?? null,
+        rewards: {
+          hp: questData.reward_hp,
+          sanity: questData.reward_sanity,
+          travel: questData.reward_travel,
+          spirituality: questData.reward_spirituality,
+          maxSanity: questData.reward_max_sanity,
+          maxTravel: questData.reward_max_travel,
+          maxSpirituality: questData.reward_max_spirituality,
+        },
+      }).catch(() => {})
+    }
+  }
+
   return { success: true }
 }
 
@@ -2355,6 +2564,32 @@ export async function updatePunishment(id: string, input: PunishmentUpdateInput)
   }
 
   revalidateActionQuestPaths()
+
+  // 🔔 Discord notification — แจ้งเตือนการแก้ไขอีเวนท์
+  {
+    const { data: playerProfiles } = await supabase
+      .from('profiles')
+      .select('display_name, discord_user_id')
+      .in('id', input.player_ids)
+    const { data: punData } = await supabase
+      .from('punishments')
+      .select('name, description, penalty_hp, penalty_sanity, deadline')
+      .eq('id', id)
+      .single()
+    const editorName = await getDisplayName(supabase, user.id)
+    const playerNames = (playerProfiles ?? []).map(p => p.display_name || 'ผู้เล่น').join(', ')
+    notifyPunishmentUpdated({
+      targetPlayerName: playerNames,
+      reason: punData?.description || punData?.name || input.name,
+      creatorName: editorName,
+      penaltyHp: punData?.penalty_hp || null,
+      penaltySanity: punData?.penalty_sanity || null,
+      taskDescription: input.required_task_ids.length > 0 ? `ต้องทำภารกิจ ${input.required_task_ids.length} รายการ` : null,
+      expiresAt: punData?.deadline ?? null,
+      discordUserIds: (playerProfiles ?? []).map(p => p.discord_user_id),
+    }).catch(() => {})
+  }
+
   return { success: true }
 }
 

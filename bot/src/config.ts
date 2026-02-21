@@ -25,7 +25,7 @@ export const config = {
   supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
 
   // ── Web App ──────────────────────────────────────────────────────
-  webUrl: process.env.WEB_URL ?? 'https://your-domain.com',
+  webUrl: process.env.WEB_URL ?? 'https://whisper-one-ochre.vercel.app',
 }
 
 // Validate required env vars

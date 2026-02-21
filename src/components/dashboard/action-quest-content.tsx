@@ -89,7 +89,7 @@ interface PunishmentEntry {
   penalty_sanity: number; penalty_hp: number; penalty_travel: number; penalty_spirituality: number
   penalty_max_sanity: number; penalty_max_travel: number; penalty_max_spirituality: number
   deadline: string | null; is_active: boolean; created_by_name: string; created_at: string
-  required_tasks: { id: string; action_code_id: string | null; quest_code_id: string | null; action_name: string | null; action_code_str: string | null; quest_name: string | null; quest_code_str: string | null }[]
+  required_tasks: { id: string; action_code_id: string | null; quest_code_id: string | null; action_name: string | null; action_code_str: string | null; quest_name: string | null; quest_code_str: string | null; is_done: boolean }[]
   assigned_players: { id: string; player_id: string; player_name: string; player_avatar: string | null; is_completed: boolean; penalty_applied: boolean; mercy_requested: boolean; mercy_requested_at: string | null; completed_at: string | null }[]
 }
 interface PunishmentLogEntry {
@@ -875,6 +875,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   const [punTotalPages, setPunTotalPages] = useState(1)
   const [punTotal, setPunTotal] = useState(0)
   const [punLoading, setPunLoading] = useState(true)
+  const [expandedPunPlayers, setExpandedPunPlayers] = useState<Set<string>>(new Set())
 
   // ─── Punishment logs ───
   const [punLogs, setPunLogs] = useState<PunishmentLogEntry[]>([])
@@ -2283,10 +2284,11 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
 
                       const myEntry = p.assigned_players.find(ap => ap.player_id === _userId)
                       const isExpired = p.deadline && new Date(p.deadline) < new Date()
-                      const allDone = p.assigned_players.every(ap => ap.penalty_applied || ap.mercy_requested)
+                      const allDone = p.assigned_players.every(ap => ap.penalty_applied || ap.mercy_requested || ap.is_completed)
                       const mercyCount = p.assigned_players.filter(ap => ap.mercy_requested && !ap.penalty_applied).length
                       const penaltyCount = p.assigned_players.filter(ap => ap.penalty_applied).length
-                      const pendingCount = p.assigned_players.filter(ap => !ap.mercy_requested && !ap.penalty_applied).length
+                      const completedCount = p.assigned_players.filter(ap => ap.is_completed && !ap.penalty_applied && !ap.mercy_requested).length
+                      const pendingCount = p.assigned_players.filter(ap => !ap.mercy_requested && !ap.penalty_applied && !ap.is_completed).length
 
                       // Determine overall status
                       let statusLabel = ''
@@ -2308,7 +2310,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                           <div className={`text-[10px] font-bold px-2.5 py-1.5 rounded border ${statusColor}`}>
                             {statusLabel}
                             {allDone && (
-                              <span className="ml-1 opacity-70">({mercyCount > 0 ? `${mercyCount} รอดพ้น` : ''}{mercyCount > 0 && penaltyCount > 0 ? ', ' : ''}{penaltyCount > 0 ? `${penaltyCount} ถูกลงโทษ` : ''})</span>
+                              <span className="ml-1 opacity-70">({completedCount > 0 ? `${completedCount} สำเร็จ` : ''}{completedCount > 0 && (mercyCount > 0 || penaltyCount > 0) ? ', ' : ''}{mercyCount > 0 ? `${mercyCount} รอดพ้น` : ''}{mercyCount > 0 && penaltyCount > 0 ? ', ' : ''}{penaltyCount > 0 ? `${penaltyCount} ถูกลงโทษ` : ''})</span>
                             )}
                           </div>
 
@@ -2342,54 +2344,133 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                             ))}
                           </div>
 
-                          {/* Required tasks (compact) */}
+                          {/* Required tasks (compact) — shared mode: checklist with ✅/spinner */}
                           <div>
                             <p className="text-victorian-500 text-[10px] font-semibold mb-0.5">ต้องทำ:</p>
-                            <div className="flex flex-wrap gap-1">
-                              {p.required_tasks.map(t => (
-                                <span key={t.id} className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                                  t.action_code_id ? 'bg-amber-900/30 text-amber-300 border-amber-500/20' : 'bg-emerald-900/30 text-emerald-300 border-emerald-500/20'
-                                }`}>
-                                  {t.action_code_id ? `⚔️ ${t.action_name}` : `🎯 ${t.quest_name}`}
-                                </span>
-                              ))}
-                            </div>
+                            {p.event_mode === 'group' && p.group_mode === 'shared' ? (
+                              <div className="space-y-1">
+                                {p.required_tasks.map(t => (
+                                  <div key={t.id} className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded border ${
+                                    t.is_done
+                                      ? 'bg-green-900/25 border-green-500/25 text-green-300'
+                                      : 'bg-victorian-900/40 border-victorian-800/50 text-victorian-300'
+                                  }`}>
+                                    {t.is_done
+                                      ? <span className="text-green-400 text-xs">✅</span>
+                                      : <span className="inline-block w-3 h-3 border-2 border-purple-400/40 border-t-purple-400 rounded-full animate-spin" />
+                                    }
+                                    <span className={t.is_done ? 'line-through opacity-70' : ''}>
+                                      {t.action_code_id ? `⚔️ ${t.action_name}` : `🎯 ${t.quest_name}`}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap gap-1">
+                                {p.required_tasks.map(t => (
+                                  <span key={t.id} className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                    t.action_code_id ? 'bg-amber-900/30 text-amber-300 border-amber-500/20' : 'bg-emerald-900/30 text-emerald-300 border-emerald-500/20'
+                                  }`}>
+                                    {t.action_code_id ? `⚔️ ${t.action_name}` : `🎯 ${t.quest_name}`}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
 
-                          {/* Assigned players (compact) */}
+                          {/* Assigned players (compact, collapsible) */}
                           <div className="flex-1">
                             <p className="text-victorian-500 text-[10px] font-semibold mb-0.5 flex items-center gap-1">
                               <Users className="w-2.5 h-2.5" /> ผู้เล่น ({p.assigned_players.length}):
                             </p>
-                            <div className="space-y-1">
-                              {p.assigned_players.map(ap => (
-                                <div key={ap.id} className={`flex items-center justify-between gap-1.5 p-1.5 rounded border ${
-                                  ap.penalty_applied ? 'bg-red-900/30 border-red-500/30' :
-                                  ap.mercy_requested ? 'bg-green-900/30 border-green-500/30' :
-                                  'bg-victorian-900/40 border-victorian-800/50'
-                                }`}>
-                                  <div className="flex items-center gap-1.5 min-w-0">
-                                    <Avatar name={ap.player_name} url={ap.player_avatar} />
-                                    <span className="text-victorian-200 text-[10px] truncate">{ap.player_name}</span>
-                                    {ap.mercy_requested && !ap.penalty_applied && (
-                                      <span className="text-green-400 text-[9px] bg-green-500/15 px-1.5 py-0.5 rounded border border-green-500/20 shrink-0 font-bold">✅ รอดพ้น</span>
-                                    )}
-                                    {ap.penalty_applied && (
-                                      <span className="text-red-400 text-[9px] bg-red-500/15 px-1.5 py-0.5 rounded border border-red-500/20 shrink-0 font-bold">💀 ถูกลงโทษ</span>
-                                    )}
-                                    {!ap.is_completed && !ap.penalty_applied && !ap.mercy_requested && (
-                                      <span className="text-amber-400 text-[9px] bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 shrink-0 font-bold">⏳ รอดำเนินการ</span>
-                                    )}
+                            {/* Shared mode: progress bar (counts tasks, not players) */}
+                            {p.event_mode === 'group' && p.group_mode === 'shared' && (() => {
+                              const doneCount = p.required_tasks.filter(t => t.is_done).length
+                              const total = p.required_tasks.length
+                              const allComplete = total > 0 && doneCount === total
+                              const pct = total > 0 ? (doneCount / total) * 100 : 0
+                              return (
+                                <div className="mb-1.5">
+                                  <div className="flex items-center justify-between text-[10px] mb-0.5">
+                                    <span className={allComplete ? 'text-green-300 font-bold' : 'text-purple-300'}>
+                                      {allComplete ? '✅ ภารกิจครบแล้ว!' : '🎯 ความคืบหน้าภารกิจ'}
+                                    </span>
+                                    <span className={`font-bold ${allComplete ? 'text-green-400' : 'text-purple-400'}`}>{doneCount}/{total}</span>
                                   </div>
-                                  {isAdmin && !ap.penalty_applied && !ap.mercy_requested && (
-                                    <button type="button" onClick={() => handleApplyPenalty(p.id, ap.player_id)} disabled={isPending}
-                                      className="px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-[9px] font-bold hover:bg-red-500/20 cursor-pointer disabled:opacity-50 shrink-0">
-                                      ดำเนินการ
+                                  <div className="w-full bg-victorian-900/60 rounded-full h-2 border border-victorian-800/50 overflow-hidden">
+                                    <div className={`h-full rounded-full transition-all duration-500 ${allComplete ? 'bg-green-500' : 'bg-purple-500'}`}
+                                      style={{ width: `${pct}%` }} />
+                                  </div>
+                                </div>
+                              )
+                            })()}
+                            {(() => {
+                              const LIMIT = 5
+                              const isExpanded = expandedPunPlayers.has(p.id)
+                              const visible = isExpanded ? p.assigned_players : p.assigned_players.slice(0, LIMIT)
+                              const hidden = p.assigned_players.length - LIMIT
+                              return (
+                                <>
+                                  <div className="space-y-1">
+                                    {visible.map(ap => (
+                                      <div key={ap.id} className={`flex items-center justify-between gap-1.5 p-1.5 rounded border ${
+                                        ap.penalty_applied ? 'bg-red-900/30 border-red-500/30' :
+                                        ap.mercy_requested && p.event_mode === 'group' && p.group_mode === 'all' ? 'bg-cyan-900/20 border-cyan-500/25' :
+                                        ap.mercy_requested ? 'bg-green-900/30 border-green-500/30' :
+                                        ap.is_completed ? 'bg-blue-900/20 border-blue-500/25' :
+                                        'bg-victorian-900/40 border-victorian-800/50'
+                                      }`}>
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <Avatar name={ap.player_name} url={ap.player_avatar} />
+                                          <span className="text-victorian-200 text-[10px] truncate">{ap.player_name}</span>
+                                          {ap.mercy_requested && !ap.penalty_applied && (
+                                            p.event_mode === 'group' && p.group_mode === 'all'
+                                              ? <span className="text-cyan-300 text-[9px] bg-cyan-500/15 px-1.5 py-0.5 rounded border border-cyan-500/25 shrink-0 font-bold">✅ เรียบร้อย, รอคนอื่น</span>
+                                              : <span className="text-green-400 text-[9px] bg-green-500/15 px-1.5 py-0.5 rounded border border-green-500/20 shrink-0 font-bold">✅ รอดพ้น</span>
+                                          )}
+                                          {ap.penalty_applied && (
+                                            <span className="text-red-400 text-[9px] bg-red-500/15 px-1.5 py-0.5 rounded border border-red-500/20 shrink-0 font-bold">💀 ถูกลงโทษ</span>
+                                          )}
+                                          {ap.is_completed && !ap.penalty_applied && !ap.mercy_requested && (
+                                            p.event_mode === 'group' && p.group_mode === 'all'
+                                              ? <span className="text-cyan-300 text-[9px] bg-cyan-500/15 px-1.5 py-0.5 rounded border border-cyan-500/25 shrink-0 font-bold">✅ เรียบร้อย, รอคนอื่น</span>
+                                              : <span className="text-blue-300 text-[9px] bg-blue-500/15 px-1.5 py-0.5 rounded border border-blue-500/25 shrink-0 font-bold">✅ สำเร็จ</span>
+                                          )}
+                                          {!ap.is_completed && !ap.penalty_applied && !ap.mercy_requested && !(p.event_mode === 'group' && p.group_mode === 'shared') && (
+                                            <span className="text-amber-400 text-[9px] bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 shrink-0 font-bold">⏳ รอดำเนินการ</span>
+                                          )}
+                                        </div>
+                                        {isAdmin && !ap.penalty_applied && !ap.mercy_requested && (
+                                          p.event_mode === 'group' && p.group_mode === 'shared'
+                                            ? false  /* shared: ไม่มีปุ่มรายคน — ลงโทษร่วมทั้งกลุ่ม */
+                                            : p.event_mode === 'group' && p.group_mode === 'all'
+                                              ? true  /* group-all: แสดงปุ่มเสมอ แม้สำเร็จแล้ว */
+                                              : !ap.is_completed  /* solo: ซ่อนเมื่อสำเร็จ */
+                                        ) && (
+                                          <button type="button" onClick={() => handleApplyPenalty(p.id, ap.player_id)} disabled={isPending}
+                                            className="px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-[9px] font-bold hover:bg-red-500/20 cursor-pointer disabled:opacity-50 shrink-0">
+                                            ดำเนินการ
+                                          </button>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {p.assigned_players.length > LIMIT && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedPunPlayers(prev => {
+                                        const next = new Set(prev)
+                                        isExpanded ? next.delete(p.id) : next.add(p.id)
+                                        return next
+                                      })}
+                                      className="mt-1 w-full text-center text-[9px] text-victorian-500 hover:text-victorian-300 py-0.5 rounded border border-victorian-800/40 hover:border-victorian-700/60 bg-victorian-900/30 hover:bg-victorian-900/50 transition-colors cursor-pointer"
+                                    >
+                                      {isExpanded ? '▲ ย่อรายชื่อ' : `▾ ดูเพิ่มเติม ${hidden} คน`}
                                     </button>
                                   )}
-                                </div>
-                              ))}
-                            </div>
+                                </>
+                              )
+                            })()}
                           </div>
 
                           {/* Player: Mercy */}

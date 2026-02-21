@@ -127,6 +127,8 @@ export interface PunishmentNotifyParams {
   penaltySanity?: number | null
   taskDescription?: string | null
   expiresAt?: string | null
+  /** Discord User IDs สำหรับ @mention — ดึงจาก profiles.discord_user_id */
+  discordUserIds?: (string | null | undefined)[]
 }
 
 export async function notifyNewPunishment(params: PunishmentNotifyParams): Promise<void> {
@@ -135,7 +137,7 @@ export async function notifyNewPunishment(params: PunishmentNotifyParams): Promi
 
   const fields: NonNullable<DiscordEmbed['fields']> = []
 
-  fields.push({ name: '👤 ผูร่วมอีเวนท์', value: params.targetPlayerName, inline: true })
+  fields.push({ name: '👤 ผู้ร่วมอีเวนท์', value: params.targetPlayerName, inline: true })
   fields.push({ name: '⚖️ ผู้กำหนดอีเวนท์', value: params.creatorName, inline: true })
   fields.push({ name: '📋 เหตุผล', value: params.reason, inline: false })
 
@@ -159,8 +161,15 @@ export async function notifyNewPunishment(params: PunishmentNotifyParams): Promi
     })
   }
 
+  // สร้าง @mention string — mention ใน content เท่านั้นที่ Discord จะ ping จริง
+  const mentionContent = params.discordUserIds
+    ?.filter((id): id is string => !!id)
+    .map(id => `<@${id}>`)
+    .join(' ') || undefined
+
   await sendDiscordNotification(webhookUrl, {
     username: 'ระบบอีเวนท์',
+    content: mentionContent,
     embeds: [{
       title: `⚖️ อีเวนท์ — ${params.targetPlayerName}`,
       description: '> มีอีเวนท์ โปรดเคลียร์ภารกิจให้ครบทุกรายการ',
@@ -194,6 +203,114 @@ export async function notifyPathwayAccepted(params: PathwayNotifyParams): Promis
         { name: '🌟 เส้นทางที่เลือก', value: params.pathwayName, inline: true },
       ],
       footer: { text: 'Whisper of the Shadow • ระบบเส้นทาง' },
+      timestamp: new Date().toISOString(),
+    }],
+  })
+}
+
+// ─── Quest Updated Notification ───────────────────────────────────────────────
+
+export async function notifyQuestUpdated(params: QuestNotifyParams): Promise<void> {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_QUEST
+  if (!webhookUrl) return
+
+  const fields: NonNullable<DiscordEmbed['fields']> = []
+
+  fields.push({ name: '🔑 รหัสภารกิจ', value: `\`${params.questCode}\``, inline: true })
+  fields.push({ name: '✏️ แก้ไขโดย', value: params.creatorName, inline: true })
+
+  if (params.npcName || params.mapName) {
+    const location = params.npcName
+      ? `${params.npcName}${params.mapName ? ` *(${params.mapName})*` : ''}`
+      : (params.mapName ?? '')
+    fields.push({ name: '📍 สถานที่', value: location, inline: false })
+  }
+
+  const r = params.rewards
+  if (r) {
+    const parts: string[] = []
+    if (r.hp)               parts.push(`❤️ HP ${r.hp > 0 ? '+' : ''}${r.hp}`)
+    if (r.sanity)           parts.push(`🧠 Sanity ${r.sanity > 0 ? '+' : ''}${r.sanity}`)
+    if (r.travel)           parts.push(`👟 Travel ${r.travel > 0 ? '+' : ''}${r.travel}`)
+    if (r.spirituality)     parts.push(`✨ Spirit ${r.spirituality > 0 ? '+' : ''}${r.spirituality}`)
+    if (r.maxSanity)        parts.push(`🧠↑ MaxSanity ${r.maxSanity > 0 ? '+' : ''}${r.maxSanity}`)
+    if (r.maxTravel)        parts.push(`👟↑ MaxTravel ${r.maxTravel > 0 ? '+' : ''}${r.maxTravel}`)
+    if (r.maxSpirituality)  parts.push(`✨↑ MaxSpirit ${r.maxSpirituality > 0 ? '+' : ''}${r.maxSpirituality}`)
+    if (parts.length > 0) {
+      fields.push({ name: '🎁 รางวัล (ใหม่)', value: parts.join('  ·  '), inline: false })
+    }
+  }
+
+  if (params.expiresAt) {
+    const d = new Date(params.expiresAt)
+    fields.push({
+      name: '⏰ หมดอายุ',
+      value: d.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }),
+      inline: true,
+    })
+  } else {
+    fields.push({ name: '⏰ อายุ', value: 'ตลอดไป', inline: true })
+  }
+
+  await sendDiscordNotification(webhookUrl, {
+    username: 'ระบบภารกิจ',
+    embeds: [{
+      title: `✏️ แก้ไขภารกิจ: ${params.questName}`,
+      description: '> รายละเอียดภารกิจนี้ถูกอัปเดตแล้ว ตรวจสอบรายละเอียดใหม่',
+      color: 0x4169E1,
+      fields,
+      footer: { text: 'Whisper of the Shadow • ระบบภารกิจ' },
+      timestamp: new Date().toISOString(),
+    }],
+  })
+}
+
+// ─── Punishment Updated Notification ─────────────────────────────────────────
+
+export async function notifyPunishmentUpdated(params: PunishmentNotifyParams): Promise<void> {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_PUNISHMENT
+  if (!webhookUrl) return
+
+  const mentionContent = params.discordUserIds
+    ?.filter((id): id is string => !!id)
+    .map(id => `<@${id}>`)
+    .join(' ') || undefined
+
+  const fields: NonNullable<DiscordEmbed['fields']> = []
+
+  fields.push({ name: '👤 ผู้ร่วมอีเวนท์', value: params.targetPlayerName, inline: true })
+  fields.push({ name: '✏️ แก้ไขโดย', value: params.creatorName, inline: true })
+  fields.push({ name: '📋 รายละเอียด', value: params.reason, inline: false })
+
+  const penalties: string[] = []
+  if (params.penaltyHp)     penalties.push(`❤️ HP **-${Math.abs(params.penaltyHp)}**`)
+  if (params.penaltySanity) penalties.push(`🧠 Sanity **-${Math.abs(params.penaltySanity)}**`)
+  if (penalties.length > 0) {
+    fields.push({ name: '💢 อีเวนท์', value: penalties.join('  ·  '), inline: false })
+  }
+
+  if (params.taskDescription) {
+    fields.push({ name: '📝 งานที่ต้องทำ', value: params.taskDescription, inline: false })
+  }
+
+  if (params.expiresAt) {
+    const d = new Date(params.expiresAt)
+    fields.push({
+      name: '⏰ กำหนด',
+      value: d.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }),
+      inline: true,
+    })
+  }
+
+  await sendDiscordNotification(webhookUrl, {
+    username: 'ระบบอีเวนท์',
+    content: mentionContent,
+    embeds: [{
+      title: `📝 แก้ไขอีเวนท์ — ${params.targetPlayerName}`,
+      description: '> อีเวนท์ถูกแก้ไขแล้ว โปรดตรวจสอบรายละเอียดใหม่',
+      color: 0xFF8C00,
+      fields,
+      footer: { text: 'Whisper of the Shadow • ระบบการลงโทษ' },
       timestamp: new Date().toISOString(),
     }],
   })

@@ -34,7 +34,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   const evidenceInput = new TextInputBuilder()
     .setCustomId('evidence_urls')
-    .setLabel('บรรทัดละ 1 ลิงกก์โรลฯ)')
+    .setLabel('บรรทัดละ 1 ลิงก์)')
     .setStyle(TextInputStyle.Paragraph)
     .setPlaceholder('https://example.com/image1.jpg\nhttps://example.com/image2.jpg')
     .setRequired(true)
