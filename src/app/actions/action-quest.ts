@@ -282,7 +282,7 @@ export async function approveSleepRequest(requestId: string) {
     actorName: adminName,
     type: 'sleep_approved',
     title: 'การนอนหลับได้รับการอนุมัติ',
-    message: 'พลังจิตวิญญาณถูกฟื้นฟูเต็มแล้ว',
+    message: 'พลังวิญญาณถูกฟื้นฟูเต็มแล้ว',
     link: '/dashboard/action-quest/sleep',
   })
 

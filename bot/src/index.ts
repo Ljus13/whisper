@@ -1,7 +1,8 @@
-import { Client, Collection, GatewayIntentBits, Interaction, Events, MessageFlags } from 'discord.js'
+import { Collection, Interaction, Events, MessageFlags } from 'discord.js'
 import * as fs from 'fs'
 import * as path from 'path'
 import { config } from './config'
+import { client } from './lib/client'
 import { handleButton } from './handlers/button-handler'
 import { handleModal } from './handlers/modal-handler'
 import { handleSelect } from './handlers/select-handler'
@@ -12,12 +13,6 @@ interface Command {
   data: { name: string; toJSON: () => object }
   execute: (interaction: any) => Promise<void>
 }
-
-// ─── Client Setup ─────────────────────────────────────────────────────────────
-
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
-})
 
 const commands = new Collection<string, Command>()
 

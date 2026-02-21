@@ -1,8 +1,11 @@
 import * as dotenv from 'dotenv'
 import * as path from 'path'
 
-// โหลด .env.local จาก root ของโปรเจค (parent directory ของ bot/)
-dotenv.config({ path: path.resolve(__dirname, '../../.env.local') })
+// โหลด .env.local ก่อน ถ้าไม่มีให้ fallback ไป .env
+const envLocalPath = path.resolve(__dirname, '../../.env.local')
+const envPath = path.resolve(__dirname, '../../.env')
+dotenv.config({ path: envLocalPath })
+dotenv.config({ path: envPath })
 
 export const config = {
   // ── Discord ──────────────────────────────────────────────────────
@@ -15,6 +18,7 @@ export const config = {
   channelQuests: process.env.DISCORD_CHANNEL_QUESTS ?? '',
   channelPunishments: process.env.DISCORD_CHANNEL_PUNISHMENTS ?? '',
   channelRoleplay: process.env.DISCORD_CHANNEL_ROLEPLAY ?? '',
+  channelSkillLogs: process.env.DISCORD_CHANNEL_SKILL_LOGS ?? '',
 
   // ── Supabase ─────────────────────────────────────────────────────
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',

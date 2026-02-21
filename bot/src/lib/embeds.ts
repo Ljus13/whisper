@@ -68,9 +68,9 @@ export function buildStatusEmbed(
     .addFields(
       { name: '❤️ ตัวตายตัวแทน (HP)', value: `**${profile.hp}** ❤️`, inline: true },
       { name: '🧠 สติ (Sanity)', value: bar(profile.sanity, profile.max_sanity), inline: false },
-      { name: '👟 เส้นทาง (Travel)', value: bar(profile.travel_points, profile.max_travel_points), inline: false },
-      { name: '✨ จิตวิญญาณ (Spirituality)', value: bar(profile.spirituality, profile.max_spirituality), inline: false },
-      { name: '🧪 แถบย่อยโอสถ', value: `${progressBar(profile.potion_digest_progress, 100)}  **${profile.potion_digest_progress}%**`, inline: false },
+      { name: '👟 แต้มเดินทาง (Travel)', value: bar(profile.travel_points, profile.max_travel_points), inline: false },
+      { name: '✨ พลังวิญญาณ (Spirituality)', value: bar(profile.spirituality, profile.max_spirituality), inline: false },
+      { name: '🧪 การย่อยโอสถ', value: `${progressBar(profile.potion_digest_progress, 100)}  **${profile.potion_digest_progress}%**`, inline: false },
       { name: '🛤️ เส้นทาง', value: pathwayName, inline: true },
       { name: '📊 ลำดับ', value: sequenceText, inline: true },
       { name: '🙏 ศาสนา', value: religionName, inline: true },

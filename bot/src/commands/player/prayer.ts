@@ -23,7 +23,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   const evidenceInput = new TextInputBuilder()
     .setCustomId('evidence_urls')
-    .setLabel('ลิงก์หลักฐาน (อย่างน้อย 2 ลิงก์, บรรทัดละลิงก์)')
+    .setLabel('URL ขั้นต่ำ 2 โรลเพลย์)')
     .setPlaceholder('https://example.com/prayer1\nhttps://example.com/prayer2')
     .setStyle(TextInputStyle.Paragraph)
     .setRequired(true)
@@ -74,7 +74,7 @@ export async function handlePrayerModal(interaction: ModalSubmitInteraction) {
 
   if (!playerProfile.religion_id) {
     await interaction.editReply({
-      embeds: [buildErrorEmbed('คุณยังไม่ได้เลือกศาสนา กรุณาตั้งค่าศาสนาก่อน')],
+      embeds: [buildErrorEmbed('คุณยังไม่ได้เลือกศาสนา กรุณาติดต่อทีมงาน')],
     })
     return
   }
@@ -144,7 +144,7 @@ export async function handlePrayerModal(interaction: ModalSubmitInteraction) {
   if (logError) {
     console.error('Prayer log insert error:', logError)
     await interaction.editReply({
-      embeds: [buildErrorEmbed('บันทึก Prayer ผิดพลาด กรุณาลองใหม่')],
+      embeds: [buildErrorEmbed('บันทึกผิดพลาด กรุณาลองใหม่')],
     })
     return
   }
@@ -159,7 +159,7 @@ export async function handlePrayerModal(interaction: ModalSubmitInteraction) {
   if (updateError) {
     console.error('Sanity update error:', updateError)
     await interaction.editReply({
-      embeds: [buildErrorEmbed('อัปเดตสติผิดพลาด กรุณาแจ้ง DM')],
+      embeds: [buildErrorEmbed('อัปเดตสติผิดพลาด กรุณาแจ้งทีมงาน')],
     })
     return
   }

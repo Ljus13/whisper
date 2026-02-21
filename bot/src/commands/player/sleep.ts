@@ -26,17 +26,17 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   const mealInput = new TextInputBuilder()
     .setCustomId('meal_url')
-    .setLabel('URL รูปอาหาร 🍽️')
+    .setLabel('ลิงก์กินอาหารมื้อใหญ่ 🍽️')
     .setStyle(TextInputStyle.Short)
-    .setPlaceholder('https://example.com/meal.jpg')
+    .setPlaceholder('https://roleplayth.com/')
     .setRequired(true)
     .setMaxLength(500)
 
   const sleepInput = new TextInputBuilder()
     .setCustomId('sleep_url')
-    .setLabel('URL รูปที่นอน 😴')
+    .setLabel('ลิงก์การนอนหลับ 😴')
     .setStyle(TextInputStyle.Short)
-    .setPlaceholder('https://example.com/sleep.jpg')
+    .setPlaceholder('https://roleplayth.com/')
     .setRequired(true)
     .setMaxLength(500)
 
@@ -76,7 +76,7 @@ export async function handleSleepModal(interaction: import('discord.js').ModalSu
 
   if (!playerToken) {
     await interaction.editReply({
-      content: '❌ ไม่พบตัวละครบนแผนที่ — ต้องอยู่ในเขตจุดพักเท่านั้นจึงจะนอนหลับได้',
+      content: '❌ ไม่พบตัวละครบนแผนที่ — ต้องอยู่ในเขตจุดพักเท่านั้นจึงจะนอนหลับได้ โปรดย้ายตัวละครบนแผนที่ไปยังจุดพักแล้วลองอีกครั้ง',
     })
     return
   }

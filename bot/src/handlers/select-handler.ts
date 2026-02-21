@@ -1,9 +1,14 @@
 import { StringSelectMenuInteraction, MessageFlags } from 'discord.js'
+import { handleUseSkillSelect } from '../commands/player/use-skill'
 
 export async function handleSelect(interaction: StringSelectMenuInteraction) {
   const { customId } = interaction
 
   try {
+    if (customId === 'select_use_skill') {
+      return await handleUseSkillSelect(interaction)
+    }
+
     // Phase 3: grant-pathway select menu จะ implement ที่นี่
     if (customId.startsWith('select_pathway_')) {
       await interaction.reply({ content: '⏳ (Phase 3) ระบบ Grant Pathway ยังไม่พร้อมใช้งาน', flags: MessageFlags.Ephemeral })
