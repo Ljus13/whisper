@@ -10,7 +10,7 @@ import SanityLockOverlay from '@/components/sanity-lock-overlay'
 import { CornerOrnament, OrnamentedCard } from '@/components/ui/ornaments'
 import dynamic from 'next/dynamic'
 import type { User } from '@supabase/supabase-js'
-import { LogOut, Shield, Swords, Crown, Settings, X, Camera, Map, Zap, Users, Footprints, Flame, Brain, Heart, Pencil, Lock, Image as ImageIcon, BookOpen, FileText, Church } from 'lucide-react'
+import { LogOut, Shield, Swords, Crown, Settings, X, Camera, Map, Zap, Users, Footprints, Flame, Brain, Heart, Pencil, Lock, Image as ImageIcon, BookOpen, FileText, Church, ScrollText } from 'lucide-react'
 import { useState, useTransition, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -755,6 +755,28 @@ export default function DashboardContent({
               </p>
             </div>
           </a>
+          <Link
+            href="/timeline"
+            className="group relative overflow-hidden card-victorian p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center gap-3 md:gap-5 
+                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[140px] md:min-h-[200px]
+                        cursor-pointer"
+          >
+            <CornerOrnament className="absolute top-0 left-0 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] w-8 h-8 md:w-14 md:h-14" />
+            <div className="relative z-10 flex flex-col items-center gap-2 md:gap-4">
+              <div className="w-12 h-12 md:w-18 md:h-18 rounded-full bg-victorian-800/50 border-2 border-gold-400/20 
+                              flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
+                <ScrollText className="w-6 h-6 md:w-9 md:h-9 text-gold-400" />
+              </div>
+              <h3 className="heading-victorian text-lg md:text-2xl">เส้นเรื่อง</h3>
+              <p className="text-victorian-400 text-center text-xs md:text-sm font-body hidden md:block">
+                ติดตามไทม์ไลน์และเหตุการณ์สำคัญ
+              </p>
+            </div>
+          </Link>
+
           {isAdmin && (
             <Link
               href="/dashboard/pathways-grant"

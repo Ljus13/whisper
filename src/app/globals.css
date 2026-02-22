@@ -48,6 +48,25 @@
   ::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(180deg, #8B7425, #705D1C);
   }
+
+  /* Slim scrollbar for card / node content areas */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(184, 134, 11, 0.3);
+    border-radius: 2px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(184, 134, 11, 0.5);
+  }
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(184, 134, 11, 0.3) transparent;
+  }
 }
 
 @layer components {
@@ -200,4 +219,97 @@
 }
 .animate-ripple {
   animation: ripple-effect 3s infinite cubic-bezier(0, 0.2, 0.8, 1);
+}
+
+/* ════════════════════════════════════════
+   TIMELINE SYSTEM ANIMATIONS
+   ════════════════════════════════════════ */
+
+/* ── Main vertical flowing dashed line ── */
+.timeline-main-line {
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(212, 175, 55, 0.5) 0px,
+    rgba(212, 175, 55, 0.5) 8px,
+    transparent 8px,
+    transparent 16px
+  );
+  background-size: 100% 32px;
+  animation: timeline-flow-down 2s linear infinite;
+}
+
+@keyframes timeline-flow-down {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 32px; }
+}
+
+/* ── Glowing node on the main line ── */
+.timeline-node-glow {
+  box-shadow:
+    0 0 8px rgba(212, 175, 55, 0.6),
+    0 0 20px rgba(212, 175, 55, 0.3),
+    0 0 40px rgba(212, 175, 55, 0.1);
+  animation: node-pulse 3s ease-in-out infinite;
+}
+
+@keyframes node-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 8px rgba(212, 175, 55, 0.6),
+      0 0 20px rgba(212, 175, 55, 0.3),
+      0 0 40px rgba(212, 175, 55, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 12px rgba(212, 175, 55, 0.8),
+      0 0 30px rgba(212, 175, 55, 0.5),
+      0 0 50px rgba(212, 175, 55, 0.2);
+  }
+}
+
+/* ── Flowing dashed connector for side stories (blue) ── */
+.timeline-flowing-dash-blue {
+  animation: dash-flow-blue 1.5s linear infinite;
+}
+
+@keyframes dash-flow-blue {
+  0% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -20; }
+}
+
+/* ── Flowing dashed connector for sub stories (green) ── */
+.timeline-flowing-dash-green {
+  animation: dash-flow-green 1.2s linear infinite;
+}
+
+@keyframes dash-flow-green {
+  0% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -14; }
+}
+
+/* ── Timeline gold shadow utilities ── */
+.shadow-gold {
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.15);
+}
+
+/* ── React Flow: force default cursor on main-entry nodes ── */
+.react-flow__node-mainEntry {
+  cursor: default !important;
+}
+.react-flow__node-mainEntry .react-flow__handle {
+  cursor: default !important;
+}
+
+/* ── React Flow edge flowing animation ── */
+@keyframes rfDashFlow {
+  to { stroke-dashoffset: -40; }
+}
+.react-flow__edge.rf-spine .react-flow__edge-path {
+  animation: rfDashFlow 3s linear infinite;
+}
+.react-flow__edge.rf-side .react-flow__edge-path {
+  animation: rfDashFlow 2s linear infinite;
+}
+.react-flow__edge.rf-sub .react-flow__edge-path {
+  animation: rfDashFlow 1.5s linear infinite;
 }
