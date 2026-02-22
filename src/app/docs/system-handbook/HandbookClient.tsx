@@ -198,18 +198,6 @@ function QuestTypeBadge({ type, label, desc }: { type: string; label: string; de
   )
 }
 
-function TechBadge({ icon, name, desc }: { icon: string; name: string; desc: string }) {
-  return (
-    <div className="bg-victorian-900/40 border border-gold-subtle rounded-sm p-3 flex gap-2.5">
-      <span className="flex-shrink-0 text-base mt-0.5">{icon}</span>
-      <div>
-        <p className="text-nouveau-cream text-xs font-display mb-1">{name}</p>
-        <p className="text-victorian-300 text-xs leading-relaxed">{desc}</p>
-      </div>
-    </div>
-  )
-}
-
 /* ─────────────────────────────────────────────────────────────
    Table of Contents data
 ───────────────────────────────────────────────────────────── */
@@ -223,7 +211,7 @@ const TOC = [
   { id: 'actions',    num: '07', title: 'ระบบแอคชั่น' },
   { id: 'events',     num: '08', title: 'ระบบอีเวนท์' },
   { id: 'directory',  num: '09', title: 'ทำเนียบผู้เล่นและศาสนา' },
-  { id: 'stack',      num: '10', title: 'Tech Stack และสถาปัตยกรรม' },
+  { id: 'stack',      num: '10', title: 'ผู้พัฒนา' },
 ]
 
 /* ─────────────────────────────────────────────────────────────
@@ -994,169 +982,25 @@ export default function HandbookClient() {
           10 — Tech Stack และสถาปัตยกรรม
       ══════════════════════════════════════════════════════════ */}
       <section id="stack" className="scroll-mt-20">
-        <SectionHeading num="10" title="Tech Stack และสถาปัตยกรรม" />
+        <SectionHeading num="10" title="ผู้พัฒนา" />
 
-        <BodyText>
-          ระบบ Whisper of the Shadow พัฒนาขึ้นเพื่อใช้ในการจัดการ ควบคุม และอำนวยความสะดวกดูแลการโรลเพลย์
-          สร้างขึ้นบน Tech Stack ที่เน้น <strong className="text-nouveau-cream">ความเร็ว Real-time, ความปลอดภัยของข้อมูล และความยืดหยุ่นในการขยายระบบ</strong>
-        </BodyText>
-
-        <SubHeading label="Core Frameworks" />
-        <div className="grid gap-3 sm:grid-cols-2 mb-4">
-          <TechBadge
-            icon="▲"
-            name="Next.js ^15.1.0"
-            desc="Framework หลักของเว็บ ใช้ App Router + React Server Components — ดึงข้อมูลได้โดยตรงในฝั่ง Server, รองรับ Server Actions, Middleware และ Edge Runtime"
-          />
-          <TechBadge
-            icon="⚛"
-            name="React ^19.0.0"
-            desc="Core UI Library — ใช้ Server Actions แทน REST API ทำให้ทุก mutation (ส่งภารกิจ, ใช้สกิล, ย้ายแผนที่) เรียกผ่านฟังก์ชัน async ที่รันบน Server โดยตรง"
-          />
-        </div>
-
-        <SubHeading label="UI & Styling" />
-        <div className="grid gap-3 sm:grid-cols-2 mb-4">
-          <TechBadge
-            icon="🎨"
-            name="Tailwind CSS ^3.4.0"
-            desc="Utility-first CSS พร้อม custom design token ในธีม Victorian / Art Nouveau — สีชุด gold, nouveau-cream, victorian ถูก extend ใน tailwind.config"
-          />
-          <TechBadge
-            icon="✦"
-            name="Lucide React ^0.468.0"
-            desc="ไลบรารีไอคอน SVG สำหรับ UI ทั่วทั้งระบบ — น้ำหนักเบา, tree-shakeable, สอดคล้องกับธีม Victorian"
-          />
-          <TechBadge
-            icon="📐"
-            name="@tailwindcss/typography ^0.5.0"
-            desc="Plugin สำหรับจัดรูปแบบ Rich Text ในประวัติตัวละครและเอกสารต่าง ๆ — ควบคุม typography scale อัตโนมัติ"
-          />
-          <TechBadge
-            icon="📝"
-            name="TipTap (Rich Text Editor)"
-            desc="Editor ประวัติตัวละคร รองรับ Bold, Italic, Underline, Link, Image embed, Text align, Color, Highlight — บันทึกเป็น HTML"
-          />
-        </div>
-
-        <SubHeading label="State Management & Data Fetching" />
-        <div className="grid gap-3 sm:grid-cols-2 mb-4">
-          <TechBadge
-            icon="🟩"
-            name="@supabase/ssr ^0.5.2"
-            desc="SSR-aware Supabase client — จัดการ Session ผ่าน Cookie สำหรับ Next.js Server Components และ Middleware ได้อย่างถูกต้อง"
-          />
-          <TechBadge
-            icon="⚡"
-            name="Supabase Realtime"
-            desc="Real-time updates ผ่าน WebSocket — ใช้ Broadcast Channel เป็นหลัก และ Postgres Changes เป็น fallback เพื่อรับประกันข้อมูลครบถ้วน"
-          />
-          <TechBadge
-            icon="🗄️"
-            name="Supabase (PostgreSQL)"
-            desc="ฐานข้อมูลหลัก — Row-Level Security (RLS), pg_cron สำหรับ scheduled jobs (ลด Sanity, trigger บทลงโทษ), PostgreSQL Functions"
-          />
-          <TechBadge
-            icon="🖐"
-            name="@dnd-kit"
-            desc="Drag & Drop สำหรับ Token ตัวละครบนแผนที่ รองรับทั้ง Mouse และ Touch — ตำแหน่ง normalize เป็น % เพื่อให้ responsive ทุกขนาดหน้าจอ"
-          />
-        </div>
-
-        <SubHeading label="Discord Integration" />
-        <div className="grid gap-3 sm:grid-cols-2 mb-4">
-          <TechBadge
-            icon="🤖"
-            name="Discord.js v14"
-            desc="Bot หลักที่รับ Slash Commands จากผู้เล่นในเซิร์ฟเวอร์ Discord — ใช้ REST API ลงทะเบียน Command และ Gateway WebSocket รับ event"
-          />
-          <TechBadge
-            icon="🔔"
-            name="Discord Webhook"
-            desc="ระบบแจ้งเตือนแบบ fire-and-forget — ส่ง notification ไปยัง Discord channel เมื่อมีเหตุการณ์ (Quest ใหม่, อีเวนท์เปิด, การอนุมัติ)"
-          />
-        </div>
-
-        <SubHeading label="Infrastructure & Hosting" />
-        <div className="grid gap-3 sm:grid-cols-2 mb-4">
-          <TechBadge
-            icon="▲"
-            name="Vercel"
-            desc="Hosting สำหรับ Next.js Web App — Edge Middleware, Serverless Functions, Image Optimization อัตโนมัติ"
-          />
-          <TechBadge
-            icon="🚂"
-            name="Railway"
-            desc="Hosting สำหรับ Discord Bot — รัน Node.js process ต่อเนื่อง 24/7 แยกจาก Web App"
-          />
-          <TechBadge
-            icon="🌥"
-            name="Cloudinary"
-            desc="CDN สำหรับรูปภาพทั้งหมด — รูปโปรไฟล์, พื้นหลัง, และภาพประกอบ อัปโหลดผ่าน Cloudinary Widget"
-          />
-          <TechBadge
-            icon="🔷"
-            name="TypeScript 5.7"
-            desc="Type-safe ตลอดทั้ง Codebase — ทั้ง Web App และ Discord Bot พัฒนาด้วย TypeScript"
-          />
-        </div>
-
-        <div className="bg-victorian-900/40 border border-gold-subtle rounded-sm p-4 mb-4">
-          <p className="text-[10px] font-display tracking-[0.2em] uppercase text-gold-400/60 mb-3">
-            ภาพรวมสถาปัตยกรรม
-          </p>
-          <div className="bg-victorian-950/80 rounded-sm p-3 font-mono text-[10px] text-victorian-300 leading-relaxed overflow-x-auto">
-            <pre>{`Browser / Discord Client
-       │
-       ├─ Next.js (Vercel)
-       │   ├─ App Router (Server Components + Server Actions)
-       │   ├─ Middleware (Session check via Supabase SSR)
-       │   └─ Client Components (Realtime, Lightbox, DnD)
-       │
-       ├─ Discord Bot (Railway)
-       │   └─ Slash Commands → Supabase DB
-       │
-       └─ Supabase
-           ├─ PostgreSQL + RLS Policies
-           ├─ Auth (OAuth — Discord / Google)
-           ├─ Realtime (Broadcast + Postgres Changes)
-           └─ pg_cron (Sanity decay, Punishment trigger)`}</pre>
-          </div>
-        </div>
-
-        <Divider />
-
-        <SubHeading label="เครดิต" />
-        <div className="grid gap-3 sm:grid-cols-2 mb-4">
-          <div className="bg-victorian-900/40 border border-gold-subtle rounded-sm p-4 sm:col-span-2">
-            <p className="text-gold-400 text-xs font-display tracking-wide mb-3">👑 ผู้พัฒนา</p>
-            <div className="flex items-start gap-3">
-              <div>
-                <p className="text-nouveau-cream text-sm font-display mb-1">Kendrick Mervin</p>
-                <p className="text-victorian-300 text-xs leading-relaxed">
-                  Project Lead & Logic Control — ออกแบบและพัฒนาระบบทั้งหมด ตั้งแต่ฐานข้อมูล, Logic การทำงาน,
-                  UI/UX ไปจนถึง Discord Bot
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-victorian-900/40 border border-gold-subtle rounded-sm p-4 sm:col-span-2">
-            <p className="text-gold-400 text-xs font-display tracking-wide mb-3">🤝 AI Collaboration</p>
-            <p className="text-victorian-300 text-xs leading-relaxed mb-3">
-              พัฒนาระบบโดยใช้แนวทาง <strong className="text-nouveau-cream">Human-in-the-Loop</strong> —
-              ผู้พัฒนาเป็นผู้กำหนดทิศทาง Logic และตัดสินใจทุกขั้นตอน
-              โดยมี AI ช่วยในการเขียนโค้ดและขยายรายละเอียด
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="bg-victorian-950/60 rounded-sm px-3 py-2">
-                <p className="text-nouveau-cream text-xs font-display">Claude Opus 4.6</p>
-                <p className="text-victorian-400 text-[11px] mt-0.5">Architecture & Complex Logic</p>
-              </div>
-              <div className="bg-victorian-950/60 rounded-sm px-3 py-2">
-                <p className="text-nouveau-cream text-xs font-display">Claude Sonnet 4.5</p>
-                <p className="text-victorian-400 text-[11px] mt-0.5">Implementation & Iteration</p>
-              </div>
-            </div>
+        <div className="bg-victorian-900/40 border border-gold-subtle rounded-sm p-5 mb-4">
+          <p className="text-gold-400 text-xs font-display tracking-wide mb-3">👑 ผู้พัฒนา</p>
+          <p className="text-nouveau-cream text-sm font-display mb-4">Kendrick Mervin</p>
+          <div className="flex flex-wrap gap-2">
+            {[
+              "Next.js", "React", "TypeScript",
+              "Tailwind CSS", "Supabase", "PostgreSQL",
+              "Discord.js", "Vercel", "Cloudinary",
+              "TipTap", "@dnd-kit", "@xyflow/react",
+            ].map((tool) => (
+              <span
+                key={tool}
+                className="px-2.5 py-1 bg-victorian-950/70 border border-gold-subtle rounded-sm text-[11px] text-victorian-300 font-display"
+              >
+                {tool}
+              </span>
+            ))}
           </div>
         </div>
       </section>

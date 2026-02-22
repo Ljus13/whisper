@@ -28,7 +28,7 @@ export async function getTimelineEntries(includeUnpublished = false) {
   // the UI decides what to show per-role (LockedBox vs real content).
   const supabase = createAdminClient()
 
-  let query = supabase
+  const query = supabase
     .from('timeline_entries')
     .select(`
       *,
