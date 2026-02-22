@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
 // ── Helper: check admin/dm role ──
@@ -24,7 +24,9 @@ async function requireAdmin() {
 // ═══════════════════════════════════════
 
 export async function getTimelineEntries(includeUnpublished = false) {
-  const supabase = await createClient()
+  // Use service-role client so RLS never hides unpublished rows;
+  // the UI decides what to show per-role (LockedBox vs real content).
+  const supabase = createAdminClient()
 
   let query = supabase
     .from('timeline_entries')
@@ -44,9 +46,7 @@ export async function getTimelineEntries(includeUnpublished = false) {
     `)
     .order('sort_order', { ascending: true })
 
-  if (!includeUnpublished) {
-    query = query.eq('is_published', true)
-  }
+  // Always return all entries; UI handles visibility per role
 
   const { data, error } = await query
   if (error) throw error

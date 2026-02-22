@@ -49,6 +49,12 @@
     background: linear-gradient(180deg, #8B7425, #705D1C);
   }
 
+  /* Hide React Flow selection outline on nodes */
+  .react-flow__node.selected {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
   /* Slim scrollbar for card / node content areas */
   .custom-scrollbar::-webkit-scrollbar {
     width: 4px;

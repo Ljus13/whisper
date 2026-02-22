@@ -128,7 +128,6 @@ function buildGraph(
       type: 'mainEntry',
       position: { x: mainX, y: mainY },
       draggable: isAdmin,
-      selectable: false,
       data: {
         entry,
         isAdmin,
@@ -156,7 +155,7 @@ function buildGraph(
     }
 
     entry.timeline_side_stories?.forEach((side, j) => {
-      const hasPos = side.position_x !== 0 || side.position_y !== 0
+      const hasPos = (side.position_x != null && side.position_x !== 0) || (side.position_y != null && side.position_y !== 0)
       const sideX  = hasPos ? side.position_x : defaultSideX(j)
       const sideY  = hasPos ? side.position_y : mainY + 30
       const sideId = `side-${side.id}`
@@ -166,7 +165,6 @@ function buildGraph(
         type: 'sideStory',
         position: { x: sideX, y: sideY },
         draggable: isAdmin,
-        selectable: false,
         data: {
           side,
           isAdmin,
@@ -191,17 +189,22 @@ function buildGraph(
         selectable: false,
       })
 
+      // actual rendered height of the side card (mirrors flow-nodes.tsx)
+      const sideCardH = side.image_url ? 340 : 200
+
       side.timeline_sub_stories?.forEach((sub, k) => {
-        const hasSubPos = sub.position_x !== 0 || sub.position_y !== 0
+        const hasSubPos = (sub.position_x != null && sub.position_x !== 0) || (sub.position_y != null && sub.position_y !== 0)
+        // center sub horizontally under its parent side card
         const subX = hasSubPos ? sub.position_x : sideX + SIDE_W / 2 - SUB_W / 2
-        const subY = hasSubPos ? sub.position_y : sideY + SIDE_H_EST + k * SUB_GAP
+        // stack subs below the side card with a 24px gap
+        const subCardH = sub.image_url ? 300 : 170
+        const subY = hasSubPos ? sub.position_y : sideY + sideCardH + 24 + k * (subCardH + 20)
 
         nodes.push({
           id:       `sub-${sub.id}`,
           type:     'subStory',
           position: { x: subX, y: subY },
           draggable: isAdmin,
-          selectable: false,
           data: {
             sub,
             isAdmin,
@@ -236,7 +239,6 @@ function buildGraph(
           type: 'eventStory',
           position: { x: eventX, y: eventY },
           draggable: isAdmin,
-          selectable: false,
           data: {
             punishment: ep,
             isAdmin,
@@ -439,9 +441,8 @@ export default function TimelineView({ entries, isAdmin }: Props) {
           fitView
           fitViewOptions={{ padding: 0.1, maxZoom: 1.5 }}
           nodesDraggable={isAdmin}
+          panOnDrag
           nodesConnectable={false}
-          elementsSelectable={false}
-          panOnScroll
           zoomOnScroll
           style={{ background: 'transparent' }}
           proOptions={{ hideAttribution: true }}

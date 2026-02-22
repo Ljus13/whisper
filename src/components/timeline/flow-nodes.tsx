@@ -3,7 +3,7 @@
 import { memo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { Calendar, Pencil, Eye, EyeOff, Plus, Trash2, ChevronDown, X, AlertCircle, Users, Shield } from 'lucide-react'
+import { Calendar, Pencil, Eye, EyeOff, Plus, Trash2, ChevronDown, X, AlertCircle, Users, Shield, Lock } from 'lucide-react'
 import type { TimelineEntry, SideStory, SubStory, EventPunishment } from './timeline-view'
 
 // Hidden handle style — topology only, not user-drawn
@@ -126,6 +126,30 @@ function DetailPopup({ title, description, fullDetail, goal, imageUrl, startedAt
   return createPortal(content, document.body)
 }
 
+// ── Locked Box (shown to non-admins for unpublished items) ────────────────────
+function LockedBox({ width, height, accent }: { width: number; height: number; accent: 'gold' | 'sapphire' | 'emerald' }) {
+  const styles = {
+    gold:     { border: 'border-gold-700/50',              bg: 'bg-victorian-950', icon: 'text-gold-500/60',    text: 'text-gold-600/50' },
+    sapphire: { border: 'border-nouveau-sapphire/50',      bg: 'bg-victorian-950', icon: 'text-blue-500/60',    text: 'text-blue-400/50' },
+    emerald:  { border: 'border-nouveau-emerald/50',       bg: 'bg-victorian-950', icon: 'text-emerald-500/60', text: 'text-emerald-400/50' },
+  }[accent]
+  const iconSz = Math.round(width * 0.14)
+  return (
+    <div
+      className={`nodrag nopan rounded-xl border ${styles.border} ${styles.bg} flex flex-col items-center justify-center gap-3`}
+      style={{ width, height, cursor: 'default' }}
+    >
+      {/* lock icon ring */}
+      <div className={`rounded-full border ${styles.border} p-3 bg-victorian-900/60`}>
+        <Lock className={styles.icon} style={{ width: iconSz, height: iconSz }} />
+      </div>
+      <p className={`${styles.text} text-[11px] text-center px-4 leading-relaxed`}>
+        เนื้อหายังไม่เปิดเผย
+      </p>
+    </div>
+  )
+}
+
 // ── Main Entry Node ────────────────────────────────────────────────────────────
 export type MainNodeData = {
   entry: TimelineEntry
@@ -142,6 +166,19 @@ function MainEntryNode({ data }: NodeProps) {
   const [showPopup, setShowPopup] = useState(false)
 
   const hasImage = !!entry.image_url
+
+  // Non-admin view for unpublished entries
+  if (!isAdmin && !entry.is_published) {
+    return (
+      <>
+        <Handle type="target" id="top"    position={Position.Top}    style={HH} />
+        <Handle type="source" id="right"  position={Position.Right}  style={HH} />
+        <Handle type="source" id="left"   position={Position.Left}   style={HH} />
+        <Handle type="source" id="bottom" position={Position.Bottom} style={HH} />
+        <LockedBox width={360} height={hasImage ? 460 : 280} accent="gold" />
+      </>
+    )
+  }
 
   return (
     <>
@@ -234,6 +271,19 @@ function SideFlowNode({ data }: NodeProps) {
   const [showPopup, setShowPopup] = useState(false)
 
   const hasImage = !!side.image_url
+
+  // Non-admin view for unpublished side stories
+  if (!isAdmin && !side.is_published) {
+    return (
+      <>
+        <Handle type="target" id="left"   position={Position.Left}   style={HH} />
+        <Handle type="target" id="right"  position={Position.Right}  style={HH} />
+        <Handle type="target" id="top"    position={Position.Top}    style={HH} />
+        <Handle type="source" id="bottom" position={Position.Bottom} style={HH} />
+        <LockedBox width={224} height={hasImage ? 340 : 200} accent="sapphire" />
+      </>
+    )
+  }
 
   return (
     <>
@@ -334,6 +384,19 @@ function SubFlowNode({ data }: NodeProps) {
   const [showPopup, setShowPopup] = useState(false)
 
   const hasImage = !!sub.image_url
+
+  // Non-admin view for unpublished sub stories
+  if (!isAdmin && !sub.is_published) {
+    return (
+      <>
+        <Handle type="target" id="top"    position={Position.Top}    style={HH} />
+        <Handle type="target" id="left"   position={Position.Left}   style={HH} />
+        <Handle type="target" id="right"  position={Position.Right}  style={HH} />
+        <Handle type="source" id="bottom" position={Position.Bottom} style={HH} />
+        <LockedBox width={192} height={hasImage ? 300 : 170} accent="emerald" />
+      </>
+    )
+  }
 
   return (
     <>
