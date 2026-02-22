@@ -129,18 +129,18 @@ function DetailPopup({ title, description, fullDetail, goal, imageUrl, startedAt
 // ── Locked Box (shown to non-admins for unpublished items) ────────────────────
 function LockedBox({ width, height, accent }: { width: number; height: number; accent: 'gold' | 'sapphire' | 'emerald' }) {
   const styles = {
-    gold:     { border: 'border-gold-700/50',              bg: 'bg-victorian-950', icon: 'text-gold-500/60',    text: 'text-gold-600/50' },
-    sapphire: { border: 'border-nouveau-sapphire/50',      bg: 'bg-victorian-950', icon: 'text-blue-500/60',    text: 'text-blue-400/50' },
-    emerald:  { border: 'border-nouveau-emerald/50',       bg: 'bg-victorian-950', icon: 'text-emerald-500/60', text: 'text-emerald-400/50' },
+    gold:     { outer: 'border border-gold-700/50 bg-victorian-950',  ring: 'border border-gold-700/50',     icon: 'text-gold-500/60',    text: 'text-gold-600/50' },
+    sapphire: { outer: 'bg-blue-950/85',                               ring: 'border border-blue-800/40',     icon: 'text-blue-500/60',    text: 'text-blue-400/50' },
+    emerald:  { outer: 'bg-emerald-950/85',                            ring: 'border border-emerald-800/40',  icon: 'text-emerald-500/60', text: 'text-emerald-400/50' },
   }[accent]
   const iconSz = Math.round(width * 0.14)
   return (
     <div
-      className={`nodrag nopan rounded-xl border ${styles.border} ${styles.bg} flex flex-col items-center justify-center gap-3`}
+      className={`nodrag nopan rounded-xl ${styles.outer} flex flex-col items-center justify-center gap-3`}
       style={{ width, height, cursor: 'default' }}
     >
       {/* lock icon ring */}
-      <div className={`rounded-full border ${styles.border} p-3 bg-victorian-900/60`}>
+      <div className={`rounded-full ${styles.ring} p-3 bg-victorian-900/60`}>
         <Lock className={styles.icon} style={{ width: iconSz, height: iconSz }} />
       </div>
       <p className={`${styles.text} text-[11px] text-center px-4 leading-relaxed`}>
@@ -206,7 +206,10 @@ function MainEntryNode({ data }: NodeProps) {
             </span>
           )}
           <DateRange s={entry.started_at} e={entry.ended_at} />
-          <h3 className="font-display text-xl text-gold-200 mb-2">{entry.title}</h3>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gold-900/60 border border-gold-700/40 text-gold-400 text-xs font-bold shrink-0">{entry.sort_order}</span>
+            <h3 className="font-display text-xl text-gold-200 leading-tight">{entry.title}</h3>
+          </div>
           {entry.description && (
             <p className="text-victorian-300 text-sm leading-relaxed mb-2 line-clamp-3">{entry.description}</p>
           )}
@@ -292,7 +295,7 @@ function SideFlowNode({ data }: NodeProps) {
       <Handle type="target" id="top"    position={Position.Top}    style={HH} />
       <Handle type="source" id="bottom" position={Position.Bottom} style={HH} />
 
-      <div className="w-[224px] rounded-lg border border-nouveau-sapphire/40 bg-victorian-900/85 backdrop-blur-sm overflow-hidden hover:border-nouveau-sapphire/70 hover:shadow-[0_0_14px_rgba(27,58,92,0.4)] transition-shadow"
+      <div className="w-[224px] rounded-xl bg-blue-950/80 backdrop-blur-sm overflow-hidden hover:shadow-[0_0_14px_rgba(27,58,92,0.5)] transition-shadow"
         style={{ height: hasImage ? 340 : 200 }}
       >
         {isAdmin && !side.is_published && (
@@ -311,7 +314,10 @@ function SideFlowNode({ data }: NodeProps) {
             </div>
           )}
           <DateRange s={side.started_at} e={side.ended_at} xs />
-          <h4 className="font-display text-sm text-blue-200 mb-1">{side.title}</h4>
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-900/60 text-blue-300 text-[9px] font-bold shrink-0">{side.sort_order}</span>
+            <h4 className="font-display text-sm text-blue-200 leading-tight">{side.title}</h4>
+          </div>
           {side.description && (
             <p className="text-victorian-300 text-xs leading-relaxed line-clamp-2">{side.description}</p>
           )}
@@ -405,7 +411,7 @@ function SubFlowNode({ data }: NodeProps) {
       <Handle type="target" id="right"  position={Position.Right}  style={HH} />
       <Handle type="source" id="bottom" position={Position.Bottom} style={HH} />
 
-      <div className="w-[192px] rounded-lg border border-nouveau-emerald/40 bg-victorian-900/75 backdrop-blur-sm overflow-hidden hover:border-nouveau-emerald/70 hover:shadow-[0_0_12px_rgba(46,91,60,0.4)] transition-shadow"
+      <div className="w-[192px] rounded-xl bg-emerald-950/80 backdrop-blur-sm overflow-hidden hover:shadow-[0_0_12px_rgba(46,91,60,0.5)] transition-shadow"
         style={{ height: hasImage ? 300 : 170 }}
       >
         {isAdmin && !sub.is_published && (
@@ -424,7 +430,10 @@ function SubFlowNode({ data }: NodeProps) {
             </div>
           )}
           <DateRange s={sub.started_at} e={sub.ended_at} xs />
-          <h5 className="font-display text-xs text-emerald-200 mb-1">{sub.title}</h5>
+          <div className="flex items-center gap-1 mb-1">
+            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-900/60 text-emerald-300 text-[8px] font-bold shrink-0">{sub.sort_order}</span>
+            <h5 className="font-display text-xs text-emerald-200 leading-tight">{sub.title}</h5>
+          </div>
           {sub.description && (
             <p className="text-victorian-300 text-[11px] leading-relaxed line-clamp-2">{sub.description}</p>
           )}

@@ -12,6 +12,7 @@ import { Plus, AlertTriangle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { nodeTypes, type MainNodeData } from './flow-nodes'
 import TimelineFormModal from './timeline-form-modal'
+import TimelineListView from './timeline-list-view'
 import {
   createTimelineEntry, updateTimelineEntry, deleteTimelineEntry, toggleTimelinePublish,
   createSideStory, updateSideStory, deleteSideStory, updateSideStoryPosition, toggleSideStoryPublish,
@@ -89,7 +90,7 @@ function computeMainYs(entries: TimelineEntry[]): number[] {
   let y = 0
   for (const e of entries) {
     ys.push(y)
-    y += (e.image_url ? 460 : 280) + 50
+    y += (e.image_url ? 460 : 280) + 80
   }
   return ys
 }
@@ -269,6 +270,15 @@ export default function TimelineView({ entries, isAdmin }: Props) {
   const [modal, setModal]                 = useState<ModalMode>(null)
   const [isPending, setIsPending]         = useState(false)
   const [confirmModal, setConfirmModal]   = useState<{ message: string; onConfirm: () => void } | null>(null)
+  const [isMobile, setIsMobile]           = useState(false)
+
+  // Detect mobile screen (< 768px = Tailwind md breakpoint)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   // Lists for moderators/participants/punishments multi-selects
   const [adminDmProfiles, setAdminDmProfiles] = useState<{ id: string; display_name: string; avatar_url: string | null }[]>([])
@@ -404,7 +414,10 @@ export default function TimelineView({ entries, isAdmin }: Props) {
   const allSideStories = entries.flatMap(e => e.timeline_side_stories ?? [])
 
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 80px)' }}>
+    <div
+      className="flex flex-col"
+      style={isMobile ? undefined : { height: 'calc(100vh - 80px)' }}
+    >
       {/* ── Header ── */}
       <div className="text-center py-8 shrink-0 px-4">
         <h2 className="font-display text-3xl md:text-5xl heading-victorian mb-2">
@@ -422,14 +435,30 @@ export default function TimelineView({ entries, isAdmin }: Props) {
             <Plus className="w-4 h-4" /> เพิ่มไทม์ไลน์หลัก
           </button>
         )}
-        {entries.length === 0 && (
+        {!isMobile && entries.length === 0 && (
           <p className="mt-10 text-victorian-400 text-lg">
             ยังไม่มีเส้นเรื่อง {isAdmin && '— กดปุ่มด้านบนเพื่อเริ่มสร้าง'}
           </p>
         )}
       </div>
 
-      {/* ── React Flow canvas ── */}
+      {/* ── Mobile: scrollable list view ── */}
+      {isMobile && (
+        <TimelineListView
+          entries={entries}
+          isAdmin={isAdmin}
+          setModal={setModal}
+          handleDeleteEntry={handleDeleteEntry}
+          handleToggleEntry={handleToggleEntry}
+          handleDeleteSide={handleDeleteSide}
+          handleToggleSide={handleToggleSide}
+          handleDeleteSub={handleDeleteSub}
+          handleToggleSub={handleToggleSub}
+        />
+      )}
+
+      {/* ── Desktop: React Flow canvas ── */}
+      {!isMobile && (
       <div className="flex-1 min-h-0">
         <ReactFlow
           nodes={nodes}
@@ -469,6 +498,7 @@ export default function TimelineView({ entries, isAdmin }: Props) {
           />
         </ReactFlow>
       </div>
+      )}
 
       {/* ── Form Modal ── */}
       {modal && (
