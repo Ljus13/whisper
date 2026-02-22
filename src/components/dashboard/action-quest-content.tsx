@@ -9,7 +9,7 @@ import {
   ArrowLeft, Moon, ScrollText, Swords, Target, Shield, Plus, Copy,
   X, ExternalLink, ChevronLeft, ChevronRight, Clock, CheckCircle,
   XCircle, Send, AlertTriangle, Trash2, Church, Skull, Users, CalendarClock,
-  Repeat, HandHeart, Pencil, Archive, Flame, Sparkles
+  Repeat, HandHeart, Pencil, Archive, Flame, Sparkles, Hourglass, BookOpen
 } from 'lucide-react'
 import {
   submitSleepRequest, getTodaySleepStatus,
@@ -56,6 +56,7 @@ interface CodeEntry {
   reward_hp?: number; reward_sanity?: number; reward_travel?: number; reward_spirituality?: number
   reward_max_sanity?: number; reward_max_travel?: number; reward_max_spirituality?: number
   expires_at?: string | null; max_repeats?: number | null
+  cooldown_minutes?: number | null; max_roleplay_submissions?: number | null
 }
 interface Submission {
   id: string; player_id: string; player_name: string; player_avatar: string | null
@@ -332,6 +333,20 @@ const ActionCodeRow = memo(function ActionCodeRow({ c, isPending, onCopy, onEdit
           <span className="text-victorian-600 text-xs">ไม่จำกัด</span>
         )}
       </td>
+      <td className="py-2 pr-3">
+        {c.cooldown_minutes ? (
+          <span className="text-xs text-cyan-400">{c.cooldown_minutes >= 60 && c.cooldown_minutes % 60 === 0 ? `${c.cooldown_minutes / 60} ชม.` : `${c.cooldown_minutes} นาที`}</span>
+        ) : (
+          <span className="text-victorian-600 text-xs">—</span>
+        )}
+      </td>
+      <td className="py-2 pr-3">
+        {c.max_roleplay_submissions !== null && c.max_roleplay_submissions !== undefined ? (
+          <span className="text-xs text-purple-400">{c.max_roleplay_submissions} ครั้ง</span>
+        ) : (
+          <span className="text-victorian-600 text-xs">ไม่จำกัด</span>
+        )}
+      </td>
       <td className="py-2 pr-3 text-victorian-400">{c.created_by_name}</td>
       <td className="py-2 pr-3 text-victorian-500 text-xs">{fmtDate(c.created_at)}</td>
       <td className="py-2">
@@ -420,6 +435,20 @@ const QuestCodeRow = memo(function QuestCodeRow({ c, isPending, onCopy, onEdit, 
       <td className="py-2 pr-3">
         {c.max_repeats !== null && c.max_repeats !== undefined ? (
           <span className="text-xs text-orange-400">{c.max_repeats} ครั้ง</span>
+        ) : (
+          <span className="text-victorian-600 text-xs">ไม่จำกัด</span>
+        )}
+      </td>
+      <td className="py-2 pr-3">
+        {c.cooldown_minutes ? (
+          <span className="text-xs text-cyan-400">{c.cooldown_minutes >= 60 && c.cooldown_minutes % 60 === 0 ? `${c.cooldown_minutes / 60} ชม.` : `${c.cooldown_minutes} นาที`}</span>
+        ) : (
+          <span className="text-victorian-600 text-xs">—</span>
+        )}
+      </td>
+      <td className="py-2 pr-3">
+        {c.max_roleplay_submissions !== null && c.max_roleplay_submissions !== undefined ? (
+          <span className="text-xs text-purple-400">{c.max_roleplay_submissions} ครั้ง</span>
         ) : (
           <span className="text-victorian-600 text-xs">ไม่จำกัด</span>
         )}
@@ -764,12 +793,22 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   const [genMaxRepeats, setGenMaxRepeats] = useState<string>('')
   const [genNoExpiry, setGenNoExpiry] = useState(true)
   const [genUnlimitedRepeats, setGenUnlimitedRepeats] = useState(true)
+  const [genNoCooldown, setGenNoCooldown] = useState(true)
+  const [genCooldownValue, setGenCooldownValue] = useState<string>('')
+  const [genCooldownUnit, setGenCooldownUnit] = useState<'minutes' | 'hours'>('minutes')
+  const [genUnlimitedRoleplay, setGenUnlimitedRoleplay] = useState(true)
+  const [genMaxRoleplay, setGenMaxRoleplay] = useState<string>('')
   // ─── Quest expiration state ───
   const [genQuestExpiresDate, setGenQuestExpiresDate] = useState<string>('')
   const [genQuestExpiresTime, setGenQuestExpiresTime] = useState<string>('')
   const [genQuestMaxRepeats, setGenQuestMaxRepeats] = useState<string>('')
   const [genQuestNoExpiry, setGenQuestNoExpiry] = useState(true)
   const [genQuestUnlimitedRepeats, setGenQuestUnlimitedRepeats] = useState(true)
+  const [genQuestNoCooldown, setGenQuestNoCooldown] = useState(true)
+  const [genQuestCooldownValue, setGenQuestCooldownValue] = useState<string>('')
+  const [genQuestCooldownUnit, setGenQuestCooldownUnit] = useState<'minutes' | 'hours'>('minutes')
+  const [genQuestUnlimitedRoleplay, setGenQuestUnlimitedRoleplay] = useState(true)
+  const [genQuestMaxRoleplay, setGenQuestMaxRoleplay] = useState<string>('')
   // ─── Quest visibility ───
   const [genQuestIsPublic, setGenQuestIsPublic] = useState(true)
 
@@ -893,6 +932,11 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   const [editActionExpiresDate, setEditActionExpiresDate] = useState('')
   const [editActionExpiresTime, setEditActionExpiresTime] = useState('')
   const [editActionMaxRepeats, setEditActionMaxRepeats] = useState('')
+  const [editActionNoCooldown, setEditActionNoCooldown] = useState(true)
+  const [editActionCooldownValue, setEditActionCooldownValue] = useState('')
+  const [editActionCooldownUnit, setEditActionCooldownUnit] = useState<'minutes' | 'hours'>('minutes')
+  const [editActionUnlimitedRoleplay, setEditActionUnlimitedRoleplay] = useState(true)
+  const [editActionMaxRoleplay, setEditActionMaxRoleplay] = useState('')
   const [editActionError, setEditActionError] = useState<string | null>(null)
 
   const [editQuest, setEditQuest] = useState<CodeEntry | null>(null)
@@ -905,6 +949,11 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
   const [editQuestExpiresDate, setEditQuestExpiresDate] = useState('')
   const [editQuestExpiresTime, setEditQuestExpiresTime] = useState('')
   const [editQuestMaxRepeats, setEditQuestMaxRepeats] = useState('')
+  const [editQuestNoCooldown, setEditQuestNoCooldown] = useState(true)
+  const [editQuestCooldownValue, setEditQuestCooldownValue] = useState('')
+  const [editQuestCooldownUnit, setEditQuestCooldownUnit] = useState<'minutes' | 'hours'>('minutes')
+  const [editQuestUnlimitedRoleplay, setEditQuestUnlimitedRoleplay] = useState(true)
+  const [editQuestMaxRoleplay, setEditQuestMaxRoleplay] = useState('')
   const [editQuestError, setEditQuestError] = useState<string | null>(null)
 
   const [editPunishment, setEditPunishment] = useState<PunishmentEntry | null>(null)
@@ -940,6 +989,11 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     setGenMaxRepeats('')
     setGenNoExpiry(true)
     setGenUnlimitedRepeats(true)
+    setGenNoCooldown(true)
+    setGenCooldownValue('')
+    setGenCooldownUnit('minutes')
+    setGenUnlimitedRoleplay(true)
+    setGenMaxRoleplay('')
     setShowGenAction(true)
   }
 
@@ -953,6 +1007,11 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     setGenQuestMaxRepeats('')
     setGenQuestNoExpiry(true)
     setGenQuestUnlimitedRepeats(true)
+    setGenQuestNoCooldown(true)
+    setGenQuestCooldownValue('')
+    setGenQuestCooldownUnit('minutes')
+    setGenQuestUnlimitedRoleplay(true)
+    setGenQuestMaxRoleplay('')
     setGenQuestIsPublic(true)
     if (isAdmin && mapOptions.length === 0) {
       getMapsForQuestDropdown().then(m => setMapOptions(m))
@@ -1402,9 +1461,19 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       if (type === 'action') {
         if (!genNoExpiry && genExpiresDate) expiration.expires_at = new Date(combineDateTime(genExpiresDate, genExpiresTime)).toISOString()
         if (!genUnlimitedRepeats && genMaxRepeats) expiration.max_repeats = parseInt(genMaxRepeats) || null
+        if (!genNoCooldown && genCooldownValue) {
+          const val = parseInt(genCooldownValue) || 0
+          expiration.cooldown_minutes = genCooldownUnit === 'hours' ? val * 60 : val
+        }
+        if (!genUnlimitedRoleplay && genMaxRoleplay) expiration.max_roleplay_submissions = parseInt(genMaxRoleplay) || null
       } else {
         if (!genQuestNoExpiry && genQuestExpiresDate) expiration.expires_at = new Date(combineDateTime(genQuestExpiresDate, genQuestExpiresTime)).toISOString()
         if (!genQuestUnlimitedRepeats && genQuestMaxRepeats) expiration.max_repeats = parseInt(genQuestMaxRepeats) || null
+        if (!genQuestNoCooldown && genQuestCooldownValue) {
+          const val = parseInt(genQuestCooldownValue) || 0
+          expiration.cooldown_minutes = genQuestCooldownUnit === 'hours' ? val * 60 : val
+        }
+        if (!genQuestUnlimitedRoleplay && genQuestMaxRoleplay) expiration.max_roleplay_submissions = parseInt(genQuestMaxRoleplay) || null
       }
 
       const r = type === 'action'
@@ -1682,6 +1751,23 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     const hasRepeatLimit = c.max_repeats !== null && c.max_repeats !== undefined
     setEditActionUnlimitedRepeats(!hasRepeatLimit)
     setEditActionMaxRepeats(hasRepeatLimit ? String(c.max_repeats) : '')
+    const hasCooldown = c.cooldown_minutes !== null && c.cooldown_minutes !== undefined && c.cooldown_minutes > 0
+    setEditActionNoCooldown(!hasCooldown)
+    if (hasCooldown) {
+      if (c.cooldown_minutes! >= 60 && c.cooldown_minutes! % 60 === 0) {
+        setEditActionCooldownValue(String(c.cooldown_minutes! / 60))
+        setEditActionCooldownUnit('hours')
+      } else {
+        setEditActionCooldownValue(String(c.cooldown_minutes))
+        setEditActionCooldownUnit('minutes')
+      }
+    } else {
+      setEditActionCooldownValue('')
+      setEditActionCooldownUnit('minutes')
+    }
+    const hasRoleplayLimit = c.max_roleplay_submissions !== null && c.max_roleplay_submissions !== undefined
+    setEditActionUnlimitedRoleplay(!hasRoleplayLimit)
+    setEditActionMaxRoleplay(hasRoleplayLimit ? String(c.max_roleplay_submissions) : '')
     setEditActionError(null)
   }
 
@@ -1695,6 +1781,12 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       else expiration.expires_at = null
       if (!editActionUnlimitedRepeats && editActionMaxRepeats) expiration.max_repeats = parseInt(editActionMaxRepeats) || null
       else expiration.max_repeats = null
+      if (!editActionNoCooldown && editActionCooldownValue) {
+        const val = parseInt(editActionCooldownValue) || 0
+        expiration.cooldown_minutes = editActionCooldownUnit === 'hours' ? val * 60 : val
+      } else expiration.cooldown_minutes = null
+      if (!editActionUnlimitedRoleplay && editActionMaxRoleplay) expiration.max_roleplay_submissions = parseInt(editActionMaxRoleplay) || null
+      else expiration.max_roleplay_submissions = null
 
       const r = await updateActionCode(editAction!.id, editActionName, editActionRewards, expiration)
       if (r.error) { setEditActionError(r.error) }
@@ -1734,6 +1826,23 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
     const hasRepeatLimit = c.max_repeats !== null && c.max_repeats !== undefined
     setEditQuestUnlimitedRepeats(!hasRepeatLimit)
     setEditQuestMaxRepeats(hasRepeatLimit ? String(c.max_repeats) : '')
+    const hasCooldown = c.cooldown_minutes !== null && c.cooldown_minutes !== undefined && c.cooldown_minutes > 0
+    setEditQuestNoCooldown(!hasCooldown)
+    if (hasCooldown) {
+      if (c.cooldown_minutes! >= 60 && c.cooldown_minutes! % 60 === 0) {
+        setEditQuestCooldownValue(String(c.cooldown_minutes! / 60))
+        setEditQuestCooldownUnit('hours')
+      } else {
+        setEditQuestCooldownValue(String(c.cooldown_minutes))
+        setEditQuestCooldownUnit('minutes')
+      }
+    } else {
+      setEditQuestCooldownValue('')
+      setEditQuestCooldownUnit('minutes')
+    }
+    const hasRoleplayLimit = c.max_roleplay_submissions !== null && c.max_roleplay_submissions !== undefined
+    setEditQuestUnlimitedRoleplay(!hasRoleplayLimit)
+    setEditQuestMaxRoleplay(hasRoleplayLimit ? String(c.max_roleplay_submissions) : '')
     setEditQuestError(null)
   }
 
@@ -1747,6 +1856,12 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
       else expiration.expires_at = null
       if (!editQuestUnlimitedRepeats && editQuestMaxRepeats) expiration.max_repeats = parseInt(editQuestMaxRepeats) || null
       else expiration.max_repeats = null
+      if (!editQuestNoCooldown && editQuestCooldownValue) {
+        const val = parseInt(editQuestCooldownValue) || 0
+        expiration.cooldown_minutes = editQuestCooldownUnit === 'hours' ? val * 60 : val
+      } else expiration.cooldown_minutes = null
+      if (!editQuestUnlimitedRoleplay && editQuestMaxRoleplay) expiration.max_roleplay_submissions = parseInt(editQuestMaxRoleplay) || null
+      else expiration.max_roleplay_submissions = null
 
       const r = await updateQuestCode(editQuest!.id, editQuestName, editQuestMapId || null, editQuestNpcId || null, expiration, editQuestRewards)
       if (r.error) { setEditQuestError(r.error) }
@@ -2062,6 +2177,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                         <th className="pb-2 pr-3">รางวัล</th>
                         <th className="pb-2 pr-3">หมดอายุ</th>
                         <th className="pb-2 pr-3">ทำซ้ำ</th>
+                        <th className="pb-2 pr-3">คูลดาวน์</th>
+                        <th className="pb-2 pr-3">โรลเพลย์</th>
                         <th className="pb-2 pr-3">สร้างโดย</th>
                         <th className="pb-2 pr-3">วันที่</th>
                         <th className="pb-2">จัดการ</th>
@@ -2127,6 +2244,8 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                         <th className="pb-2 pr-3">รางวัล</th>
                         <th className="pb-2 pr-3">หมดอายุ</th>
                         <th className="pb-2 pr-3">ทำซ้ำ</th>
+                        <th className="pb-2 pr-3">คูลดาวน์</th>
+                        <th className="pb-2 pr-3">โรลเพลย์</th>
                         <th className="pb-2 pr-3">สร้างโดย</th>
                         <th className="pb-2 pr-3">วันที่</th>
                         <th className="pb-2">จัดการ</th>
@@ -2770,6 +2889,49 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                 )}
               </div>
 
+              {/* ── Cooldown ── */}
+              <div className="space-y-2">
+                <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+                  <Hourglass className="w-3.5 h-3.5 text-cyan-400" /> คูลดาวน์
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+                    <input type="checkbox" checked={genNoCooldown} onChange={e => setGenNoCooldown(e.target.checked)}
+                      className="rounded border-gold-400/30" />
+                    ไม่มีคูลดาวน์
+                  </label>
+                </div>
+                {!genNoCooldown && (
+                  <div className="flex gap-2">
+                    <input type="number" min={1} placeholder="ระยะเวลา" value={genCooldownValue} onChange={e => setGenCooldownValue(e.target.value)}
+                      className="input-victorian flex-1 !py-1.5 !text-xs" />
+                    <select value={genCooldownUnit} onChange={e => setGenCooldownUnit(e.target.value as 'minutes' | 'hours')}
+                      className="input-victorian !py-1.5 !text-xs w-24">
+                      <option value="minutes">นาที</option>
+                      <option value="hours">ชั่วโมง</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Roleplay submission limit ── */}
+              <div className="space-y-2">
+                <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-purple-400" /> จำกัดจำนวนโรลเพลย์
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+                    <input type="checkbox" checked={genUnlimitedRoleplay} onChange={e => setGenUnlimitedRoleplay(e.target.checked)}
+                      className="rounded border-gold-400/30" />
+                    ไม่จำกัด
+                  </label>
+                </div>
+                {!genUnlimitedRoleplay && (
+                  <input type="number" min={1} placeholder="จำนวนโรลเพลย์สูงสุด" value={genMaxRoleplay} onChange={e => setGenMaxRoleplay(e.target.value)}
+                    className="input-victorian w-full !py-1.5 !text-xs" />
+                )}
+              </div>
+
               {genError && <div className="p-3 bg-red-900/40 border border-red-500/30 rounded-lg text-red-300 text-sm text-center">{genError}</div>}
               <div className="flex justify-end gap-3">
                 <button type="button" onClick={() => setShowGenAction(false)} className="btn-victorian px-4 py-2 text-sm cursor-pointer">ยกเลิก</button>
@@ -2953,6 +3115,49 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
                 </div>
                 {!genQuestUnlimitedRepeats && (
                   <input type="number" min={1} placeholder="จำนวนครั้งสูงสุด" value={genQuestMaxRepeats} onChange={e => setGenQuestMaxRepeats(e.target.value)}
+                    className="input-victorian w-full !py-1.5 !text-xs" />
+                )}
+              </div>
+
+              {/* ── Cooldown ── */}
+              <div className="space-y-2">
+                <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+                  <Hourglass className="w-3.5 h-3.5 text-cyan-400" /> คูลดาวน์
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+                    <input type="checkbox" checked={genQuestNoCooldown} onChange={e => setGenQuestNoCooldown(e.target.checked)}
+                      className="rounded border-gold-400/30" />
+                    ไม่มีคูลดาวน์
+                  </label>
+                </div>
+                {!genQuestNoCooldown && (
+                  <div className="flex gap-2">
+                    <input type="number" min={1} placeholder="ระยะเวลา" value={genQuestCooldownValue} onChange={e => setGenQuestCooldownValue(e.target.value)}
+                      className="input-victorian flex-1 !py-1.5 !text-xs" />
+                    <select value={genQuestCooldownUnit} onChange={e => setGenQuestCooldownUnit(e.target.value as 'minutes' | 'hours')}
+                      className="input-victorian !py-1.5 !text-xs w-24">
+                      <option value="minutes">นาที</option>
+                      <option value="hours">ชั่วโมง</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Roleplay submission limit ── */}
+              <div className="space-y-2">
+                <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-purple-400" /> จำกัดจำนวนโรลเพลย์
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+                    <input type="checkbox" checked={genQuestUnlimitedRoleplay} onChange={e => setGenQuestUnlimitedRoleplay(e.target.checked)}
+                      className="rounded border-gold-400/30" />
+                    ไม่จำกัด
+                  </label>
+                </div>
+                {!genQuestUnlimitedRoleplay && (
+                  <input type="number" min={1} placeholder="จำนวนโรลเพลย์สูงสุด" value={genQuestMaxRoleplay} onChange={e => setGenQuestMaxRoleplay(e.target.value)}
                     className="input-victorian w-full !py-1.5 !text-xs" />
                 )}
               </div>
@@ -3494,6 +3699,43 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
               <input type="number" min={1} placeholder="จำนวนครั้ง" value={editActionMaxRepeats} onChange={e => setEditActionMaxRepeats(e.target.value)} className="input-victorian w-full !py-1.5 !text-xs" />
             )}
           </div>
+
+          {/* ── Cooldown ── */}
+          <div className="space-y-2">
+            <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+              <Hourglass className="w-3.5 h-3.5 text-cyan-400" /> คูลดาวน์
+            </label>
+            <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+              <input type="checkbox" checked={editActionNoCooldown} onChange={e => setEditActionNoCooldown(e.target.checked)} className="rounded border-gold-400/30" />
+              ไม่มีคูลดาวน์
+            </label>
+            {!editActionNoCooldown && (
+              <div className="flex gap-2">
+                <input type="number" min={1} placeholder="ระยะเวลา" value={editActionCooldownValue} onChange={e => setEditActionCooldownValue(e.target.value)}
+                  className="input-victorian flex-1 !py-1.5 !text-xs" />
+                <select value={editActionCooldownUnit} onChange={e => setEditActionCooldownUnit(e.target.value as 'minutes' | 'hours')}
+                  className="input-victorian !py-1.5 !text-xs w-24">
+                  <option value="minutes">นาที</option>
+                  <option value="hours">ชั่วโมง</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* ── Roleplay submission limit ── */}
+          <div className="space-y-2">
+            <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+              <BookOpen className="w-3.5 h-3.5 text-purple-400" /> จำกัดจำนวนโรลเพลย์
+            </label>
+            <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+              <input type="checkbox" checked={editActionUnlimitedRoleplay} onChange={e => setEditActionUnlimitedRoleplay(e.target.checked)} className="rounded border-gold-400/30" />
+              ไม่จำกัด
+            </label>
+            {!editActionUnlimitedRoleplay && (
+              <input type="number" min={1} placeholder="จำนวนโรลเพลย์สูงสุด" value={editActionMaxRoleplay} onChange={e => setEditActionMaxRoleplay(e.target.value)}
+                className="input-victorian w-full !py-1.5 !text-xs" />
+            )}
+          </div>
           {editActionError && <div className="p-3 bg-red-900/40 border border-red-500/30 rounded-lg text-red-300 text-sm text-center">{editActionError}</div>}
           <div className="flex justify-end gap-3">
             <button type="button" onClick={() => setEditAction(null)} className="btn-victorian px-4 py-2 text-sm cursor-pointer">ยกเลิก</button>
@@ -3592,6 +3834,43 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
             </label>
             {!editQuestUnlimitedRepeats && (
               <input type="number" min={1} placeholder="จำนวนครั้ง" value={editQuestMaxRepeats} onChange={e => setEditQuestMaxRepeats(e.target.value)} className="input-victorian w-full !py-1.5 !text-xs" />
+            )}
+          </div>
+
+          {/* ── Cooldown ── */}
+          <div className="space-y-2">
+            <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+              <Hourglass className="w-3.5 h-3.5 text-cyan-400" /> คูลดาวน์
+            </label>
+            <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+              <input type="checkbox" checked={editQuestNoCooldown} onChange={e => setEditQuestNoCooldown(e.target.checked)} className="rounded border-gold-400/30" />
+              ไม่มีคูลดาวน์
+            </label>
+            {!editQuestNoCooldown && (
+              <div className="flex gap-2">
+                <input type="number" min={1} placeholder="ระยะเวลา" value={editQuestCooldownValue} onChange={e => setEditQuestCooldownValue(e.target.value)}
+                  className="input-victorian flex-1 !py-1.5 !text-xs" />
+                <select value={editQuestCooldownUnit} onChange={e => setEditQuestCooldownUnit(e.target.value as 'minutes' | 'hours')}
+                  className="input-victorian !py-1.5 !text-xs w-24">
+                  <option value="minutes">นาที</option>
+                  <option value="hours">ชั่วโมง</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* ── Roleplay submission limit ── */}
+          <div className="space-y-2">
+            <label className="block text-sm text-victorian-300 font-semibold flex items-center gap-1.5">
+              <BookOpen className="w-3.5 h-3.5 text-purple-400" /> จำกัดจำนวนโรลเพลย์
+            </label>
+            <label className="flex items-center gap-2 text-xs text-victorian-400 cursor-pointer">
+              <input type="checkbox" checked={editQuestUnlimitedRoleplay} onChange={e => setEditQuestUnlimitedRoleplay(e.target.checked)} className="rounded border-gold-400/30" />
+              ไม่จำกัด
+            </label>
+            {!editQuestUnlimitedRoleplay && (
+              <input type="number" min={1} placeholder="จำนวนโรลเพลย์สูงสุด" value={editQuestMaxRoleplay} onChange={e => setEditQuestMaxRoleplay(e.target.value)}
+                className="input-victorian w-full !py-1.5 !text-xs" />
             )}
           </div>
           {editQuestError && <div className="p-3 bg-red-900/40 border border-red-500/30 rounded-lg text-red-300 text-sm text-center">{editQuestError}</div>}

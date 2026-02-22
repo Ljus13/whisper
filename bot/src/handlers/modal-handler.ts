@@ -8,7 +8,6 @@ import { handleSubmitQuestModal } from '../commands/player/submit-quest'
 import { handleSleepModal } from '../commands/player/sleep'
 import { handlePrayerModal } from '../commands/player/prayer'
 import { handleUseSkillModal } from '../commands/player/use-skill'
-import { handleSubmitActionModal } from '../commands/player/submit-action'
 import { requireStaffProfile, supabase } from '../lib/supabase'
 import { COLORS, buildErrorEmbed, buildSuccessEmbed } from '../lib/embeds'
 import { notifyApproval, notifyRejection } from '../lib/dm-notify'
@@ -20,10 +19,6 @@ export async function handleModal(interaction: ModalSubmitInteraction) {
   try {
     if (customId === 'modal_submit_quest') {
       return await handleSubmitQuestModal(interaction)
-    }
-
-    if (customId === 'modal_submit_action') {
-      return await handleSubmitActionModal(interaction)
     }
 
     if (customId === 'modal_sleep') {

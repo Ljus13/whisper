@@ -8,7 +8,31 @@ function fmtDate(d: string | null): string | null {
   const [y, m, day] = d.split('-').map(Number)
   return new Date(y, m - 1, day).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })
 }
-import type { SideStory, SubStory } from './timeline-view'
+import type { SideStory, SubStory, StoryStatus } from './timeline-view'
+
+// ── Status helpers ────────────────────────────────────────────────────────────
+const STATUS_CFG = {
+  running: { label: 'กำลังดำเนิน', glow: '0 0 18px rgba(234,179,8,0.5)',  textClass: 'text-yellow-300', bgClass: 'bg-yellow-900/50 border border-yellow-500/40' },
+  end:     { label: 'จบแล้ว',      glow: '0 0 18px rgba(34,197,94,0.5)',   textClass: 'text-green-300',  bgClass: 'bg-green-900/50 border border-green-500/40'  },
+  failed:  { label: 'ล้มเหลว',     glow: '0 0 18px rgba(239,68,68,0.5)',   textClass: 'text-red-300',    bgClass: 'bg-red-900/50 border border-red-500/40'    },
+} as const
+
+function StatusBadge({ status, xs }: { status: StoryStatus; xs?: boolean }) {
+  if (!status) return null
+  const cfg = STATUS_CFG[status]
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${
+      xs ? 'text-[9px]' : 'text-[10px]'
+    } ${cfg.textClass} ${cfg.bgClass} mb-1.5`}>
+      <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />{cfg.label}
+    </span>
+  )
+}
+
+function getStatusGlow(status: StoryStatus): string {
+  if (!status) return ''
+  return STATUS_CFG[status].glow
+}
 
 // ── Layout constants ──────────────────────────────────────────────────────────
 const SIDE_CARD_W    = 224   // w-56 = 224 px
@@ -150,13 +174,16 @@ export default function SideStoryNode({
         }}
       >
         {/* Card */}
-        <div className={`
-          relative w-full rounded-lg border backdrop-blur-sm overflow-hidden
-          transition-shadow duration-300 animate-fade-in
-          border-nouveau-sapphire/40 hover:border-nouveau-sapphire/70
-          bg-victorian-900/85 hover:shadow-[0_0_15px_rgba(27,58,92,0.45)]
-          ${isDragging ? 'scale-105 shadow-[0_0_25px_rgba(27,58,92,0.55)] cursor-grabbing' : ''}
-        `}>
+        <div
+          className={`
+            relative w-full rounded-lg border backdrop-blur-sm overflow-hidden
+            transition-shadow duration-300 animate-fade-in
+            border-nouveau-sapphire/40 hover:border-nouveau-sapphire/70
+            bg-victorian-900/85
+            ${isDragging ? 'scale-105 cursor-grabbing' : ''}
+          `}
+          style={{ boxShadow: getStatusGlow(side.status) || (isDragging ? '0 0 25px rgba(27,58,92,0.55)' : undefined) }}
+        >
           {/* Drag handle */}
           {isAdmin && (
             <div
@@ -188,6 +215,7 @@ export default function SideStoryNode({
                 {side.goal}
               </div>
             )}
+            <StatusBadge status={side.status} xs />
             {(side.started_at || side.ended_at) && (
               <div className="flex items-center gap-1 text-[10px] text-victorian-400 mb-1">
                 <Calendar className="w-2.5 h-2.5 shrink-0" />
@@ -369,13 +397,16 @@ function SubStoryNode({
           zIndex:    20,
         }}
       >
-        <div className={`
-          relative w-full rounded-lg border backdrop-blur-sm overflow-hidden
-          transition-shadow duration-300 animate-fade-in
-          border-nouveau-emerald/40 hover:border-nouveau-emerald/70
-          bg-victorian-900/75 hover:shadow-[0_0_12px_rgba(46,91,60,0.4)]
-          ${isDragging ? 'scale-105 cursor-grabbing shadow-[0_0_18px_rgba(46,91,60,0.5)]' : ''}
-        `}>
+        <div
+          className={`
+            relative w-full rounded-lg border backdrop-blur-sm overflow-hidden
+            transition-shadow duration-300 animate-fade-in
+            border-nouveau-emerald/40 hover:border-nouveau-emerald/70
+            bg-victorian-900/75
+            ${isDragging ? 'scale-105 cursor-grabbing' : ''}
+          `}
+          style={{ boxShadow: getStatusGlow(sub.status) || (isDragging ? '0 0 18px rgba(46,91,60,0.5)' : undefined) }}
+        >
           {isAdmin && (
             <div onMouseDown={handleMouseDown}
               className="absolute top-1 left-1 z-30 p-1 cursor-grab text-victorian-400 hover:text-emerald-300 transition-colors">
@@ -400,6 +431,7 @@ function SubStoryNode({
                 {sub.goal}
               </div>
             )}
+            <StatusBadge status={sub.status} xs />
             {(sub.started_at || sub.ended_at) && (
               <div className="flex items-center gap-1 text-[9px] text-victorian-400 mb-1">
                 <Calendar className="w-2 h-2 shrink-0" />

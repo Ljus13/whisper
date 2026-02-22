@@ -78,7 +78,7 @@ export async function handleSubmitQuestModal(interaction: import('discord.js').M
   // ── ตรวจสอบ code ──
   const { data: codeRow } = await supabase
     .from('quest_codes')
-    .select('id, name, code, map_id, npc_token_id, expires_at, max_repeats, archived')
+    .select('id, name, code, map_id, npc_token_id, expires_at, max_repeats, cooldown_minutes, archived')
     .eq('code', codeStr)
     .eq('archived', false)   // ❌ archived quest ส่งไม่ได้
     .maybeSingle()
@@ -104,6 +104,36 @@ export async function handleSubmitQuestModal(interaction: import('discord.js').M
         content: `❌ คุณส่ง Quest นี้ครบ ${codeRow.max_repeats} ครั้งแล้ว ไม่สามารถส่งซ้ำได้อีก`,
       })
       return
+    }
+  }
+
+  // ── ตรวจสอบคูลดาวน์ ──
+  if (codeRow.cooldown_minutes !== null && codeRow.cooldown_minutes !== undefined) {
+    const { data: lastSub } = await supabase
+      .from('quest_submissions')
+      .select('created_at')
+      .eq('player_id', profile.id)
+      .eq('quest_code_id', codeRow.id)
+      .neq('status', 'rejected')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (lastSub) {
+      const elapsed = Date.now() - new Date(lastSub.created_at).getTime()
+      const cooldownMs = codeRow.cooldown_minutes * 60 * 1000
+      if (elapsed < cooldownMs) {
+        const remainingMin = Math.ceil((cooldownMs - elapsed) / 60000)
+        const hours = Math.floor(remainingMin / 60)
+        const minutes = remainingMin % 60
+        const timeStr = hours > 0
+          ? `${hours} ชั่วโมง${minutes > 0 ? ` ${minutes} นาที` : ''}`
+          : `${minutes} นาที`
+        await interaction.editReply({
+          content: `⏳ คุณต้องรออีก **${timeStr}** ก่อนส่ง Quest นี้ได้อีกครั้ง`,
+        })
+        return
+      }
     }
   }
 

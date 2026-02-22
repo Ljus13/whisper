@@ -4,7 +4,7 @@ import { memo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { Calendar, Pencil, Eye, EyeOff, Plus, Trash2, ChevronDown, X, AlertCircle, Users, Shield, Lock } from 'lucide-react'
-import type { TimelineEntry, SideStory, SubStory, EventPunishment } from './timeline-view'
+import type { TimelineEntry, SideStory, SubStory, EventPunishment, StoryStatus } from './timeline-view'
 
 // Hidden handle style — topology only, not user-drawn
 const HH: React.CSSProperties = {
@@ -28,6 +28,30 @@ function DateRange({ s, e, xs }: { s: string | null; e: string | null; xs?: bool
       <span>{fmtDate(s) ?? '?'}{e ? ` – ${fmtDate(e)}` : ''}</span>
     </div>
   )
+}
+
+// ── Status helpers ────────────────────────────────────────────────────────────
+const STATUS_CFG = {
+  running: { label: 'กำลังดำเนิน', glow: '0 0 18px rgba(234,179,8,0.5)',  textClass: 'text-yellow-300', bgClass: 'bg-yellow-900/50 border border-yellow-500/40' },
+  end:     { label: 'จบแล้ว',      glow: '0 0 18px rgba(34,197,94,0.5)',   textClass: 'text-green-300',  bgClass: 'bg-green-900/50 border border-green-500/40'  },
+  failed:  { label: 'ล้มเหลว',     glow: '0 0 18px rgba(239,68,68,0.5)',   textClass: 'text-red-300',    bgClass: 'bg-red-900/50 border border-red-500/40'    },
+} as const
+
+function StatusBadge({ status, xs }: { status: StoryStatus; xs?: boolean }) {
+  if (!status) return null
+  const cfg = STATUS_CFG[status]
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${
+      xs ? 'text-[9px]' : 'text-[10px]'
+    } ${cfg.textClass} ${cfg.bgClass} mb-1.5`}>
+      <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />{cfg.label}
+    </span>
+  )
+}
+
+function getStatusGlow(status: StoryStatus): string {
+  if (!status) return ''
+  return STATUS_CFG[status].glow
 }
 
 // ── Detail Popup (borderless, rounded) ─────────────────────────────────────────
@@ -187,8 +211,8 @@ function MainEntryNode({ data }: NodeProps) {
       <Handle type="source" id="left"   position={Position.Left}   style={HH} />
       <Handle type="source" id="bottom" position={Position.Bottom} style={HH} />
 
-      <div className="nodrag nopan w-[360px] rounded-xl border border-gold-700/50 bg-victorian-900/90 backdrop-blur-sm overflow-hidden shadow-[0_0_20px_rgba(184,134,11,0.12)] hover:shadow-[0_0_25px_rgba(184,134,11,0.2)] transition-shadow cursor-default"
-        style={{ height: hasImage ? 460 : 280 }}
+      <div className="nodrag nopan w-[360px] rounded-xl border border-gold-700/50 bg-victorian-900/90 backdrop-blur-sm overflow-hidden transition-shadow cursor-default"
+        style={{ height: hasImage ? 460 : 280, boxShadow: getStatusGlow(entry.status) || '0 0 20px rgba(184,134,11,0.12)' }}
       >
         {isAdmin && !entry.is_published && (
           <div className="absolute top-2 right-2 z-10 px-1.5 py-0.5 rounded text-[10px] bg-red-900/60 text-red-300 border border-red-500/30">ซ่อน</div>
@@ -205,6 +229,7 @@ function MainEntryNode({ data }: NodeProps) {
               <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />{entry.goal}
             </span>
           )}
+          <StatusBadge status={entry.status} />
           <DateRange s={entry.started_at} e={entry.ended_at} />
           <div className="flex items-center gap-2 mb-2">
             <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gold-900/60 border border-gold-700/40 text-gold-400 text-xs font-bold shrink-0">{entry.sort_order}</span>
@@ -295,8 +320,8 @@ function SideFlowNode({ data }: NodeProps) {
       <Handle type="target" id="top"    position={Position.Top}    style={HH} />
       <Handle type="source" id="bottom" position={Position.Bottom} style={HH} />
 
-      <div className="w-[224px] rounded-xl bg-blue-950/80 backdrop-blur-sm overflow-hidden hover:shadow-[0_0_14px_rgba(27,58,92,0.5)] transition-shadow"
-        style={{ height: hasImage ? 340 : 200 }}
+      <div className="w-[224px] rounded-xl bg-blue-950/80 backdrop-blur-sm overflow-hidden transition-shadow"
+        style={{ height: hasImage ? 340 : 200, boxShadow: getStatusGlow(side.status) || undefined }}
       >
         {isAdmin && !side.is_published && (
           <div className="absolute top-1 right-1 z-10 px-1.5 py-0.5 rounded text-[10px] bg-red-900/60 text-red-300 border border-red-500/30">ซ่อน</div>
@@ -313,6 +338,7 @@ function SideFlowNode({ data }: NodeProps) {
               <span className="w-1 h-1 rounded-full bg-current animate-pulse" />{side.goal}
             </div>
           )}
+          <StatusBadge status={side.status} xs />
           <DateRange s={side.started_at} e={side.ended_at} xs />
           <div className="flex items-center gap-1.5 mb-1">
             <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-900/60 text-blue-300 text-[9px] font-bold shrink-0">{side.sort_order}</span>
@@ -411,8 +437,8 @@ function SubFlowNode({ data }: NodeProps) {
       <Handle type="target" id="right"  position={Position.Right}  style={HH} />
       <Handle type="source" id="bottom" position={Position.Bottom} style={HH} />
 
-      <div className="w-[192px] rounded-xl bg-emerald-950/80 backdrop-blur-sm overflow-hidden hover:shadow-[0_0_12px_rgba(46,91,60,0.5)] transition-shadow"
-        style={{ height: hasImage ? 300 : 170 }}
+      <div className="w-[192px] rounded-xl bg-emerald-950/80 backdrop-blur-sm overflow-hidden transition-shadow"
+        style={{ height: hasImage ? 300 : 170, boxShadow: getStatusGlow(sub.status) || undefined }}
       >
         {isAdmin && !sub.is_published && (
           <div className="absolute top-1 right-1 z-10 px-1.5 py-0.5 rounded text-[10px] bg-red-900/60 text-red-300 border border-red-500/30">ซ่อน</div>
@@ -429,6 +455,7 @@ function SubFlowNode({ data }: NodeProps) {
               <span className="w-1 h-1 rounded-full bg-current animate-pulse" />{sub.goal}
             </div>
           )}
+          <StatusBadge status={sub.status} xs />
           <DateRange s={sub.started_at} e={sub.ended_at} xs />
           <div className="flex items-center gap-1 mb-1">
             <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-900/60 text-emerald-300 text-[8px] font-bold shrink-0">{sub.sort_order}</span>

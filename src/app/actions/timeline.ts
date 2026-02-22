@@ -122,6 +122,7 @@ export async function createTimelineEntry(formData: FormData) {
   const sort_order = parseInt(formData.get('sort_order') as string || '0', 10)
   const started_at = (formData.get('started_at') as string | null) || null
   const ended_at   = (formData.get('ended_at')   as string | null) || null
+  const status = (formData.get('status') as string | null) || null
 
   const { error } = await supabase.from('timeline_entries').insert({
     title,
@@ -132,6 +133,7 @@ export async function createTimelineEntry(formData: FormData) {
     sort_order,
     started_at,
     ended_at,
+    status,
     is_published: false,
     created_by: userId,
   })
@@ -151,10 +153,11 @@ export async function updateTimelineEntry(id: string, formData: FormData) {
   const sort_order = parseInt(formData.get('sort_order') as string || '0', 10)
   const started_at = (formData.get('started_at') as string | null) || null
   const ended_at   = (formData.get('ended_at')   as string | null) || null
+  const status = (formData.get('status') as string | null) || null
 
   const { error } = await supabase
     .from('timeline_entries')
-    .update({ title, description, full_detail, goal, image_url, sort_order, started_at, ended_at })
+    .update({ title, description, full_detail, goal, image_url, sort_order, started_at, ended_at, status })
     .eq('id', id)
 
   if (error) throw error
@@ -212,6 +215,8 @@ export async function createSideStory(formData: FormData) {
   const position_x = sideCount % 2 === 0 ? 260 : -260
   const position_y = Math.floor(sideCount / 2) * 30  // stagger multiple cards on same side
 
+  const status = (formData.get('status') as string | null) || null
+
   const { error } = await supabase.from('timeline_side_stories').insert({
     timeline_id,
     title,
@@ -224,6 +229,7 @@ export async function createSideStory(formData: FormData) {
     sort_order,
     started_at,
     ended_at,
+    status,
     is_published: false,
     created_by: userId,
   })
@@ -245,9 +251,11 @@ export async function updateSideStory(id: string, formData: FormData) {
   const started_at = (formData.get('started_at') as string | null) || null
   const ended_at   = (formData.get('ended_at')   as string | null) || null
 
+  const status = (formData.get('status') as string | null) || null
+
   const { error } = await supabase
     .from('timeline_side_stories')
-    .update({ timeline_id, title, description, full_detail, goal, image_url, sort_order, started_at, ended_at })
+    .update({ timeline_id, title, description, full_detail, goal, image_url, sort_order, started_at, ended_at, status })
     .eq('id', id)
 
   if (error) throw error
@@ -308,6 +316,8 @@ export async function createSubStory(formData: FormData) {
   const started_at = (formData.get('started_at') as string | null) || null
   const ended_at   = (formData.get('ended_at')   as string | null) || null
 
+  const status = (formData.get('status') as string | null) || null
+
   const { error } = await supabase.from('timeline_sub_stories').insert({
     side_story_id,
     title,
@@ -320,6 +330,7 @@ export async function createSubStory(formData: FormData) {
     sort_order,
     started_at,
     ended_at,
+    status,
     is_published: false,
     created_by: userId,
   })
@@ -341,9 +352,11 @@ export async function updateSubStory(id: string, formData: FormData) {
   const started_at = (formData.get('started_at') as string | null) || null
   const ended_at   = (formData.get('ended_at')   as string | null) || null
 
+  const status = (formData.get('status') as string | null) || null
+
   const { error } = await supabase
     .from('timeline_sub_stories')
-    .update({ side_story_id, title, description, full_detail, goal, image_url, sort_order, started_at, ended_at })
+    .update({ side_story_id, title, description, full_detail, goal, image_url, sort_order, started_at, ended_at, status })
     .eq('id', id)
 
   if (error) throw error

@@ -65,23 +65,23 @@ export default function TimelineFormModal({
   const initial = (() => {
     if (mode.type === 'edit-entry') {
       const e = mode.entry
-      return { title: e.title, description: e.description || '', full_detail: e.full_detail || '', goal: e.goal || '', image_url: e.image_url || '', sort_order: e.sort_order, started_at: e.started_at || '', ended_at: e.ended_at || '', timeline_id: '', side_story_id: '' }
+      return { title: e.title, description: e.description || '', full_detail: e.full_detail || '', goal: e.goal || '', image_url: e.image_url || '', sort_order: e.sort_order, started_at: e.started_at || '', ended_at: e.ended_at || '', timeline_id: '', side_story_id: '', status: e.status || '' }
     }
     if (mode.type === 'edit-side') {
       const s = mode.side
-      return { title: s.title, description: s.description || '', full_detail: s.full_detail || '', goal: s.goal || '', image_url: s.image_url || '', sort_order: s.sort_order, started_at: s.started_at || '', ended_at: s.ended_at || '', timeline_id: s.timeline_id, side_story_id: '' }
+      return { title: s.title, description: s.description || '', full_detail: s.full_detail || '', goal: s.goal || '', image_url: s.image_url || '', sort_order: s.sort_order, started_at: s.started_at || '', ended_at: s.ended_at || '', timeline_id: s.timeline_id, side_story_id: '', status: s.status || '' }
     }
     if (mode.type === 'edit-sub') {
       const sb = mode.sub
-      return { title: sb.title, description: sb.description || '', full_detail: sb.full_detail || '', goal: sb.goal || '', image_url: sb.image_url || '', sort_order: sb.sort_order, started_at: sb.started_at || '', ended_at: sb.ended_at || '', timeline_id: '', side_story_id: sb.side_story_id }
+      return { title: sb.title, description: sb.description || '', full_detail: sb.full_detail || '', goal: sb.goal || '', image_url: sb.image_url || '', sort_order: sb.sort_order, started_at: sb.started_at || '', ended_at: sb.ended_at || '', timeline_id: '', side_story_id: sb.side_story_id, status: sb.status || '' }
     }
     if (mode.type === 'create-side') {
-      return { title: '', description: '', full_detail: '', goal: '', image_url: '', sort_order: 0, started_at: '', ended_at: '', timeline_id: mode.timelineId, side_story_id: '' }
+      return { title: '', description: '', full_detail: '', goal: '', image_url: '', sort_order: 0, started_at: '', ended_at: '', timeline_id: mode.timelineId, side_story_id: '', status: '' }
     }
     if (mode.type === 'create-sub') {
-      return { title: '', description: '', full_detail: '', goal: '', image_url: '', sort_order: 0, started_at: '', ended_at: '', timeline_id: '', side_story_id: mode.sideStoryId }
+      return { title: '', description: '', full_detail: '', goal: '', image_url: '', sort_order: 0, started_at: '', ended_at: '', timeline_id: '', side_story_id: mode.sideStoryId, status: '' }
     }
-    return { title: '', description: '', full_detail: '', goal: '', image_url: '', sort_order: 0, started_at: '', ended_at: '', timeline_id: '', side_story_id: '' }
+    return { title: '', description: '', full_detail: '', goal: '', image_url: '', sort_order: 0, started_at: '', ended_at: '', timeline_id: '', side_story_id: '', status: '' }
   })()
 
   // Pre-populate moderators/participants/punishments from edit mode
@@ -113,6 +113,7 @@ export default function TimelineFormModal({
   const [selectedModerators, setSelectedModerators] = useState<string[]>(initialModerators)
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>(initialParticipants)
   const [selectedPunishments, setSelectedPunishments] = useState<string[]>(initialPunishments)
+  const [status, setStatus] = useState(initial.status)
 
   // Whether to show moderator/participant/punishment sections
   const isSideOrSub = mode.type.includes('side') || mode.type.includes('sub')
@@ -146,6 +147,7 @@ export default function TimelineFormModal({
     fd.set('sort_order', String(sortOrder))
     if (startedAt) fd.set('started_at', startedAt)
     if (endedAt)   fd.set('ended_at',   endedAt)
+    if (status)    fd.set('status', status)
 
     let resultId: string | undefined
 
@@ -285,6 +287,22 @@ export default function TimelineFormModal({
                 className="input-victorian w-full"
               />
             </div>
+          </div>
+
+          {/* Status */}
+          <div>
+            <label className="block text-sm font-medium text-victorian-300 mb-1">สถานะเรื่องราว</label>
+            <select
+              value={status}
+              onChange={e => setStatus(e.target.value)}
+              className="input-victorian w-full"
+            >
+              <option value="">— ไม่ระบุสถานะ —</option>
+              <option value="running">🟡 กำลังดำเนิน (Running)</option>
+              <option value="end">🟢 จบลงแล้ว (End)</option>
+              <option value="failed">🔴 ล้มเหลว (Failed)</option>
+            </select>
+            <p className="text-[11px] text-victorian-500 mt-1">สถานะจะแสดงเป็นเลเบลและ Glow บนการ์ด</p>
           </div>
 
           {/* Sort Order */}

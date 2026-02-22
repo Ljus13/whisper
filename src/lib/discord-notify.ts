@@ -56,6 +56,8 @@ export interface QuestNotifyParams {
   mapName?: string | null
   npcName?: string | null
   expiresAt?: string | null
+  cooldownMinutes?: number | null
+  maxRoleplaySubmissions?: number | null
   rewards?: {
     hp?: number; sanity?: number; travel?: number; spirituality?: number
     maxSanity?: number; maxTravel?: number; maxSpirituality?: number
@@ -102,6 +104,17 @@ export async function notifyNewPublicQuest(params: QuestNotifyParams): Promise<v
     })
   } else {
     fields.push({ name: '⏰ อายุ', value: 'ตลอดไป', inline: true })
+  }
+
+  if (params.cooldownMinutes) {
+    const h = Math.floor(params.cooldownMinutes / 60)
+    const m = params.cooldownMinutes % 60
+    const cdStr = h > 0 ? `${h} ชั่วโมง${m > 0 ? ` ${m} นาที` : ''}` : `${m} นาที`
+    fields.push({ name: '⏱️ คูลดาวน์', value: cdStr, inline: true })
+  }
+
+  if (params.maxRoleplaySubmissions) {
+    fields.push({ name: '📖 โรลเพลย์สูงสุด', value: `${params.maxRoleplaySubmissions} ครั้ง`, inline: true })
   }
 
   await sendDiscordNotification(webhookUrl, {
@@ -250,6 +263,17 @@ export async function notifyQuestUpdated(params: QuestNotifyParams): Promise<voi
     })
   } else {
     fields.push({ name: '⏰ อายุ', value: 'ตลอดไป', inline: true })
+  }
+
+  if (params.cooldownMinutes) {
+    const h = Math.floor(params.cooldownMinutes / 60)
+    const m = params.cooldownMinutes % 60
+    const cdStr = h > 0 ? `${h} ชั่วโมง${m > 0 ? ` ${m} นาที` : ''}` : `${m} นาที`
+    fields.push({ name: '⏱️ คูลดาวน์', value: cdStr, inline: true })
+  }
+
+  if (params.maxRoleplaySubmissions) {
+    fields.push({ name: '📖 โรลเพลย์สูงสุด', value: `${params.maxRoleplaySubmissions} ครั้ง`, inline: true })
   }
 
   await sendDiscordNotification(webhookUrl, {

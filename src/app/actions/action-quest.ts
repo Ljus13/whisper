@@ -388,6 +388,8 @@ export interface ActionRewards {
 export interface CodeExpiration {
   expires_at?: string | null   // ISO datetime or null for never
   max_repeats?: number | null  // null = unlimited
+  cooldown_minutes?: number | null  // null = no cooldown
+  max_roleplay_submissions?: number | null  // null = unlimited
 }
 
 export async function generateActionCode(name: string, rewards?: ActionRewards, expiration?: CodeExpiration) {
@@ -424,6 +426,8 @@ export async function generateActionCode(name: string, rewards?: ActionRewards, 
   if (expiration) {
     if (expiration.expires_at) insertData.expires_at = expiration.expires_at
     if (expiration.max_repeats !== undefined && expiration.max_repeats !== null) insertData.max_repeats = expiration.max_repeats
+    if (expiration.cooldown_minutes !== undefined && expiration.cooldown_minutes !== null) insertData.cooldown_minutes = expiration.cooldown_minutes
+    if (expiration.max_roleplay_submissions !== undefined && expiration.max_roleplay_submissions !== null) insertData.max_roleplay_submissions = expiration.max_roleplay_submissions
   }
 
   const { data, error } = await supabase
@@ -451,7 +455,7 @@ export async function getActionCodes(page: number = 1) {
 
   const { data, error } = await supabase
     .from('action_codes')
-    .select('id, name, code, created_by, reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality, expires_at, max_repeats, created_at')
+    .select('id, name, code, created_by, reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality, expires_at, max_repeats, cooldown_minutes, max_roleplay_submissions, created_at')
     .or('archived.is.null,archived.eq.false')
     .order('created_at', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1)
@@ -519,6 +523,8 @@ export async function generateQuestCode(name: string, mapId?: string | null, npc
   if (expiration) {
     if (expiration.expires_at) insertData.expires_at = expiration.expires_at
     if (expiration.max_repeats !== undefined && expiration.max_repeats !== null) insertData.max_repeats = expiration.max_repeats
+    if (expiration.cooldown_minutes !== undefined && expiration.cooldown_minutes !== null) insertData.cooldown_minutes = expiration.cooldown_minutes
+    if (expiration.max_roleplay_submissions !== undefined && expiration.max_roleplay_submissions !== null) insertData.max_roleplay_submissions = expiration.max_roleplay_submissions
   }
   if (rewards) {
     // Quest rewards allow negative (penalty) — store regardless of sign
@@ -560,6 +566,8 @@ export async function generateQuestCode(name: string, mapId?: string | null, npc
       mapName,
       npcName,
       expiresAt: data.expires_at ?? null,
+      cooldownMinutes: data.cooldown_minutes ?? null,
+      maxRoleplaySubmissions: data.max_roleplay_submissions ?? null,
       rewards: {
         hp: data.reward_hp,
         sanity: data.reward_sanity,
@@ -589,7 +597,7 @@ export async function getQuestCodes(page: number = 1) {
 
   const { data, error } = await supabase
     .from('quest_codes')
-    .select('id, name, code, created_by, map_id, npc_token_id, reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality, expires_at, max_repeats, created_at')
+    .select('id, name, code, created_by, map_id, npc_token_id, reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality, expires_at, max_repeats, cooldown_minutes, max_roleplay_submissions, created_at')
     .or('archived.is.null,archived.eq.false')
     .order('created_at', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1)
@@ -639,7 +647,7 @@ export async function submitAction(codeStr: string, evidenceUrls: string[]) {
 
   const { data: codeRow } = await supabase
     .from('action_codes')
-    .select('id, name, expires_at, max_repeats')
+    .select('id, name, expires_at, max_repeats, cooldown_minutes')
     .eq('code', codeStr.trim())
     .maybeSingle()
 
@@ -661,6 +669,29 @@ export async function submitAction(codeStr: string, evidenceUrls: string[]) {
       .neq('status', 'rejected')
     if ((count || 0) >= codeRow.max_repeats) {
       return { error: `คุณส่งแอคชั่นนี้ครบ ${codeRow.max_repeats} ครั้งแล้ว ไม่สามารถส่งซ้ำได้อีก` }
+    }
+  }
+
+  // Check cooldown — ตรวจสอบคูลดาวน์
+  if (codeRow.cooldown_minutes !== null && codeRow.cooldown_minutes !== undefined && codeRow.cooldown_minutes > 0) {
+    const { data: lastSub } = await supabase
+      .from('action_submissions')
+      .select('created_at')
+      .eq('player_id', user.id)
+      .eq('action_code_id', codeRow.id)
+      .neq('status', 'rejected')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (lastSub) {
+      const elapsed = Date.now() - new Date(lastSub.created_at).getTime()
+      const cooldownMs = codeRow.cooldown_minutes * 60 * 1000
+      if (elapsed < cooldownMs) {
+        const remaining = cooldownMs - elapsed
+        const mins = Math.ceil(remaining / 60000)
+        const display = mins >= 60 ? `${Math.floor(mins / 60)} ชั่วโมง ${mins % 60} นาที` : `${mins} นาที`
+        return { error: `กรุณารออีก ${display} ก่อนส่งแอคชั่นนี้อีกครั้ง` }
+      }
     }
   }
 
@@ -1001,7 +1032,7 @@ export async function submitQuest(codeStr: string, evidenceUrls: string[]) {
 
   const { data: codeRow } = await supabase
     .from('quest_codes')
-    .select('id, name, map_id, npc_token_id, expires_at, max_repeats')
+    .select('id, name, map_id, npc_token_id, expires_at, max_repeats, cooldown_minutes')
     .eq('code', codeStr.trim())
     .maybeSingle()
 
@@ -1023,6 +1054,29 @@ export async function submitQuest(codeStr: string, evidenceUrls: string[]) {
       .neq('status', 'rejected')
     if ((count || 0) >= codeRow.max_repeats) {
       return { error: `คุณส่งภารกิจนี้ครบ ${codeRow.max_repeats} ครั้งแล้ว ไม่สามารถส่งซ้ำได้อีก` }
+    }
+  }
+
+  // Check cooldown — ตรวจสอบคูลดาวน์
+  if (codeRow.cooldown_minutes !== null && codeRow.cooldown_minutes !== undefined && codeRow.cooldown_minutes > 0) {
+    const { data: lastSub } = await supabase
+      .from('quest_submissions')
+      .select('created_at')
+      .eq('player_id', user.id)
+      .eq('quest_code_id', codeRow.id)
+      .neq('status', 'rejected')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (lastSub) {
+      const elapsed = Date.now() - new Date(lastSub.created_at).getTime()
+      const cooldownMs = codeRow.cooldown_minutes * 60 * 1000
+      if (elapsed < cooldownMs) {
+        const remaining = cooldownMs - elapsed
+        const mins = Math.ceil(remaining / 60000)
+        const display = mins >= 60 ? `${Math.floor(mins / 60)} ชั่วโมง ${mins % 60} นาที` : `${mins} นาที`
+        return { error: `กรุณารออีก ${display} ก่อนส่งภารกิจนี้อีกครั้ง` }
+      }
     }
   }
 
@@ -1406,6 +1460,34 @@ export async function submitRoleplayLinks(urls: string[]) {
 
   const list = (urls || []).map(u => u.trim()).filter(Boolean)
   if (list.length === 0) return { error: 'กรุณาแนบ URL อย่างน้อย 1 ลิงก์' }
+
+  // Check max roleplay submissions limit — ตรวจสอบจำกัดจำนวนโรลเพลย์
+  // ดึงค่าต่ำสุดจากทุก quest/action codes ที่ยังไม่หมดอายุ
+  const { data: questLimits } = await supabase
+    .from('quest_codes')
+    .select('max_roleplay_submissions')
+    .not('max_roleplay_submissions', 'is', null)
+    .or('archived.is.null,archived.eq.false')
+    .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
+  const { data: actionLimits } = await supabase
+    .from('action_codes')
+    .select('max_roleplay_submissions')
+    .not('max_roleplay_submissions', 'is', null)
+    .or('archived.is.null,archived.eq.false')
+    .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
+  const allLimits = [...(questLimits || []), ...(actionLimits || [])]
+    .map(r => r.max_roleplay_submissions as number)
+    .filter(n => n > 0)
+  if (allLimits.length > 0) {
+    const minLimit = Math.min(...allLimits)
+    const { count: totalSubs } = await supabase
+      .from('roleplay_submissions')
+      .select('id', { count: 'exact', head: true })
+      .eq('player_id', user.id)
+    if ((totalSubs || 0) >= minLimit) {
+      return { error: `คุณส่งโรลเพลย์ครบ ${minLimit} ครั้งแล้ว ไม่สามารถส่งเพิ่มได้` }
+    }
+  }
 
   const today = new Date().toISOString().slice(0, 10)
   const { data: existing } = await supabase
@@ -2339,6 +2421,8 @@ export async function updateActionCode(
     reward_max_spirituality: rewards?.reward_max_spirituality || 0,
     expires_at: expiration?.expires_at || null,
     max_repeats: expiration?.max_repeats ?? null,
+    cooldown_minutes: expiration?.cooldown_minutes ?? null,
+    max_roleplay_submissions: expiration?.max_roleplay_submissions ?? null,
   }
 
   const { error } = await supabase
@@ -2390,6 +2474,8 @@ export async function updateQuestCode(
     npc_token_id: npcTokenId || null,
     expires_at: expiration?.expires_at || null,
     max_repeats: expiration?.max_repeats ?? null,
+    cooldown_minutes: expiration?.cooldown_minutes ?? null,
+    max_roleplay_submissions: expiration?.max_roleplay_submissions ?? null,
     reward_hp: rewards?.reward_hp ?? 0,
     reward_sanity: rewards?.reward_sanity ?? 0,
     reward_travel: rewards?.reward_travel ?? 0,
@@ -2411,7 +2497,7 @@ export async function updateQuestCode(
   {
     const { data: questData } = await supabase
       .from('quest_codes')
-      .select('code, name, is_public, map_id, npc_token_id, expires_at, reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality')
+      .select('code, name, is_public, map_id, npc_token_id, expires_at, cooldown_minutes, max_roleplay_submissions, reward_hp, reward_sanity, reward_travel, reward_spirituality, reward_max_sanity, reward_max_travel, reward_max_spirituality')
       .eq('id', id)
       .single()
     if (questData?.is_public) {
@@ -2433,6 +2519,8 @@ export async function updateQuestCode(
         mapName,
         npcName,
         expiresAt: questData.expires_at ?? null,
+        cooldownMinutes: questData.cooldown_minutes ?? null,
+        maxRoleplaySubmissions: questData.max_roleplay_submissions ?? null,
         rewards: {
           hp: questData.reward_hp,
           sanity: questData.reward_sanity,

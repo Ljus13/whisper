@@ -22,11 +22,14 @@ import {
 } from '@/app/actions/timeline'
 
 // ── Interfaces (exported for use in other components) ─────────────────────────
+export type StoryStatus = 'running' | 'end' | 'failed' | null | undefined
+
 export interface SubStory {
   id: string; side_story_id: string; title: string
   description: string | null; full_detail: string | null; goal: string | null
   image_url: string | null; position_x: number; position_y: number
   sort_order: number; started_at: string | null; ended_at: string | null; is_published: boolean
+  status?: StoryStatus
   moderators?: { id: string; display_name: string; avatar_url: string | null }[]
   participants?: { id: string; display_name: string; avatar_url: string | null }[]
 }
@@ -36,6 +39,7 @@ export interface SideStory {
   description: string | null; full_detail: string | null; goal: string | null
   image_url: string | null; position_x: number; position_y: number
   sort_order: number; started_at: string | null; ended_at: string | null; is_published: boolean
+  status?: StoryStatus
   timeline_sub_stories: SubStory[]
   event_punishments?: EventPunishment[]
   moderators?: { id: string; display_name: string; avatar_url: string | null }[]
@@ -46,6 +50,7 @@ export interface TimelineEntry {
   id: string; title: string; description: string | null; full_detail: string | null
   goal: string | null; image_url: string | null; sort_order: number
   started_at: string | null; ended_at: string | null; is_published: boolean
+  status?: StoryStatus
   created_at: string; timeline_side_stories: SideStory[]
 }
 
