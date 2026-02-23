@@ -48,34 +48,24 @@ const DEFAULT_DATA: CharData = {
   psNote: '',
 }
 
-// CSS URL — hosted on the same domain under /css/
-const CSS_URL = '/css/wots-card.css'
-const DEPLOY_BASE = 'https://whisper-one-ochre.vercel.app'
-const NATURAL_WIDTH = 650
+// CSS URL — fetched from GitHub Pages at runtime (always latest)
+const CSS_URL = 'https://savant777.github.io/zoecode/whisperoftheshadow.css'
+const NATURAL_WIDTH = 900
 
-// --------------- pathway accent colors (dropper from logo) ---------------
-const PATHWAY_COLORS: Record<string, { h: number; s: number }> = {
-  'seer':               { h: 271, s: 65 },  // Fool     → purple
-  'marauder':           { h: 20,  s: 70 },  // Error    → orange-red
-  'apprentice':         { h: 185, s: 60 },  // Door     → teal
-  'spectator':          { h: 250, s: 60 },  // Visionary → indigo
-  'sailor':             { h: 217, s: 72 },  // Tyrant   → blue
-  'hunter':             { h: 10,  s: 80 },  // Red Priest → deep red
-  'mystery-pryer':      { h: 170, s: 50 },  // Hermit   → teal-green
-  'savant':             { h: 215, s: 25 },  // Paragon  → steel-slate
-  'warrior':            { h: 225, s: 40 },  // Twilight → muted blue
-  'assassin':           { h: 290, s: 55 },  // Demoness → purple-pink
-  'bard':               { h: 45,  s: 88 },  // Sun      → amber
-  'apothecary':         { h: 218, s: 45 },  // Moon     → silver-blue
-  'planter':            { h: 130, s: 55 },  // Mother   → green
-  'corpse-collector':   { h: 205, s: 20 },  // Death    → desaturated blue
-  'sleepless':          { h: 0,   s: 62 },  // Darkness → deep red
-  'lawyer':             { h: 270, s: 45 },  // Black Emperor → dark purple
-  'arbiter':            { h: 42,  s: 65 },  // Justiciar → gold
-  'prisoner':           { h: 25,  s: 50 },  // Chained  → rust
-  'criminal':           { h: 355, s: 65 },  // Abyss    → crimson
-  'secrets-supplicant': { h: 275, s: 50 },  // Hanged Man → dark purple
-  'reader':             { h: 38,  s: 40 },  // White Tower → warm stone
+// --------------- church number mapping ---------------
+const CHURCH_MAP: Record<string, number> = {
+  'ไม่มีศาสนา':           0,
+  'โบสถ์คนโง่':            1,
+  'โบสถ์อันธกาลนิรันดิ์':   2,
+  'โบสถ์พระแม่ธรณี':       3,
+  'โบสถ์เทพวายุสลาตัน':    4,
+  'โบสถ์สุริยันเจิดจรัส':   5,
+  'โบสถ์เทพจักรกลไอน้ำ':   6,
+  'โบสถ์เทพปัญญาความรู้':   7,
+}
+
+function getChurchNum(religionName: string): number {
+  return CHURCH_MAP[religionName] ?? 0
 }
 
 // --------------- helpers for pathway data ---------------
@@ -87,71 +77,62 @@ function getReligionData(nameTh: string): ReligionData {
   return RELIGION_DATA.find(r => r.name_th === nameTh) || RELIGION_DATA[0]
 }
 
-// --------------- HTML builders (CSS class-based) ---------------
+// --------------- HTML builders (new wots structure) ---------------
 
-function buildSection(label: string, value: string): string {
-  return `<div class="wots-section"><div class="wots-label">${label}</div><div class="wots-value">${value}</div></div>`
+/** Build the pathway section — shared between preview & copy */
+function buildPathwaySection(d: CharData): string {
+  const tags = d.pathwayPrefs.slice(0, 3).map(p => {
+    return `<div class="path-tags" pathway="${p}"><div></div></div>`
+  }).join('')
+  return tags
+    ? `<section class="wots-info"><h1>✦ เส้นทางผู้วิเศษ</h1><div class="wots-path-tags">${tags}</div></section>`
+    : ''
 }
 
-function buildInnerHtml(d: CharData): string {
-  const rel = getReligionData(d.religion)
+/** Shared structural HTML — tmiContent differs between preview/copy */
+function buildInnerHtml(d: CharData, tmiContent: string): string {
+  const churchNum = getChurchNum(d.religion)
 
-  // CSS custom properties for religion theming
-  const themeStyle = `--wots-hue:${rel.hue};--wots-sat:${rel.saturation}%;--wots-lit:${rel.lightness}%;--wots-pos:${d.imagePos};--wots-size:${d.imageSize}`
+  const sec = (h: string, body: string) =>
+    `<section class="wots-info"><h1>✦ ${h}</h1><div class="wots-box">${body}</div></section>`
 
-  // Pathway items
-  const pathwayItems = d.pathwayPrefs
-    .filter(Boolean)
-    .map((p, i) => {
-      const pw = findPathwayByShortName(p)
-      const cls = i === 0 ? 'wots-path-1' : i === 1 ? 'wots-path-2' : i === 2 ? 'wots-path-3' : 'wots-path-extra'
-      const logoImg = pw?.logo ? `<img src="${pw.logo}" alt="">` : ''
-      const col = pw ? (PATHWAY_COLORS[pw.id] ?? { h: 38, s: 60 }) : { h: 38, s: 60 }
-      const colorStyle = `--ph:${col.h};--ps:${col.s}%`
-      return `<div class="wots-path-item ${cls}" style="${colorStyle}">${logoImg}${i + 1}. ${p}</div>`
-    })
-    .join('')
-
-  const pathwayBlock = pathwayItems
-    ? `<div class="wots-section"><div class="wots-label">เส้นทางผู้วิเศษ (Top 3)</div><div class="wots-path-list">${pathwayItems}</div></div>`
-    : ''
-
-  // Text sections
   const sections = [
-    d.appearance.trim() ? buildSection('ลักษณะทางกายภาพ', d.appearance) : '',
-    d.history.trim()    ? buildSection('ประวัติโดยสังเขป', d.history)    : '',
-    d.personality.trim()? buildSection('ลักษณะนิสัย', d.personality)     : '',
-    d.hobbies.trim()    ? buildSection('งานอดิเรก', d.hobbies)           : '',
-    d.likes.trim()      ? buildSection('สิ่งที่ชอบ', d.likes)            : '',
-    pathwayBlock,
+    d.appearance.trim()  ? sec('ลักษณะทางกายภาพ', d.appearance)  : '',
+    d.history.trim()     ? sec('ประวัติโดยสังเขป', d.history)     : '',
+    d.personality.trim() ? sec('ลักษณะนิสัย',     d.personality)  : '',
+    tmiContent           ? sec('TMI',               tmiContent)    : '',
+    buildPathwaySection(d),
   ].filter(Boolean).join('')
 
-  // Religion badge with logo
-  const relLogo = rel.logo_url ? `<img src="${rel.logo_url}" alt="">` : ''
-  const badges = [
-    `<span class="wots-badge">${d.race}</span>`,
-    d.age.trim() ? `<span class="wots-badge">${d.age} ปี</span>` : '',
-    `<span class="wots-badge">${relLogo}${d.religion}</span>`,
-    `<span class="wots-badge-gender">${d.gender}</span>`,
-  ].filter(Boolean).join('')
+  return `<div id="WhisperOfTheShadow"><a href="https://discord.com/users/625292873914515456/"></a><div id="wots-profile" class="wots-container"><div class="wots-basic-info"><div class="wots-pic" style="--wots-pic:url(${d.imageUrl});--wots-pos:${d.imagePos};--wots-size:${d.imageSize};"></div><div class="wots-info-mid"><div class="wots-info-name"><div class="wots-name">${d.characterName}</div><div class="wots-dp-name">${d.prevName}</div></div><div class="wots-info-tags"><div class="info-tags" data="เผ่าพันธุ์">${d.race}</div><div class="info-tags" data="อายุ">${d.age}</div><div class="info-tags" data="เพศ">${d.gender}</div></div></div><div class="wots-info-last" church="${churchNum}"><div class="wots-info-church"><div></div></div></div></div>${sections}</div></div>`
+}
 
-  const psBlock = d.psNote.trim()
-    ? `<div class="wots-box wots-box-ps">✦ หมายเหตุ: ${d.psNote}</div>`
-    : ''
+/** TMI content for iframe preview — rendered as HTML list */
+function buildTmiHtml(d: CharData): string {
+  const items = [
+    d.hobbies.trim() ? `<li>งานอดิเรก: ${d.hobbies}</li>` : '',
+    d.likes.trim()   ? `<li>สิ่งที่ชอบ: ${d.likes}</li>`  : '',
+    d.psNote.trim()  ? `<li>${d.psNote}</li>`               : '',
+  ].filter(Boolean)
+  return items.length ? `<ul style="margin:0;padding-left:1.4em">${items.join('')}</ul>` : ''
+}
 
-  const prevNameBlock = d.prevName.trim()
-    ? `<div class="wots-prev-name">ชื่อก่อนข้ามโลก: ${d.prevName}</div>`
-    : ''
-
-  return `<div style="${themeStyle}"><a class="wots-credit" href="https://discord.com/users/625292873914515456/"></a><div class="wots-card"><div class="wots-player"><div class="wots-pic" style="background-image:url(${d.imageUrl})"></div><div class="wots-info"><div class="wots-name">${d.characterName}</div>${prevNameBlock}<div class="wots-badges">${badges}</div></div></div><div class="wots-box wots-box-role">${sections}</div>${psBlock}</div></div>`
+/** TMI content for copy output — BBCode format used by forum CMS */
+function buildTmiBBCode(d: CharData): string {
+  const items = [
+    d.hobbies.trim() ? `[*]งานอดิเรก: ${d.hobbies}` : '',
+    d.likes.trim()   ? `[*]สิ่งที่ชอบ: ${d.likes}`  : '',
+    d.psNote.trim()  ? `[*]${d.psNote}`               : '',
+  ].filter(Boolean)
+  return items.length ? `[list]${items.join('')}[/list]` : ''
 }
 
 function buildCopyHtml(d: CharData): string {
-  return `<link href="${DEPLOY_BASE}/css/wots-card.css" rel="stylesheet">${buildInnerHtml(d)}`
+  return `<link href="${CSS_URL}" rel="stylesheet">${buildInnerHtml(d, buildTmiBBCode(d))}`
 }
 
 function buildPreviewSrcdoc(d: CharData, cssText: string): string {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=650"><style>${cssText}</style><style>html,body{margin:0;padding:1rem;background:#0a0908;overflow-x:hidden;}::-webkit-scrollbar{width:5px;height:5px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#4a3f35;border-radius:4px;}::-webkit-scrollbar-thumb:hover{background:#6b5a4e;}*{scrollbar-width:thin;scrollbar-color:#4a3f35 transparent;}</style></head><body>${buildInnerHtml(d)}<script>function send(){window.parent.postMessage({type:'rp-height',h:document.body.scrollHeight},'*');}window.addEventListener('load',send);new ResizeObserver(send).observe(document.body);<\/script></body></html>`
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=900"><style>${cssText}</style><style>html,body{margin:0;padding:1rem;background:#0a0908;overflow-x:hidden;}::-webkit-scrollbar{width:5px;height:5px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#4a3f35;border-radius:4px;}::-webkit-scrollbar-thumb:hover{background:#6b5a4e;}*{scrollbar-width:thin;scrollbar-color:#4a3f35 transparent;}</style></head><body>${buildInnerHtml(d, buildTmiHtml(d))}<script>function send(){window.parent.postMessage({type:'rp-height',h:document.body.scrollHeight},'*');}window.addEventListener('load',send);new ResizeObserver(send).observe(document.body);<\/script></body></html>`
 }
 
 
@@ -262,13 +243,14 @@ export default function CharacterCreateContent() {
     warning: p.warning,
   }))
 
-  // Toggle pathway preference
+  // Toggle pathway preference — hard limit of 3 selections
   function togglePathway(name: string) {
     setData(prev => {
       const prefs = prev.pathwayPrefs
       if (prefs.includes(name)) {
         return { ...prev, pathwayPrefs: prefs.filter(p => p !== name) }
       }
+      if (prefs.length >= 3) return prev  // already at max
       return { ...prev, pathwayPrefs: [...prefs, name] }
     })
   }
@@ -280,7 +262,7 @@ export default function CharacterCreateContent() {
   }
 
   const previewSrcdoc = useMemo(() => cssText ? buildPreviewSrcdoc(data, cssText) : '', [data, cssText])
-  const copyHtml      = useMemo(() => buildCopyHtml(data),       [data])
+  const copyHtml      = useMemo(() => buildCopyHtml(data), [data])
   const scale = Math.min(containerWidth / NATURAL_WIDTH, 1)
 
   async function handleCopy() {
@@ -464,8 +446,10 @@ export default function CharacterCreateContent() {
                 </a>
               </div>
               <p className="text-xs text-victorian-600">
-                เลือก <span className="text-gold-400 font-semibold">TOP 3</span> รายการที่ต้องการมากที่สุด
-                {' '}(เลือกได้มากกว่า 3 ได้ ทีมงานจะโยนเต๋า d20 เพื่อสุ่มให้เหลือ 3 ตัวเลือก)
+                เลือก <span className="text-gold-400 font-semibold">สูงสุด 3 เส้นทาง</span> ตามลำดับความต้องการ
+                {data.pathwayPrefs.length >= 3 && (
+                  <span className="ml-1 text-red-400/80">(ครบแล้ว — ยกเลิกก่อนเพื่อเปลี่ยน)</span>
+                )}
               </p>
 
               {/* Selected preview */}
@@ -491,16 +475,20 @@ export default function CharacterCreateContent() {
                   const idx = data.pathwayPrefs.indexOf(p.shortName)
                   const selected = idx !== -1
                   const rank = idx + 1
+                  const atLimit = data.pathwayPrefs.length >= 3 && !selected
                   return (
                     <button
                       key={p.shortName}
                       type="button"
                       onClick={() => togglePathway(p.shortName)}
+                      disabled={atLimit}
                       className={`
                         relative text-left text-xs px-2.5 py-2 rounded border transition-all flex items-center gap-1.5
                         ${selected
                           ? 'border-gold-400/60 bg-gold-400/10 text-gold-300 cursor-pointer'
-                          : 'border-victorian-700/50 text-victorian-400 hover:border-victorian-600 hover:text-victorian-200 cursor-pointer'
+                          : atLimit
+                            ? 'border-victorian-800/40 text-victorian-700 cursor-not-allowed opacity-40'
+                            : 'border-victorian-700/50 text-victorian-400 hover:border-victorian-600 hover:text-victorian-200 cursor-pointer'
                         }
                       `}
                     >
