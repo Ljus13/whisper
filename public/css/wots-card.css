@@ -1,0 +1,231 @@
+/* ═══════════════════════════════════════════════════════════════
+   Whisper of the Shadow — Character Card CSS
+   Host this file at a public URL and <link rel="stylesheet"> it.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Google Fonts import — Kanit (Thai + Latin) */
+@import url('https://fonts.googleapis.com/css2?family=Kanit:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&display=swap');
+
+/* ── CSS Custom Properties (religion theming via inline --wots-*) ── */
+:root {
+  --wots-hue: 38;
+  --wots-sat: 60%;
+  --wots-lit: 42%;
+  --wots-accent: hsl(var(--wots-hue) var(--wots-sat) var(--wots-lit));
+  --wots-accent-bright: hsl(var(--wots-hue) calc(var(--wots-sat) + 20%) calc(var(--wots-lit) + 16%));
+  --wots-accent-dim: hsl(var(--wots-hue) var(--wots-sat) calc(var(--wots-lit) - 10%));
+  --wots-accent-glow: hsl(var(--wots-hue) 96% 56% / 0.45);
+  --wots-gold: #D4AF37;
+  --wots-text: #e0d8cc;
+  --wots-text-dim: hsl(var(--wots-hue) 30% 45%);
+  --wots-bg: hsl(var(--wots-hue) 18% 8% / 0.88);
+  --wots-border: hsl(var(--wots-hue) var(--wots-sat) var(--wots-lit) / 0.3);
+  --wots-pos: center;
+  --wots-size: cover;
+}
+
+/* ── Container ── */
+.wots-card {
+  width: 650px;
+  max-width: 90%;
+  margin: auto;
+  font-family: 'Kanit', sans-serif;
+  line-height: 1.6;
+  color: var(--wots-text);
+}
+
+/* ── Player header (image + name + badges) ── */
+.wots-player {
+  display: flex;
+  column-gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.wots-pic {
+  flex-shrink: 0;
+  width: 175px;
+  aspect-ratio: 1 / 1;
+  border-radius: 2px;
+  border: 1px solid hsl(var(--wots-hue) var(--wots-sat) var(--wots-lit) / 0.5);
+  background-position: var(--wots-pos);
+  background-size: var(--wots-size);
+  background-repeat: no-repeat;
+}
+
+.wots-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.wots-name {
+  font-weight: 600;
+  font-size: 3.5rem;
+  line-height: 1;
+  letter-spacing: 0.025em;
+  font-style: italic;
+  background: linear-gradient(135deg, var(--wots-accent-bright), var(--wots-gold) 40%, var(--wots-accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.wots-prev-name {
+  font-size: 0.82rem;
+  color: var(--wots-text-dim);
+  font-style: italic;
+}
+
+/* ── Badges row ── */
+.wots-badges {
+  border: 1px solid var(--wots-border);
+  border-radius: 2px;
+  overflow: hidden;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  background: linear-gradient(to right,
+    hsl(var(--wots-hue) 15% 5% / 0.85),
+    hsl(var(--wots-hue) 15% 9% / 0.75),
+    hsl(var(--wots-hue) 15% 5% / 0.85)
+  );
+}
+
+.wots-badge {
+  font-size: 0.74rem;
+  padding: 2px 10px;
+  border-radius: 20px;
+  border: 1px solid hsl(var(--wots-hue) 40% 30% / 0.8);
+  color: hsl(var(--wots-hue) 82% 78%);
+  background: rgba(255,255,255,0.03);
+  letter-spacing: 0.03em;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.wots-badge img {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  vertical-align: middle;
+  border-radius: 2px;
+}
+
+.wots-badge-gender {
+  font-size: 0.74rem;
+  padding: 2px 10px;
+  border-radius: 20px;
+  border: 1px solid hsl(285 30% 45% / 0.8);
+  color: hsl(285 60% 80%);
+  background: rgba(255,255,255,0.03);
+  letter-spacing: 0.03em;
+}
+
+/* ── Content boxes ── */
+.wots-box {
+  background:
+    linear-gradient(135deg, hsl(var(--wots-hue) var(--wots-sat) var(--wots-lit) / 0.02), transparent 50%),
+    linear-gradient(225deg, rgba(255,255,255,0.01), transparent 50%),
+    linear-gradient(135deg, hsl(var(--wots-hue) var(--wots-sat) var(--wots-lit) / 0.08), transparent 40% 60%, hsl(var(--wots-hue) var(--wots-sat) var(--wots-lit) / 0.02));
+  background-color: var(--wots-bg);
+  border: 1px solid var(--wots-border);
+  border-radius: 2px;
+  box-shadow: inset 0 0 20px hsl(var(--wots-hue) var(--wots-sat) var(--wots-lit) / 0.08);
+}
+
+.wots-box-role {
+  margin-bottom: 1rem;
+  padding: 1.5rem 2rem;
+  color: #fff;
+}
+
+.wots-box-ps {
+  padding: 0.875rem 2rem;
+  color: hsl(var(--wots-hue) 82% 78%);
+}
+
+/* ── Sections inside the role box ── */
+.wots-section {
+  margin-bottom: 18px;
+}
+
+.wots-section:last-child {
+  margin-bottom: 0;
+}
+
+.wots-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(var(--wots-hue) 55% 48%);
+  margin-bottom: 6px;
+  filter: drop-shadow(0 0 5px var(--wots-accent-glow));
+}
+
+.wots-value {
+  font-size: 0.9rem;
+  color: var(--wots-text);
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+/* ── Pathway list ── */
+.wots-path-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.wots-path-item {
+  font-size: 0.78rem;
+  padding: 3px 10px;
+  border: 1px solid;
+  border-radius: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.wots-path-item img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  border-radius: 2px;
+}
+
+.wots-path-1 {
+  border-color: var(--wots-gold);
+  color: var(--wots-gold);
+  background: rgba(212,175,55,0.08);
+  filter: drop-shadow(0 0 5px hsl(38 96% 56% / 0.35));
+}
+
+.wots-path-2 {
+  border-color: hsl(var(--wots-hue) 42% 42%);
+  color: hsl(var(--wots-hue) 62% 65%);
+  background: rgba(212,175,55,0.04);
+}
+
+.wots-path-3 {
+  border-color: hsl(var(--wots-hue) 30% 35%);
+  color: hsl(var(--wots-hue) 45% 56%);
+  background: rgba(212,175,55,0.04);
+}
+
+.wots-path-extra {
+  border-color: hsl(var(--wots-hue) 40% 28%);
+  color: hsl(var(--wots-hue) 55% 58%);
+  background: rgba(212,175,55,0.04);
+}
+
+/* ── Credit link hidden in the card ── */
+.wots-credit {
+  display: none;
+}

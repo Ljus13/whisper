@@ -61,7 +61,7 @@ export async function middleware(request: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession()
 
   // Standalone pages — accessible without auth
-  const standalonePages = ['/dashboard/rp-template', '/dashboard/bio-templates']
+  const standalonePages = ['/dashboard/rp-template', '/dashboard/bio-templates', '/dashboard/character-create']
   const isStandalone = standalonePages.some(p => request.nextUrl.pathname.startsWith(p))
 
   // Protect /dashboard routes — redirect to login if not authenticated

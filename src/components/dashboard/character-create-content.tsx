@@ -3,28 +3,10 @@
 import { Copy, Check, ChevronLeft, RotateCcw, ExternalLink } from 'lucide-react'
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { PATHWAYS as PATHWAY_DATA } from '@/app/world-setting/_data/pathways'
+import { RELIGIONS as RELIGION_DATA, type ReligionData } from '@/app/dashboard/character-create/_data/religions'
 
 const STORAGE_KEY = 'whisper_char_draft'
-
-// --------------- pathway data (same list, used for TOP-3 preference) ---------------
-const PATHWAYS = [
-  'นักทำนาย', 'หัวขโมย', 'ลูกศิษย์', 'ผู้ชม', 'กะลาสี',
-  'นักล่า', 'ผู้ส่องความลับ', 'นักปราชญ์', 'นักรบ', 'นักฆ่า',
-  'นักขับขาน', 'เภสัชกร', 'นักเพาะปลูก', 'ผู้เก็บซากศพ', 'ผู้ไม่นิทรา',
-  'นักกฎหมาย', 'ผู้ตัดสิน', 'นักโทษ', 'อาชญากร', 'ผู้วิงวอนความลับ', 'นักอ่าน',
-]
-
-const RELIGIONS = [
-  'ไม่มีศาสนา',
-  'โบสถ์คนโง่',
-  'โบสถ์อันธกาลนิรันดิ์',
-  'โบสถ์พระแม่ธรณี',
-  'โบสถ์เทพวายุสลาตัน',
-  'โบสถ์สุริยันเจิดจรัส',
-  'โบสถ์เทพจักรกลไอน้ำ',
-  'โบสถ์เทพปัญญาความรู้',
-]
-
 const GENDERS = ['หญิง', 'ชาย', 'อื่น ๆ']
 
 // --------------- types ---------------
@@ -66,82 +48,83 @@ const DEFAULT_DATA: CharData = {
   psNote: '',
 }
 
-const FONTS_URL = 'https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&family=Kanit:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap'
-const CSS_URL = 'https://savant777.github.io/zoecode/whisperoftheshadow.css'
+// CSS URL — hosted on the same domain under /css/
+const CSS_URL = '/css/wots-card.css'
+const DEPLOY_BASE = 'https://whisper-one-ochre.vercel.app'
 const NATURAL_WIDTH = 650
 
-// Inline style constants
-const S = {
-  char:        'width:650px;max-width:90%;margin:auto;',
-  player:      'display:flex;column-gap:1rem;margin-bottom:1rem;',
-  pic:         (url: string, pos: string, size: string) => `flex-shrink:0;width:175px;aspect-ratio:1/1;border-radius:2px;border:1px solid hsl(38 60% 42% / 0.5);background:url(${url}) ${pos}/${size} no-repeat;`,
-  info:        "flex:1;display:flex;flex-direction:column;gap:0.75rem;justify-content:flex-end;font-family:'Kanit',sans-serif;",
-  name:        "font-weight:600;font-size:3.5rem;line-height:1;letter-spacing:0.025em;font-style:italic;font-family:'Kanit',sans-serif;background:linear-gradient(135deg,hsl(38 82% 58%),#D4AF37 40%,hsl(38 60% 48%));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;",
-  prevName:    "font-size:0.82rem;color:hsl(38 30% 45%);font-style:italic;font-family:'Kanit',sans-serif;",
-  badges:      'border:1px solid hsl(38 60% 42% / 0.3);border-radius:2px;overflow:hidden;padding:0.75rem 1rem;display:flex;flex-wrap:wrap;gap:6px;align-items:center;background:linear-gradient(to right,hsl(38 15% 5% / 0.85),hsl(38 15% 9% / 0.75),hsl(38 15% 5% / 0.85));',
-  badge:       "font-family:'Kanit',sans-serif;font-size:0.74rem;padding:2px 10px;border-radius:20px;border:1px solid hsl(38 40% 30% / 0.8);color:hsl(38 82% 78%);background:rgba(255,255,255,0.03);letter-spacing:0.03em;",
-  badgeGender: "font-family:'Kanit',sans-serif;font-size:0.74rem;padding:2px 10px;border-radius:20px;border:1px solid hsl(285 30% 45% / 0.8);color:hsl(285 60% 80%);background:rgba(255,255,255,0.03);letter-spacing:0.03em;",
-  boxBase:     "background:linear-gradient(135deg,hsl(38 60% 42% / 0.02),transparent 50%),linear-gradient(225deg,rgba(255,255,255,0.01),transparent 50%),linear-gradient(135deg,hsl(38 60% 42% / 0.08),transparent 40% 60%,hsl(38 60% 42% / 0.02));background-color:hsl(38 18% 8% / 0.88);border:1px solid hsl(38 60% 42% / 0.3);border-radius:2px;box-shadow:inset 0 0 20px hsl(38 60% 42% / 0.08);font-family:'Google Sans',sans-serif;font-size:1rem;",
-  boxRole:     'margin-bottom:1rem;padding:1.5rem 2rem;color:#fff;',
-  boxPs:       'padding:0.875rem 2rem;color:hsl(38 82% 78%);',
-  section:     'margin-bottom:18px;',
-  sectionLast: 'margin-bottom:0;',
-  label:       "font-family:'Kanit',sans-serif;font-size:0.65rem;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:hsl(38 55% 48%);margin-bottom:6px;filter:drop-shadow(0 0 5px hsl(38 96% 56% / 0.45));",
-  value:       "font-family:'Google Sans',sans-serif;font-size:0.9rem;color:#e0d8cc;line-height:1.75;white-space:pre-wrap;",
-  pathList:    'display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;',
-  pathItem:    (rank: number) => {
-    const base = "font-family:'Kanit',sans-serif;font-size:0.78rem;padding:3px 10px;border:1px solid;border-radius:2px;"
-    if (rank === 1) return base + 'border-color:#D4AF37;color:#D4AF37;background:rgba(212,175,55,0.08);filter:drop-shadow(0 0 5px hsl(38 96% 56% / 0.35));'
-    if (rank === 2) return base + 'border-color:hsl(38 42% 42%);color:hsl(38 62% 65%);background:rgba(212,175,55,0.04);'
-    if (rank === 3) return base + 'border-color:hsl(38 30% 35%);color:hsl(38 45% 56%);background:rgba(212,175,55,0.04);'
-    return base + 'border-color:hsl(38 40% 28%);color:hsl(38 55% 58%);background:rgba(212,175,55,0.04);'
-  },
+// --------------- helpers for pathway data ---------------
+function findPathwayByShortName(shortName: string) {
+  return PATHWAY_DATA.find(p => p.name.replace('เส้นทาง', '') === shortName)
 }
 
-function buildSection(label: string, value: string, last = false): string {
-  return `<div style="${last ? S.sectionLast : S.section}"><div style="${S.label}">${label}</div><div style="${S.value}">${value}</div></div>`
+function getReligionData(nameTh: string): ReligionData {
+  return RELIGION_DATA.find(r => r.name_th === nameTh) || RELIGION_DATA[0]
+}
+
+// --------------- HTML builders (CSS class-based) ---------------
+
+function buildSection(label: string, value: string): string {
+  return `<div class="wots-section"><div class="wots-label">${label}</div><div class="wots-value">${value}</div></div>`
 }
 
 function buildInnerHtml(d: CharData): string {
+  const rel = getReligionData(d.religion)
+
+  // CSS custom properties for religion theming
+  const themeStyle = `--wots-hue:${rel.hue};--wots-sat:${rel.saturation}%;--wots-lit:${rel.lightness}%;--wots-pos:${d.imagePos};--wots-size:${d.imageSize}`
+
+  // Pathway items
   const pathwayItems = d.pathwayPrefs
     .filter(Boolean)
-    .map((p, i) => `<div style="${S.pathItem(i + 1)}">${i + 1}. ${p}</div>`)
+    .map((p, i) => {
+      const pw = findPathwayByShortName(p)
+      const cls = i === 0 ? 'wots-path-1' : i === 1 ? 'wots-path-2' : i === 2 ? 'wots-path-3' : 'wots-path-extra'
+      const logoImg = pw?.logo ? `<img src="${pw.logo}" alt="">` : ''
+      return `<div class="wots-path-item ${cls}">${logoImg}${i + 1}. ${p}</div>`
+    })
     .join('')
+
   const pathwayBlock = pathwayItems
-    ? `<div style="${S.sectionLast}"><div style="${S.label}">เส้นทางผู้วิเศษ (Top 3)</div><div style="${S.pathList}">${pathwayItems}</div></div>`
+    ? `<div class="wots-section"><div class="wots-label">เส้นทางผู้วิเศษ (Top 3)</div><div class="wots-path-list">${pathwayItems}</div></div>`
     : ''
 
-  // build sections, last text section is last only if no pathwayBlock
-  const textSections: string[] = [
-    d.appearance.trim()  ? buildSection('ลักษณะทางกายภาพ', d.appearance)  : '',
-    d.history.trim()     ? buildSection('ประวัติโดยสังเขป', d.history)     : '',
-    d.personality.trim() ? buildSection('ลักษณะนิสัย', d.personality)      : '',
-    d.hobbies.trim()     ? buildSection('งานอดิเรก', d.hobbies)            : '',
-    d.likes.trim()       ? buildSection('สิ่งที่ชอบ', d.likes, !pathwayBlock) : '',
-  ].filter(Boolean)
+  // Text sections
+  const sections = [
+    d.appearance.trim() ? buildSection('ลักษณะทางกายภาพ', d.appearance) : '',
+    d.history.trim()    ? buildSection('ประวัติโดยสังเขป', d.history)    : '',
+    d.personality.trim()? buildSection('ลักษณะนิสัย', d.personality)     : '',
+    d.hobbies.trim()    ? buildSection('งานอดิเรก', d.hobbies)           : '',
+    d.likes.trim()      ? buildSection('สิ่งที่ชอบ', d.likes)            : '',
+    pathwayBlock,
+  ].filter(Boolean).join('')
 
-  const sections = [...textSections, pathwayBlock].filter(Boolean).join('')
-
+  // Religion badge with logo
+  const relLogo = rel.logo_url ? `<img src="${rel.logo_url}" alt="">` : ''
   const badges = [
-    `<span style="${S.badge}">${d.race}</span>`,
-    d.age.trim() ? `<span style="${S.badge}">${d.age} ปี</span>` : '',
-    `<span style="${S.badge}">${d.religion}</span>`,
-    `<span style="${S.badgeGender}">${d.gender}</span>`,
+    `<span class="wots-badge">${d.race}</span>`,
+    d.age.trim() ? `<span class="wots-badge">${d.age} ปี</span>` : '',
+    `<span class="wots-badge">${relLogo}${d.religion}</span>`,
+    `<span class="wots-badge-gender">${d.gender}</span>`,
   ].filter(Boolean).join('')
 
   const psBlock = d.psNote.trim()
-    ? `<div style="${S.boxBase}${S.boxPs}">✦ หมายเหตุ: ${d.psNote}</div>`
-    : '<!--หมายเหตุ (PS) | รองรับ HTML เช่น <iframe>-->'
+    ? `<div class="wots-box wots-box-ps">✦ หมายเหตุ: ${d.psNote}</div>`
+    : ''
 
-  return `<div id="WhisperOfTheShadow"><a href="https://discord.com/users/625292873914515456/"></a><div id="wots-char" style="${S.char}"><div style="${S.player}"><div style="${S.pic(d.imageUrl, d.imagePos, d.imageSize)}"></div><div style="${S.info}"><div style="${S.name}">${d.characterName}</div>${d.prevName.trim() ? `<div style="${S.prevName}">ชื่อก่อนข้ามโลก: ${d.prevName}</div>` : ''}<div style="${S.badges}">${badges}</div></div></div><div style="${S.boxBase}${S.boxRole}">${sections}</div>${psBlock}</div></div>`
+  const prevNameBlock = d.prevName.trim()
+    ? `<div class="wots-prev-name">ชื่อก่อนข้ามโลก: ${d.prevName}</div>`
+    : ''
+
+  return `<div style="${themeStyle}"><a class="wots-credit" href="https://discord.com/users/625292873914515456/"></a><div class="wots-card"><div class="wots-player"><div class="wots-pic" style="background-image:url(${d.imageUrl})"></div><div class="wots-info"><div class="wots-name">${d.characterName}</div>${prevNameBlock}<div class="wots-badges">${badges}</div></div></div><div class="wots-box wots-box-role">${sections}</div>${psBlock}</div></div>`
 }
 
 function buildCopyHtml(d: CharData): string {
-  return `<link href="${FONTS_URL}" rel="stylesheet"><link href="${CSS_URL}" rel="stylesheet">${buildInnerHtml(d)}`
+  return `<link href="${DEPLOY_BASE}/css/wots-card.css" rel="stylesheet">${buildInnerHtml(d)}`
 }
 
-function buildPreviewSrcdoc(d: CharData, css: string): string {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=650"><style>${css}</style><style>html,body{margin:0;padding:1rem;background:#0a0908;overflow-x:hidden;}::-webkit-scrollbar{width:5px;height:5px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#4a3f35;border-radius:4px;}::-webkit-scrollbar-thumb:hover{background:#6b5a4e;}*{scrollbar-width:thin;scrollbar-color:#4a3f35 transparent;}</style></head><body>${buildInnerHtml(d)}<script>function send(){window.parent.postMessage({type:'rp-height',h:document.body.scrollHeight},'*');}window.addEventListener('load',send);new ResizeObserver(send).observe(document.body);<\/script></body></html>`
+function buildPreviewSrcdoc(d: CharData, cssText: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=650"><style>${cssText}</style><style>html,body{margin:0;padding:1rem;background:#0a0908;overflow-x:hidden;}::-webkit-scrollbar{width:5px;height:5px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#4a3f35;border-radius:4px;}::-webkit-scrollbar-thumb:hover{background:#6b5a4e;}*{scrollbar-width:thin;scrollbar-color:#4a3f35 transparent;}</style></head><body>${buildInnerHtml(d)}<script>function send(){window.parent.postMessage({type:'rp-height',h:document.body.scrollHeight},'*');}window.addEventListener('load',send);new ResizeObserver(send).observe(document.body);<\/script></body></html>`
 }
 
 
@@ -240,7 +223,19 @@ export default function CharacterCreateContent() {
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setData(prev => ({ ...prev, [key]: e.target.value }))
 
-  // Toggle pathway preference (max 3)
+  // Get current religion data for form UI theming
+  const currentReligion = getReligionData(data.religion)
+
+  // Short pathway names (strip "เส้นทาง" prefix)
+  const pathwayChoices = PATHWAY_DATA.map(p => ({
+    shortName: p.name.replace('เส้นทาง', ''),
+    fullName: p.name,
+    nameEn: p.nameEn,
+    logo: p.logo,
+    warning: p.warning,
+  }))
+
+  // Toggle pathway preference
   function togglePathway(name: string) {
     setData(prev => {
       const prefs = prev.pathwayPrefs
@@ -381,9 +376,23 @@ export default function CharacterCreateContent() {
                 label="ศาสนา"
                 linkHref="https://whisper-one-ochre.vercel.app/docs/religions"
               >
-                <select className={selectCls} value={data.religion} onChange={set('religion')}>
-                  {RELIGIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
+                <div className="space-y-2">
+                  <select className={selectCls} value={data.religion} onChange={set('religion')}>
+                    {RELIGION_DATA.map(r => <option key={r.id} value={r.name_th}>{r.name_th}</option>)}
+                  </select>
+                  {/* Religion preview with logo & theme color */}
+                  {currentReligion.logo_url && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded border border-victorian-700/50 bg-victorian-900/40">
+                      <img src={currentReligion.logo_url} alt="" className="w-6 h-6 object-contain rounded" />
+                      <span className="text-xs text-victorian-300">{currentReligion.name_en}</span>
+                      <span
+                        className="ml-auto w-4 h-4 rounded-full border border-victorian-600/50"
+                        style={{ background: `hsl(${currentReligion.hue} ${currentReligion.saturation}% ${currentReligion.lightness}%)` }}
+                        title="สีธีมของศาสนานี้"
+                      />
+                    </div>
+                  )}
+                </div>
               </Field>
             </div>
 
@@ -435,39 +444,47 @@ export default function CharacterCreateContent() {
               {/* Selected preview */}
               {data.pathwayPrefs.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
-                  {data.pathwayPrefs.map((p, i) => (
-                    <span key={p} className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border border-gold-400/50 text-gold-300 bg-gold-400/10">
-                      <span className="text-gold-500 font-bold">{i + 1}.</span> {p}
-                      <button type="button" onClick={() => togglePathway(p)}
-                        className="ml-0.5 text-gold-500/60 hover:text-red-400 transition-colors leading-none">✕</button>
-                    </span>
-                  ))}
+                  {data.pathwayPrefs.map((p, i) => {
+                    const pw = findPathwayByShortName(p)
+                    return (
+                      <span key={p} className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border border-gold-400/50 text-gold-300 bg-gold-400/10">
+                        {pw?.logo && <img src={pw.logo} alt="" className="w-4 h-4 object-contain rounded" />}
+                        <span className="text-gold-500 font-bold">{i + 1}.</span> {p}
+                        <button type="button" onClick={() => togglePathway(p)}
+                          className="ml-0.5 text-gold-500/60 hover:text-red-400 transition-colors leading-none cursor-pointer">✕</button>
+                      </span>
+                    )
+                  })}
                 </div>
               )}
 
-              {/* Checkbox grid */}
+              {/* Pathway grid with logos */}
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
-                {PATHWAYS.map(p => {
-                  const idx = data.pathwayPrefs.indexOf(p)
+                {pathwayChoices.map(p => {
+                  const idx = data.pathwayPrefs.indexOf(p.shortName)
                   const selected = idx !== -1
                   const rank = idx + 1
                   return (
                     <button
-                      key={p}
+                      key={p.shortName}
                       type="button"
-                      onClick={() => togglePathway(p)}
+                      onClick={() => togglePathway(p.shortName)}
                       className={`
-                        relative text-left text-xs px-2.5 py-2 rounded border transition-all
+                        relative text-left text-xs px-2.5 py-2 rounded border transition-all flex items-center gap-1.5
                         ${selected
                           ? 'border-gold-400/60 bg-gold-400/10 text-gold-300 cursor-pointer'
                           : 'border-victorian-700/50 text-victorian-400 hover:border-victorian-600 hover:text-victorian-200 cursor-pointer'
                         }
                       `}
                     >
+                      <img src={p.logo} alt="" className="w-4 h-4 object-contain rounded flex-shrink-0" />
+                      <span className="truncate">{p.shortName}</span>
                       {selected && (
-                        <span className="absolute top-1 right-1.5 text-[10px] font-bold text-gold-500">{rank}</span>
+                        <span className="absolute top-0.5 right-1.5 text-[10px] font-bold text-gold-500">{rank}</span>
                       )}
-                      {p}
+                      {p.warning && (
+                        <span className="absolute bottom-0.5 right-1.5 text-[8px] text-red-400/70" title={p.warning}>⚠</span>
+                      )}
                     </button>
                   )
                 })}
@@ -507,12 +524,12 @@ export default function CharacterCreateContent() {
               {cssLoading ? (
                 <div className="flex items-center justify-center h-40 text-victorian-500 text-sm gap-2">
                   <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="40" strokeDashoffset="10"/></svg>
-                  โหลด CSS จาก GitHub...
+                  โหลด CSS...
                 </div>
               ) : cssText === null ? (
                 <div className="flex flex-col items-center justify-center h-40 gap-2">
                   <p className="text-red-400 text-sm">โหลด CSS ไม่ได้</p>
-                  <button onClick={fetchCss} className="text-xs text-gold-400 hover:underline">ลองใหม่</button>
+                  <button onClick={fetchCss} className="text-xs text-gold-400 hover:underline cursor-pointer">ลองใหม่</button>
                 </div>
               ) : containerWidth > 0 ? (
                 <iframe
@@ -535,7 +552,7 @@ export default function CharacterCreateContent() {
               โค้ดที่คัดลอกเป็น single line ป้องกัน CMS แปลง newline เป็น &lt;br&gt;
               {hydrated && <span className="ml-1 text-victorian-700">· บันทึกอัตโนมัติแล้ว</span>}
               {!cssLoading && (
-                <button onClick={fetchCss} className="ml-2 text-victorian-600 hover:text-gold-400 transition-colors" title="รีโหลด CSS ล่าสุดจาก GitHub">
+                <button onClick={fetchCss} className="ml-2 text-victorian-600 hover:text-gold-400 transition-colors cursor-pointer" title="รีโหลด CSS ล่าสุด">
                   ↻ sync CSS
                 </button>
               )}
