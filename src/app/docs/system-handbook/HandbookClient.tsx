@@ -989,17 +989,78 @@ export default function HandbookClient() {
           <p className="text-nouveau-cream text-sm font-display mb-4">Kendrick Mervin</p>
           <div className="flex flex-wrap gap-2">
             {[
-              "Next.js", "React", "TypeScript",
-              "Tailwind CSS", "Supabase", "PostgreSQL",
-              "Discord.js", "Vercel", "Cloudinary",
-              "TipTap", "@dnd-kit", "@xyflow/react",
+              {
+                name: "Next.js",
+                logo: "https://res.cloudinary.com/dehp6efwc/image/upload/v1771814672/dango-inner-2_pmw0nj.webp",
+                url: "https://nextjs.org/"
+              },
+              {
+                name: "React",
+                logo: "https://res.cloudinary.com/dehp6efwc/image/upload/v1771814510/react_wr3xlm.svg",
+                url: "https://react.dev/"
+              },
+              {
+                name: "TypeScript",
+                logo: "https://res.cloudinary.com/dehp6efwc/image/upload/v1771814625/TypeScript_Logo__Blue.svg_jlwxws.png",
+                url: "https://www.typescriptlang.org/"
+              },
+              {
+                name: "Tailwind CSS",
+                logo: "https://res.cloudinary.com/dehp6efwc/image/upload/v1771815318/tailwind-logo_b0v1ck.svg",
+                url: "https://tailwindcss.com/"
+              },
+              {
+                name: "Supabase",
+                logo: "https://res.cloudinary.com/dehp6efwc/image/upload/v1771815386/supabase-logo-wordmark--dark_bgxwwd.svg",
+                url: "https://supabase.com/"
+              },
+              {
+                name: "PostgreSQL",
+                logo: "https://res.cloudinary.com/dehp6efwc/image/upload/v1771814844/elephant_i1loks.png",
+                url: "https://www.postgresql.org/"
+              },
+              {
+                name: "Discord.js",
+                logo: "https://res.cloudinary.com/dehp6efwc/image/upload/v1771814847/discordjs-logo_zufror.svg",
+                url: "https://discord.js.org/"
+              },
+              {
+                name: "Vercel",
+                logo: "https://res.cloudinary.com/dehp6efwc/image/upload/v1771814910/vercel-logo_wdaffk.svg",
+                url: "https://vercel.com/"
+              },
+              {
+                name: "Cloudinary",
+                logo: "https://res.cloudinary.com/dehp6efwc/image/upload/v1771815129/cloudinary_web_favicon_znhsxf.png",
+                url: "https://cloudinary.com/"
+              },
+              {
+                name: "TipTap",
+                logo: "https://res.cloudinary.com/dehp6efwc/image/upload/v1771815134/tiptap-logo_r5fe5x.svg",
+                url: "https://tiptap.dev/"
+              },
+              {
+                name: "@dnd-kit",
+                logo: "https://res.cloudinary.com/dehp6efwc/image/upload/v1771815219/dnd-kit-logo_f5j44z.svg",
+                url: "https://dndkit.com/"
+              },
+              {
+                name: "@xyflow/react",
+                logo: "https://res.cloudinary.com/dehp6efwc/image/upload/v1771815227/xyflow-react-logo_wz5jd8.svg",
+                url: "https://xyflow.com/"
+              },
             ].map((tool) => (
-              <span
-                key={tool}
-                className="px-2.5 py-1 bg-victorian-950/70 border border-gold-subtle rounded-sm text-[11px] text-victorian-300 font-display"
+              <a
+                key={tool.name}
+                href={tool.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-2.5 py-1 bg-victorian-950/70 border border-gold-subtle rounded-sm text-[11px] text-victorian-300 font-display hover:border-gold-400 transition-colors"
+                title={tool.name}
               >
-                {tool}
-              </span>
+                <img src={tool.logo} alt={tool.name + ' logo'} className="w-5 h-5 object-contain mr-1" style={{ minWidth: 20 }} />
+                <span>{tool.name}</span>
+              </a>
             ))}
           </div>
         </div>

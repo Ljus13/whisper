@@ -77,17 +77,6 @@ const PLAYER_COMMANDS = [
     badge: 'Ephemeral',
   },
   {
-    name: '/submit-action',
-    description: 'ส่ง Action Code พร้อมหลักฐาน (URL รูปภาพ) เพื่อขอรับรางวัล',
-    usage: '/submit-action',
-    inputs: [
-      { label: 'รหัส Action Code', placeholder: 'เช่น AC-DD-MM-YY-abcd', required: true },
-      { label: 'ลิงก์หลักฐาน', placeholder: 'URL รูป บรรทัดละ 1 ลิงก์', required: true },
-    ],
-    note: 'หลังส่ง Bot จะ post embed ไปยัง channel ของ Admin พร้อมปุ่ม Approve/Reject',
-    badge: 'Modal',
-  },
-  {
     name: '/submit-quest',
     description: 'ส่ง Quest Code พร้อมหลักฐานเพื่อ Complete Quest',
     usage: '/submit-quest',
