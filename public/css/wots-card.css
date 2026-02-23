@@ -3,8 +3,8 @@
    Host this file at a public URL and <link rel="stylesheet"> it.
    ═══════════════════════════════════════════════════════════════ */
 
-/* Google Fonts import — Kanit (Thai + Latin) */
-@import url('https://fonts.googleapis.com/css2?family=Kanit:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&display=swap');
+/* Google Fonts import — Google Sans + Kanit (Thai + Latin) */
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&family=Kanit:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
 
 /* ── CSS Custom Properties (religion theming via inline --wots-*) ── */
 :root {
@@ -73,7 +73,7 @@
 }
 
 .wots-prev-name {
-  font-size: 0.82rem;
+  font-size: 1rem;
   color: var(--wots-text-dim);
   font-style: italic;
 }
@@ -96,8 +96,8 @@
 }
 
 .wots-badge {
-  font-size: 0.74rem;
-  padding: 2px 10px;
+  font-size: 1rem;
+  padding: 3px 14px;
   border-radius: 20px;
   border: 1px solid hsl(var(--wots-hue) 40% 30% / 0.8);
   color: hsl(var(--wots-hue) 82% 78%);
@@ -109,16 +109,16 @@
 }
 
 .wots-badge img {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   object-fit: contain;
   vertical-align: middle;
   border-radius: 2px;
 }
 
 .wots-badge-gender {
-  font-size: 0.74rem;
-  padding: 2px 10px;
+  font-size: 1rem;
+  padding: 3px 14px;
   border-radius: 20px;
   border: 1px solid hsl(285 30% 45% / 0.8);
   color: hsl(285 60% 80%);
@@ -140,13 +140,17 @@
 
 .wots-box-role {
   margin-bottom: 1rem;
-  padding: 1.5rem 2rem;
+  padding: 2rem;
   color: #fff;
+  font-family: 'Google Sans', sans-serif;
+  font-size: 1rem;
 }
 
 .wots-box-ps {
-  padding: 0.875rem 2rem;
+  padding: 1rem 2rem;
   color: hsl(var(--wots-hue) 82% 78%);
+  font-family: 'Google Sans', sans-serif;
+  font-size: 1rem;
 }
 
 /* ── Sections inside the role box ── */
@@ -159,9 +163,9 @@
 }
 
 .wots-label {
-  font-size: 0.65rem;
+  font-size: 1rem;
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: hsl(var(--wots-hue) 55% 48%);
   margin-bottom: 6px;
@@ -169,9 +173,9 @@
 }
 
 .wots-value {
-  font-size: 0.9rem;
+  font-size: 1.1rem;
   color: var(--wots-text);
-  line-height: 1.75;
+  line-height: 1.8;
   white-space: pre-wrap;
 }
 
@@ -184,45 +188,40 @@
 }
 
 .wots-path-item {
-  font-size: 0.78rem;
-  padding: 3px 10px;
-  border: 1px solid;
-  border-radius: 2px;
+  font-size: 1rem;
+  padding: 4px 14px;
+  border-radius: 20px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
 }
 
 .wots-path-item img {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   object-fit: contain;
   border-radius: 2px;
 }
 
 .wots-path-1 {
-  border-color: var(--wots-gold);
-  color: var(--wots-gold);
-  background: rgba(212,175,55,0.08);
-  filter: drop-shadow(0 0 5px hsl(38 96% 56% / 0.35));
+  background: hsl(var(--ph, 38) var(--ps, 75%) 20% / 0.55);
+  color: hsl(var(--ph, 38) var(--ps, 75%) 84%);
+  filter: drop-shadow(0 0 6px hsl(var(--ph, 38) 90% 55% / 0.3));
 }
 
 .wots-path-2 {
-  border-color: hsl(var(--wots-hue) 42% 42%);
-  color: hsl(var(--wots-hue) 62% 65%);
-  background: rgba(212,175,55,0.04);
+  background: hsl(var(--ph, 38) var(--ps, 65%) 18% / 0.45);
+  color: hsl(var(--ph, 38) var(--ps, 65%) 74%);
 }
 
 .wots-path-3 {
-  border-color: hsl(var(--wots-hue) 30% 35%);
-  color: hsl(var(--wots-hue) 45% 56%);
-  background: rgba(212,175,55,0.04);
+  background: hsl(var(--ph, 38) var(--ps, 50%) 15% / 0.38);
+  color: hsl(var(--ph, 38) var(--ps, 50%) 64%);
 }
 
 .wots-path-extra {
-  border-color: hsl(var(--wots-hue) 40% 28%);
-  color: hsl(var(--wots-hue) 55% 58%);
-  background: rgba(212,175,55,0.04);
+  background: hsl(var(--wots-hue) 20% 12% / 0.4);
+  color: hsl(var(--wots-hue) 40% 58%);
 }
 
 /* ── Credit link hidden in the card ── */

@@ -53,6 +53,31 @@ const CSS_URL = '/css/wots-card.css'
 const DEPLOY_BASE = 'https://whisper-one-ochre.vercel.app'
 const NATURAL_WIDTH = 650
 
+// --------------- pathway accent colors (dropper from logo) ---------------
+const PATHWAY_COLORS: Record<string, { h: number; s: number }> = {
+  'seer':               { h: 271, s: 65 },  // Fool     → purple
+  'marauder':           { h: 20,  s: 70 },  // Error    → orange-red
+  'apprentice':         { h: 185, s: 60 },  // Door     → teal
+  'spectator':          { h: 250, s: 60 },  // Visionary → indigo
+  'sailor':             { h: 217, s: 72 },  // Tyrant   → blue
+  'hunter':             { h: 10,  s: 80 },  // Red Priest → deep red
+  'mystery-pryer':      { h: 170, s: 50 },  // Hermit   → teal-green
+  'savant':             { h: 215, s: 25 },  // Paragon  → steel-slate
+  'warrior':            { h: 225, s: 40 },  // Twilight → muted blue
+  'assassin':           { h: 290, s: 55 },  // Demoness → purple-pink
+  'bard':               { h: 45,  s: 88 },  // Sun      → amber
+  'apothecary':         { h: 218, s: 45 },  // Moon     → silver-blue
+  'planter':            { h: 130, s: 55 },  // Mother   → green
+  'corpse-collector':   { h: 205, s: 20 },  // Death    → desaturated blue
+  'sleepless':          { h: 0,   s: 62 },  // Darkness → deep red
+  'lawyer':             { h: 270, s: 45 },  // Black Emperor → dark purple
+  'arbiter':            { h: 42,  s: 65 },  // Justiciar → gold
+  'prisoner':           { h: 25,  s: 50 },  // Chained  → rust
+  'criminal':           { h: 355, s: 65 },  // Abyss    → crimson
+  'secrets-supplicant': { h: 275, s: 50 },  // Hanged Man → dark purple
+  'reader':             { h: 38,  s: 40 },  // White Tower → warm stone
+}
+
 // --------------- helpers for pathway data ---------------
 function findPathwayByShortName(shortName: string) {
   return PATHWAY_DATA.find(p => p.name.replace('เส้นทาง', '') === shortName)
@@ -81,7 +106,9 @@ function buildInnerHtml(d: CharData): string {
       const pw = findPathwayByShortName(p)
       const cls = i === 0 ? 'wots-path-1' : i === 1 ? 'wots-path-2' : i === 2 ? 'wots-path-3' : 'wots-path-extra'
       const logoImg = pw?.logo ? `<img src="${pw.logo}" alt="">` : ''
-      return `<div class="wots-path-item ${cls}">${logoImg}${i + 1}. ${p}</div>`
+      const col = pw ? (PATHWAY_COLORS[pw.id] ?? { h: 38, s: 60 }) : { h: 38, s: 60 }
+      const colorStyle = `--ph:${col.h};--ps:${col.s}%`
+      return `<div class="wots-path-item ${cls}" style="${colorStyle}">${logoImg}${i + 1}. ${p}</div>`
     })
     .join('')
 
