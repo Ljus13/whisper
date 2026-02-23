@@ -60,8 +60,12 @@ export async function middleware(request: NextRequest) {
   // getUser() makes a network call to Supabase Auth (~200-400ms) — avoid in middleware
   const { data: { session } } = await supabase.auth.getSession()
 
+  // Standalone pages — accessible without auth
+  const standalonePages = ['/dashboard/rp-template', '/dashboard/bio-templates']
+  const isStandalone = standalonePages.some(p => request.nextUrl.pathname.startsWith(p))
+
   // Protect /dashboard routes — redirect to login if not authenticated
-  if (request.nextUrl.pathname.startsWith('/dashboard') && !session) {
+  if (request.nextUrl.pathname.startsWith('/dashboard') && !session && !isStandalone) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 

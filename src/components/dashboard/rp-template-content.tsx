@@ -36,6 +36,8 @@ interface RpData {
   pathway: string
   lv: string
   imageUrl: string
+  imagePos: string
+  imageSize: string
   characterName: string
   roleplayContent: string
   psNote: string
@@ -45,22 +47,26 @@ const DEFAULT_DATA: RpData = {
   pathway: 'นักทำนาย',
   lv: '9',
   imageUrl: 'https://i.pravatar.cc/300?img=12',
+  imagePos: 'center',
+  imageSize: 'cover',
   characterName: 'Jane Doe',
   roleplayContent: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.',
-  psNote: '✦ หมายเหตุ: Lorem ipsum dolor sit amet',
+  psNote: '',
 }
+
+const RP_PS_NOTE = '✦ หมายเหตุ:'
 
 const CSS_URL = 'https://savant777.github.io/zoecode/whisperoftheshadow.css'
 const NATURAL_WIDTH = 650
 
 // For copy: includes <link> tag
 function buildCopyHtml(d: RpData): string {
-  return `<link href="${CSS_URL}" rel="stylesheet"><div id="WhisperOfTheShadow"><a href="https://discord.com/users/625292873914515456/"></a><div id="wots-role" class="wots-container" pathway="${d.pathway}" lv="${d.lv}"><div class="wots-player"><div class="wots-pic" style="--wots-pic: url(${d.imageUrl});--wots-pos: center;--wots-size: cover;"></div><div class="wots-info"><div class="wots-name">${d.characterName}</div><div class="wots-pathway"><div class="path-info"><div></div></div></div></div></div><div class="wots-box role">${d.roleplayContent}</div><div class="wots-box ps">${d.psNote}</div><!--พื้นที่ใส่ผลการใช้สกิล--></div></div>`
+  const psContent = `${RP_PS_NOTE}${d.psNote.trim() ? ` ${d.psNote}` : ''}`
+  return `<link href="${CSS_URL}" rel="stylesheet"><div id="WhisperOfTheShadow"><a href="https://discord.com/users/625292873914515456/"></a><div id="wots-role" class="wots-container" pathway="${d.pathway}" lv="${d.lv}"><div class="wots-player"><div class="wots-pic" style="--wots-pic: url(${d.imageUrl});--wots-pos: ${d.imagePos};--wots-size: ${d.imageSize};"></div><div class="wots-info"><div class="wots-name">${d.characterName}</div><div class="wots-pathway"><div class="path-info"><div></div></div></div></div></div><div class="wots-box role">${d.roleplayContent}</div><div class="wots-box ps">${psContent}</div></div></div>`
 }
-
-// For preview: full HTML doc with CSS injected as <style> (iframe srcdoc)
 function buildPreviewSrcdoc(d: RpData, css: string): string {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=${NATURAL_WIDTH}"><style>${css}</style><style>html,body{margin:0;padding:1rem;background:#0a0908;overflow-x:hidden;}::-webkit-scrollbar{width:5px;height:5px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#4a3f35;border-radius:4px;}::-webkit-scrollbar-thumb:hover{background:#6b5a4e;}*{scrollbar-width:thin;scrollbar-color:#4a3f35 transparent;}</style></head><body><div id="WhisperOfTheShadow"><a href="https://discord.com/users/625292873914515456/"></a><div id="wots-role" class="wots-container" pathway="${d.pathway}" lv="${d.lv}"><div class="wots-player"><div class="wots-pic" style="--wots-pic: url(${d.imageUrl});--wots-pos: center;--wots-size: cover;"></div><div class="wots-info"><div class="wots-name">${d.characterName}</div><div class="wots-pathway"><div class="path-info"><div></div></div></div></div></div><div class="wots-box role">${d.roleplayContent}</div><div class="wots-box ps">${d.psNote}</div><!--\u0e1e\u0e37\u0e49\u0e19\u0e17\u0e35\u0e48\u0e43\u0e2a\u0e48\u0e1c\u0e25\u0e01\u0e32\u0e23\u0e43\u0e0a\u0e49\u0e2a\u0e01\u0e34\u0e25--></div></div><script>function send(){window.parent.postMessage({type:'rp-height',h:document.body.scrollHeight},'*');}window.addEventListener('load',send);new ResizeObserver(send).observe(document.body);<\/script></body></html>`
+  const psContent = `${RP_PS_NOTE}${d.psNote.trim() ? ` ${d.psNote}` : ''}`
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=${NATURAL_WIDTH}"><style>${css}</style><style>html,body{margin:0;padding:1rem;background:#0a0908;overflow-x:hidden;}::-webkit-scrollbar{width:5px;height:5px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#4a3f35;border-radius:4px;}::-webkit-scrollbar-thumb:hover{background:#6b5a4e;}*{scrollbar-width:thin;scrollbar-color:#4a3f35 transparent;}</style></head><body><div id="WhisperOfTheShadow"><a href="https://discord.com/users/625292873914515456/"></a><div id="wots-role" class="wots-container" pathway="${d.pathway}" lv="${d.lv}"><div class="wots-player"><div class="wots-pic" style="--wots-pic: url(${d.imageUrl});--wots-pos: ${d.imagePos};--wots-size: ${d.imageSize};"></div><div class="wots-info"><div class="wots-name">${d.characterName}</div><div class="wots-pathway"><div class="path-info"><div></div></div></div></div></div><div class="wots-box role">${d.roleplayContent}</div><div class="wots-box ps">${psContent}</div></div></div><script>function send(){window.parent.postMessage({type:'rp-height',h:document.body.scrollHeight},'*');}window.addEventListener('load',send);new ResizeObserver(send).observe(document.body);<\/script></body></html>`
 }
 
 // --------------- rich text editor ---------------
@@ -389,6 +395,39 @@ export default function RpTemplateContent() {
               <Field label="URL รูปภาพ" hint="(direct link เท่านั้น)">
                 <input type="url" className={inputCls} placeholder="https://..." value={data.imageUrl} onChange={set('imageUrl')} />
               </Field>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="ตำแหน่งรูป" hint="(--wots-pos)">
+                  <select className={selectCls} value={data.imagePos} onChange={set('imagePos')}>
+                    <option value="center">กลาง (center)</option>
+                    <option value="top">บน (top)</option>
+                    <option value="bottom">ล่าง (bottom)</option>
+                    <option value="left">ซ้าย (left)</option>
+                    <option value="right">ขวา (right)</option>
+                    <option value="top center">บน-กลาง</option>
+                    <option value="bottom center">ล่าง-กลาง</option>
+                    <option value="center top">กลาง-บน</option>
+                    <option value="20% center">เยื้องซ้าย 20%</option>
+                    <option value="80% center">เยื้องขวา 80%</option>
+                    <option value="center 20%">เยื้องบน 20%</option>
+                    <option value="center 80%">เยื้องล่าง 80%</option>
+                  </select>
+                </Field>
+
+                <Field label="ขนาดรูป" hint="(--wots-size)">
+                  <select className={selectCls} value={data.imageSize} onChange={set('imageSize')}>
+                    <option value="cover">เต็มกรอบ (cover)</option>
+                    <option value="contain">พอดี (contain)</option>
+                    <option value="100%">100%</option>
+                    <option value="110%">110%</option>
+                    <option value="120%">120%</option>
+                    <option value="130%">130%</option>
+                    <option value="150%">150%</option>
+                    <option value="80%">80%</option>
+                    <option value="70%">70%</option>
+                  </select>
+                </Field>
+              </div>
             </div>
 
             {/* เนื้อหา */}
@@ -409,8 +448,8 @@ export default function RpTemplateContent() {
                 </div>
               </Field>
 
-              <Field label="หมายเหตุ (PS)" hint="(รองรับ HTML เช่น <iframe> ได้เลย)">
-                <textarea className={textareaCls} rows={3} value={data.psNote} onChange={set('psNote')} placeholder="ข้อความหรือ HTML..."/>
+              <Field label="หมายเหตุ (PS)" hint="(รองรับ HTML — ✦ หมายเหตุ: แสดงอยู่หน้าเสมอ, พิมพ์เนื้อหาต่อท้าย)">  
+                <textarea className={textareaCls} rows={3} value={data.psNote} onChange={set('psNote')} placeholder="ใส่ข้อความหรือ HTML เช่น <iframe> ได้เลย (ไม่ต้องใส่ ✦ หมายเหตุ: เอง)"/>
               </Field>
             </div>
           </div>
