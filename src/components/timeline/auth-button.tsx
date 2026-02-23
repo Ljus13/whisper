@@ -22,7 +22,7 @@ export function AuthButton({ isLoggedIn }: { isLoggedIn: boolean }) {
 
   return (
     <button
-      onClick={() => router.push('/auth')}
+      onClick={() => router.push('/')}
       className="flex items-center gap-1.5 text-sm text-victorian-400 hover:text-gold-300 transition-colors cursor-pointer"
       title="เข้าสู่ระบบ"
     >

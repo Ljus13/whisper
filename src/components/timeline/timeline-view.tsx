@@ -5,7 +5,7 @@ import {
   ReactFlow, Background, Controls, MiniMap,
   useNodesState, useEdgesState,
   BackgroundVariant,
-  type Node, type Edge,
+  type Node, type Edge, type ReactFlowInstance,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { Plus, AlertTriangle } from 'lucide-react'
@@ -418,8 +418,17 @@ export default function TimelineView({ entries, isAdmin }: Props) {
 
   const allSideStories = entries.flatMap(e => e.timeline_side_stories ?? [])
 
+  const containerRef = useRef<HTMLDivElement>(null)
+  const onInit = useCallback((instance: ReactFlowInstance) => {
+    const containerWidth = containerRef.current?.clientWidth ?? window.innerWidth
+    const zoom = 0.85
+    const x = containerWidth / 2 - CANVAS_CX * zoom
+    instance.setViewport({ x, y: 0, zoom })
+  }, [])
+
   return (
     <div
+      ref={containerRef}
       className="flex flex-col"
       style={isMobile ? undefined : { height: 'calc(100vh - 80px)' }}
     >
@@ -472,8 +481,7 @@ export default function TimelineView({ entries, isAdmin }: Props) {
           onEdgesChange={onEdgesChange}
           onNodeDragStop={onNodeDragStop}
           nodeTypes={nodeTypes}
-          fitView
-          fitViewOptions={{ padding: 0.1, maxZoom: 1.5 }}
+          onInit={onInit}
           nodesDraggable={isAdmin}
           panOnDrag
           nodesConnectable={false}

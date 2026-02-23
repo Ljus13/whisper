@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { EmbedButton } from '@/components/embed-button'
 import { PATHWAYS } from '../_data/pathways'
 
 /* ─────────────────────────────────────────────────────────────
@@ -747,7 +748,7 @@ const WRAP: React.CSSProperties = {
   padding: '0 24px',
 }
 
-export default function WorldClient() {
+export default function WorldClient({ hideNav = false }: { hideNav?: boolean }) {
   const [lightboxPathway, setLightboxPathway] = useState<PathwayType | null>(null)
   const openLightbox = useCallback((p: PathwayType) => setLightboxPathway(p), [])
   const closeLightbox = useCallback(() => setLightboxPathway(null), [])
@@ -761,6 +762,7 @@ export default function WorldClient() {
       }}
     >
       {/* NAV */}
+      {!hideNav && (
       <nav
         style={{
           position: 'sticky',
@@ -773,6 +775,7 @@ export default function WorldClient() {
           height: 44,
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'space-between',
         }}
       >
         <Link
@@ -790,7 +793,9 @@ export default function WorldClient() {
         >
           ← กลับ Docs
         </Link>
+        <EmbedButton embedPath="/embed/world-setting" label="Embed" />
       </nav>
+      )}
 
       {/* HERO */}
       <VideoHero />

@@ -29,7 +29,15 @@ const DOC_CARDS = [
     title: 'World Setting',
     description: 'เรื่องราวและฉากหลังของโลก — ทิศทางเนื้อหาและบรรยากาศของกิจกรรม Whisper of the Shadow',
     tags: ['Lore', 'Setting'],
-    status: 'wip' as const,
+    status: 'ready' as const,
+  },
+  {
+    href: '/docs/religions',
+    icon: '⛪',
+    title: 'ศาสนาจารีตทั้ง 7',
+    description: 'ข้อมูลศาสนาทั้ง 7 ที่เป็นที่ยอมรับในทวีป — หลักคำสอน จารีตประเพณี และเทพเจ้าของแต่ละศาสนา',
+    tags: ['Lore', 'Religion'],
+    status: 'ready' as const,
   },
 ]
 

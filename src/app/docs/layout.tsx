@@ -23,6 +23,7 @@ const NAV_ITEMS = [
     section: 'เรื่องราว',
     links: [
       { href: '/world-setting', label: '🌑 World Setting' },
+      { href: '/docs/religions', label: '⛪ ศาสนาจารีตทั้ง 7' },
     ],
   },
 ]
