@@ -5,6 +5,7 @@ import MaintenanceBanner from '@/components/dashboard/maintenance-banner'
 import MaintenanceToggle from '@/components/dashboard/maintenance-toggle'
 import MaintenanceWall from '@/components/dashboard/maintenance-wall'
 import DiscordLinkBanner from '@/components/dashboard/discord-link-banner'
+import CombatAlertBanner from '@/components/combat/combat-alert-banner'
 import { getMaintenanceStatus } from '@/app/actions/maintenance'
 
 export default async function DashboardLayout({
@@ -60,6 +61,7 @@ export default async function DashboardLayout({
 
       {!isAdmin && user && (
         <div className="max-w-screen-2xl mx-auto px-4 md:px-8 pt-4 space-y-3">
+          <CombatAlertBanner />
           <PunishmentBanner />
           <DiscordLinkBanner discordLinked={discordLinked} />
         </div>

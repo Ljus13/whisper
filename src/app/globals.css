@@ -319,3 +319,129 @@
 .react-flow__edge.rf-sub .react-flow__edge-path {
   animation: rfDashFlow 1.5s linear infinite;
 }
+
+/* ══════════════════════════════════════════════
+   COMBAT STATUS EFFECT ANIMATIONS
+   ══════════════════════════════════════════════ */
+
+/* Glow animation for overlay text */
+@keyframes combatGlow {
+  0%, 100% { opacity: 0.7; text-shadow: 0 0 20px currentColor, 0 0 40px currentColor; }
+  50% { opacity: 1; text-shadow: 0 0 40px currentColor, 0 0 80px currentColor, 0 0 120px currentColor; }
+}
+.animate-combat-glow {
+  animation: combatGlow 2s ease-in-out infinite;
+}
+
+/* ── มึนงง (Stunned): ขาว-เหลือง กระพริบจากขอบจอ ── */
+@keyframes combatStunned {
+  0%, 100% { box-shadow: inset 0 0 80px 30px rgba(255, 255, 200, 0.15); }
+  25% { box-shadow: inset 0 0 100px 40px rgba(255, 255, 100, 0.25); }
+  50% { box-shadow: inset 0 0 80px 30px rgba(255, 255, 255, 0.2); }
+  75% { box-shadow: inset 0 0 100px 40px rgba(255, 230, 100, 0.25); }
+}
+.animate-combat-stunned {
+  animation: combatStunned 1.5s ease-in-out infinite;
+}
+
+/* ── ถูกแช่แข็ง (Frozen): ฟ้า gradient ไล่จากขอบ ── */
+@keyframes combatFrozen {
+  0%, 100% { box-shadow: inset 0 0 100px 40px rgba(100, 180, 255, 0.2); }
+  50% { box-shadow: inset 0 0 120px 50px rgba(100, 180, 255, 0.35); }
+}
+.animate-combat-frozen {
+  animation: combatFrozen 3s ease-in-out infinite;
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(100, 180, 255, 0.08) 100%);
+}
+
+/* ── ถูกสาป (Cursed): ม่วง-แดง gradient ── */
+@keyframes combatCursed {
+  0%, 100% { box-shadow: inset 0 0 100px 40px rgba(150, 50, 200, 0.2); }
+  50% { box-shadow: inset 0 0 120px 50px rgba(200, 50, 80, 0.25); }
+}
+.animate-combat-cursed {
+  animation: combatCursed 2.5s ease-in-out infinite;
+}
+
+/* ── ออร่าแห่งความตาย (Death Aura): Teal gradient ── */
+@keyframes combatDeathAura {
+  0%, 100% { box-shadow: inset 0 0 100px 40px rgba(0, 180, 180, 0.15); }
+  50% { box-shadow: inset 0 0 130px 50px rgba(0, 180, 180, 0.3); }
+}
+.animate-combat-death-aura {
+  animation: combatDeathAura 3s ease-in-out infinite;
+}
+
+/* ── เผาไหม้ (Burning): แดง-ส้ม gradient ── */
+@keyframes combatBurning {
+  0%, 100% { box-shadow: inset 0 0 100px 40px rgba(255, 80, 20, 0.2); }
+  33% { box-shadow: inset 0 0 110px 45px rgba(255, 140, 20, 0.3); }
+  66% { box-shadow: inset 0 0 120px 50px rgba(255, 50, 10, 0.25); }
+}
+.animate-combat-burning {
+  animation: combatBurning 1.8s ease-in-out infinite;
+}
+
+/* ── แสงจ้า (Blinding Light): ขาวกระพริบ ── */
+@keyframes combatBlinding {
+  0%, 100% { box-shadow: inset 0 0 80px 30px rgba(255, 255, 255, 0.1); }
+  50% { box-shadow: inset 0 0 150px 60px rgba(255, 255, 255, 0.4); }
+}
+.animate-combat-blinding {
+  animation: combatBlinding 1s ease-in-out infinite;
+}
+
+/* ── ติดพิษ (Poisoned): เขียว gradient ── */
+@keyframes combatPoisoned {
+  0%, 100% { box-shadow: inset 0 0 100px 40px rgba(50, 200, 50, 0.15); }
+  50% { box-shadow: inset 0 0 120px 50px rgba(50, 200, 50, 0.3); }
+}
+.animate-combat-poisoned {
+  animation: combatPoisoned 2.5s ease-in-out infinite;
+}
+
+/* ── คุ้มคลั่ง (Berserk): แดง-ฟ้า กระพริบ ── */
+@keyframes combatBerserk {
+  0%, 100% { box-shadow: inset 0 0 100px 40px rgba(255, 30, 30, 0.25); }
+  50% { box-shadow: inset 0 0 100px 40px rgba(30, 100, 255, 0.25); }
+}
+.animate-combat-berserk {
+  animation: combatBerserk 0.8s ease-in-out infinite;
+}
+
+/* ── เลือดไหล (Bleeding): แดง gradient ── */
+@keyframes combatBleeding {
+  0%, 100% { box-shadow: inset 0 0 100px 40px rgba(200, 0, 0, 0.15); }
+  50% { box-shadow: inset 0 0 120px 50px rgba(200, 0, 0, 0.3); }
+}
+.animate-combat-bleeding {
+  animation: combatBleeding 2s ease-in-out infinite;
+}
+
+/* ── หลงใหล (Charmed): ชมพู gradient ── */
+@keyframes combatCharmed {
+  0%, 100% { box-shadow: inset 0 0 100px 40px rgba(255, 100, 180, 0.15); }
+  50% { box-shadow: inset 0 0 120px 50px rgba(255, 100, 180, 0.3); }
+}
+.animate-combat-charmed {
+  animation: combatCharmed 2.5s ease-in-out infinite;
+}
+
+/* ── จมน้ำ (Drowning): ฟ้า-ขาว gradient ── */
+@keyframes combatDrowning {
+  0%, 100% { box-shadow: inset 0 0 100px 40px rgba(80, 160, 255, 0.2); }
+  50% { box-shadow: inset 0 0 120px 50px rgba(200, 220, 255, 0.3); }
+}
+.animate-combat-drowning {
+  animation: combatDrowning 2s ease-in-out infinite;
+}
+
+/* ── Pulse slow for combat banners ── */
+@keyframes pulseSlow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+.animate-pulse-slow {
+  animation: pulseSlow 3s ease-in-out infinite;
+}
+

@@ -377,6 +377,92 @@ export interface PrayerLog {
   created_at: string
 }
 
+/* ═══════════ Combat System ═══════════ */
+
+export type CombatSessionStatus = 'lobby' | 'active' | 'ended'
+export type CombatParticipantType = 'player' | 'npc'
+export type CombatTurnStatus = 'waiting' | 'active' | 'done'
+export type CombatLogType = 'stat_change' | 'roleplay_link' | 'announcement' | 'status_effect' | 'turn_change' | 'session_start' | 'session_end'
+
+export type CombatStatusEffect =
+  | 'stunned'       // มึนงง (ห้ามเล่น)
+  | 'frozen'        // ถูกแช่แข็ง (ห้ามเล่น)
+  | 'cursed'        // ถูกสาป
+  | 'death_aura'    // ออร่าแห่งความตาย
+  | 'sleeping'      // หลับใหล
+  | 'burning'       // เผาไหม้
+  | 'blinding_light'// แสงจ้า
+  | 'paralyzed'     // อัมพาต (ห้ามเล่น)
+  | 'poisoned'      // ติดพิษ
+  | 'berserk'       // คุ้มคลั่ง
+  | 'blinded'       // ตาบอด
+  | 'bleeding'      // เลือดไหล
+  | 'charmed'       // หลงใหล (ห้ามเล่น)
+  | 'drowning'      // จมน้ำ
+
+/** สถานะที่ห้ามกดส่งลิงก์โรลเพลย์แม้ถึงเทิร์นตัวเอง */
+export const DISABLING_EFFECTS: CombatStatusEffect[] = ['stunned', 'frozen', 'paralyzed', 'charmed']
+
+/** แผนที่แปลชื่อสถานะเป็นไทย */
+export const STATUS_EFFECT_LABELS: Record<CombatStatusEffect, string> = {
+  stunned: 'มึนงง',
+  frozen: 'ถูกแช่แข็ง',
+  cursed: 'ถูกสาป',
+  death_aura: 'ออร่าแห่งความตาย',
+  sleeping: 'หลับใหล',
+  burning: 'เผาไหม้',
+  blinding_light: 'แสงจ้า',
+  paralyzed: 'อัมพาต',
+  poisoned: 'ติดพิษ',
+  berserk: 'คุ้มคลั่ง',
+  blinded: 'ตาบอด',
+  bleeding: 'เลือดไหล',
+  charmed: 'หลงใหล',
+  drowning: 'จมน้ำ',
+}
+
+export interface CombatSession {
+  id: string
+  name: string
+  status: CombatSessionStatus
+  announcement: string | null
+  announcement_ack: boolean
+  started_at: string | null
+  ended_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string
+}
+
+export interface CombatParticipant {
+  id: string
+  session_id: string
+  profile_id: string | null
+  type: CombatParticipantType
+  display_name: string
+  avatar_url: string | null
+  current_hp: number
+  current_sanity: number
+  current_spirit: number
+  status_effect_1: CombatStatusEffect | null
+  status_effect_2: CombatStatusEffect | null
+  turn_status: CombatTurnStatus
+  is_current_turn: boolean
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CombatLog {
+  id: string
+  session_id: string
+  participant_id: string | null
+  type: CombatLogType
+  message: string
+  payload: Record<string, unknown>
+  created_at: string
+}
+
 /* Supabase Database type helper */
 export interface Database {
   public: {
