@@ -23,8 +23,7 @@ interface CharData {
   appearance: string
   history: string
   personality: string
-  hobbies: string
-  likes: string
+  tmi: string
   pathwayPrefs: string[]   // top-3
   psNote: string
 }
@@ -42,8 +41,7 @@ const DEFAULT_DATA: CharData = {
   appearance: 'ส่วนสูง 165 ซม. ผมดำ ตาสีน้ำตาล ลักษณะเด่น...',
   history: 'เกิดที่เมือง... ครอบครัว... เหตุการณ์ที่สำคัญ...',
   personality: 'ใจเย็น รอบคอบ มีความอยากรู้อยากเห็น...',
-  hobbies: 'อ่านหนังสือ ทำสวน',
-  likes: 'ความสงบ ดนตรี',
+  tmi: '#อ่านหนังสือ, #ทำสวน, #ความสงบ, #ดนตรี,',
   pathwayPrefs: ['นักทำนาย', 'นักปราชญ์', 'ผู้ชม'],
   psNote: '',
 }
@@ -107,24 +105,22 @@ function buildInnerHtml(d: CharData, tmiContent: string): string {
   return `<div id="WhisperOfTheShadow"><a href="https://discord.com/users/625292873914515456/"></a><div id="wots-profile" class="wots-container"><div class="wots-basic-info"><div class="wots-pic" style="--wots-pic:url(${d.imageUrl});--wots-pos:${d.imagePos};--wots-size:${d.imageSize};"></div><div class="wots-info-mid"><div class="wots-info-name"><div class="wots-name">${d.characterName}</div><div class="wots-dp-name">${d.prevName}</div></div><div class="wots-info-tags"><div class="info-tags" data="เผ่าพันธุ์">${d.race}</div><div class="info-tags" data="อายุ">${d.age}</div><div class="info-tags" data="เพศ">${d.gender}</div></div></div><div class="wots-info-last" church="${churchNum}"><div class="wots-info-church"><div></div></div></div></div>${sections}</div></div>`
 }
 
-/** TMI content for iframe preview — rendered as HTML list */
-function buildTmiHtml(d: CharData): string {
-  const items = [
-    d.hobbies.trim() ? `<li>งานอดิเรก: ${d.hobbies}</li>` : '',
-    d.likes.trim()   ? `<li>สิ่งที่ชอบ: ${d.likes}</li>`  : '',
-    d.psNote.trim()  ? `<li>${d.psNote}</li>`               : '',
-  ].filter(Boolean)
-  return items.length ? `<ul style="margin:0;padding-left:1.4em">${items.join('')}</ul>` : ''
+/** Parse #tag, syntax → inline tag span */
+function parseTags(html: string): string {
+  return html.replace(/#([^,<>\s][^,<>]*),/g, (_, tag) =>
+    `<span style="display:inline-block;background:#374151;color:#e5e7eb;border-radius:9999px;padding:2px 12px;font-size:0.8em;margin:2px 3px;font-weight:500;line-height:1.6;letter-spacing:0.02em;vertical-align:middle;white-space:nowrap;">${tag}</span>`
+  )
 }
 
-/** TMI content for copy output — BBCode format used by forum CMS */
+/** TMI content for preview/copy */
+function buildTmiHtml(d: CharData): string {
+  const parsed = parseTags(d.tmi)
+  return parsed.trim() ? parsed : ''
+}
+
+/** TMI content for copy — same HTML with tags parsed */
 function buildTmiBBCode(d: CharData): string {
-  const items = [
-    d.hobbies.trim() ? `[*]งานอดิเรก: ${d.hobbies}` : '',
-    d.likes.trim()   ? `[*]สิ่งที่ชอบ: ${d.likes}`  : '',
-    d.psNote.trim()  ? `[*]${d.psNote}`               : '',
-  ].filter(Boolean)
-  return items.length ? `[list]${items.join('')}[/list]` : ''
+  return parseTags(d.tmi)
 }
 
 function buildCopyHtml(d: CharData): string {
@@ -135,6 +131,101 @@ function buildPreviewSrcdoc(d: CharData, cssText: string): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=900"><style>${cssText}</style><style>html,body{margin:0;padding:1rem;background:#0a0908;overflow-x:hidden;}::-webkit-scrollbar{width:5px;height:5px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#4a3f35;border-radius:4px;}::-webkit-scrollbar-thumb:hover{background:#6b5a4e;}*{scrollbar-width:thin;scrollbar-color:#4a3f35 transparent;}</style></head><body>${buildInnerHtml(d, buildTmiHtml(d))}<script>function send(){window.parent.postMessage({type:'rp-height',h:document.body.scrollHeight},'*');}window.addEventListener('load',send);new ResizeObserver(send).observe(document.body);<\/script></body></html>`
 }
 
+
+// --------------- rich text editor ---------------
+const EDITOR_COLORS = [
+  { color: '#c62828', label: 'Ruby'        },
+  { color: '#e53935', label: 'Grapefruit'  },
+  { color: '#f4511e', label: 'Bittersweet' },
+  { color: '#f9a825', label: 'Sunflower'   },
+  { color: '#d4e157', label: 'Straw'       },
+  { color: '#7cb342', label: 'Grass'       },
+  { color: '#43a047', label: 'Basil'       },
+  { color: '#26a69a', label: 'Mint'        },
+  { color: '#80cbc4', label: 'Teal'        },
+  { color: '#29b6f6', label: 'Aqua'        },
+  { color: '#5c6bc0', label: 'Blue Jeans'  },
+  { color: '#ab47bc', label: 'Lavender'    },
+  { color: '#6a1b9a', label: 'Plum'        },
+  { color: '#ec407a', label: 'Pink Rose'   },
+  { color: '#a1887f', label: 'Grizzly Bear'},
+  { color: '#6d4c41', label: 'Chocolate'   },
+  { color: '#bdbdbd', label: 'Light Grey'  },
+  { color: '#9e9e9e', label: 'Grey'        },
+  { color: '#546e7a', label: 'Dark Grey'   },
+  { color: '#37474f', label: 'Charcoal'    },
+]
+
+const FONT_SIZES = [
+  { label: 'S',  value: '2' },
+  { label: 'M',  value: '3' },
+  { label: 'L',  value: '4' },
+  { label: 'XL', value: '5' },
+  { label: '2X', value: '6' },
+]
+
+const ALIGN_BTNS = [
+  { cmd: 'justifyLeft',   title: 'ชิดซ้าย',  icon: (
+    <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 fill-current">
+      <rect x="1" y="2"  width="10" height="2" rx="1"/><rect x="1" y="6"  width="14" height="2" rx="1"/>
+      <rect x="1" y="10" width="10" height="2" rx="1"/><rect x="1" y="14" width="14" height="2" rx="1"/>
+    </svg>
+  )},
+  { cmd: 'justifyCenter', title: 'กึ่งกลาง', icon: (
+    <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 fill-current">
+      <rect x="3" y="2"  width="10" height="2" rx="1"/><rect x="1" y="6"  width="14" height="2" rx="1"/>
+      <rect x="3" y="10" width="10" height="2" rx="1"/><rect x="1" y="14" width="14" height="2" rx="1"/>
+    </svg>
+  )},
+  { cmd: 'justifyRight',  title: 'ชิดขวา',  icon: (
+    <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 fill-current">
+      <rect x="5" y="2"  width="10" height="2" rx="1"/><rect x="1" y="6"  width="14" height="2" rx="1"/>
+      <rect x="5" y="10" width="10" height="2" rx="1"/><rect x="1" y="14" width="14" height="2" rx="1"/>
+    </svg>
+  )},
+]
+
+function EditorToolbar({ onFormat }: { onFormat: (cmd: string, value?: string) => void }) {
+  return (
+    <div className="flex items-center gap-1 flex-wrap px-2 py-1.5 bg-victorian-900/80 border border-victorian-700/50 border-b-0 rounded-t-md">
+      <button type="button" onMouseDown={e => { e.preventDefault(); onFormat('bold') }}
+        className="w-7 h-7 text-sm font-bold text-victorian-200 hover:bg-victorian-700/60 rounded flex items-center justify-center" title="ตัวหนา">B</button>
+      <button type="button" onMouseDown={e => { e.preventDefault(); onFormat('italic') }}
+        className="w-7 h-7 text-sm italic text-victorian-200 hover:bg-victorian-700/60 rounded flex items-center justify-center" title="ตัวเอียง">I</button>
+      <button type="button" onMouseDown={e => { e.preventDefault(); onFormat('underline') }}
+        className="w-7 h-7 text-sm underline text-victorian-200 hover:bg-victorian-700/60 rounded flex items-center justify-center" title="ขีดเส้นใต้">U</button>
+      <div className="w-px h-4 bg-victorian-700/60 mx-0.5 self-center" />
+      {FONT_SIZES.map(({ label, value }) => (
+        <button key={value} type="button"
+          onMouseDown={e => { e.preventDefault(); onFormat('fontSize', value) }}
+          className="h-7 px-1.5 text-xs text-victorian-300 hover:bg-victorian-700/60 rounded flex items-center justify-center"
+          title={`ขนาด ${label}`}>{label}</button>
+      ))}
+      <div className="w-px h-4 bg-victorian-700/60 mx-0.5 self-center" />
+      {ALIGN_BTNS.map(({ cmd, title, icon }) => (
+        <button key={cmd} type="button"
+          onMouseDown={e => { e.preventDefault(); onFormat(cmd) }}
+          className="w-7 h-7 text-victorian-300 hover:bg-victorian-700/60 rounded flex items-center justify-center"
+          title={title}>{icon}</button>
+      ))}
+      <div className="w-px h-4 bg-victorian-700/60 mx-0.5 self-center" />
+      {EDITOR_COLORS.map(({ color, label }) => (
+        <button key={color} type="button"
+          onMouseDown={e => { e.preventDefault(); onFormat('foreColor', color) }}
+          className="w-5 h-5 rounded-sm border border-victorian-700/50 hover:scale-110 transition-transform flex-shrink-0"
+          style={{ background: color }} title={label} />
+      ))}
+      <button type="button"
+        onMouseDown={e => { e.preventDefault(); onFormat('removeFormat') }}
+        className="ml-auto flex items-center gap-1 text-xs font-semibold text-red-400 hover:text-red-300 border border-red-500/40 hover:border-red-400/60 hover:bg-red-500/10 px-2 py-1 rounded transition-colors"
+        title="ล้างการจัดรูปแบบทั้งหมด"
+      >
+        <svg viewBox="0 0 16 16" className="w-3 h-3 fill-current"><path d="M2 3h12l-1.5 10H3.5L2 3zm4 3v5m4-5v5M5 3V2a1 1 0 011-1h4a1 1 0 011 1v1"/><line x1="1" y1="3" x2="15" y2="3" stroke="currentColor" strokeWidth="1.2" fill="none"/></svg>
+        ล้าง
+      </button>
+    </div>
+  )
+}
 
 // --------------- helpers ---------------
 function Field({ label, hint, linkHref, children }: {
@@ -172,6 +263,11 @@ export default function CharacterCreateContent() {
   const [containerWidth, setContainerWidth] = useState(0)
   const [iframeHeight, setIframeHeight] = useState(400)
   const containerRef = useRef<HTMLDivElement>(null)
+  const appearanceEditorRef = useRef<HTMLDivElement>(null)
+  const historyEditorRef = useRef<HTMLDivElement>(null)
+  const personalityEditorRef = useRef<HTMLDivElement>(null)
+  const tmiEditorRef = useRef<HTMLDivElement>(null)
+  const editorInitialized = useRef(false)
   const router = useRouter()
 
   // Fetch CSS from GitHub at runtime — always latest, no redeploy needed
@@ -227,6 +323,18 @@ export default function CharacterCreateContent() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)) } catch {}
   }, [data, hydrated])
 
+  // Initialize editor content after hydration (uncontrolled — set once)
+  useEffect(() => {
+    if (hydrated && !editorInitialized.current) {
+      if (appearanceEditorRef.current) appearanceEditorRef.current.innerHTML = data.appearance
+      if (historyEditorRef.current) historyEditorRef.current.innerHTML = data.history
+      if (personalityEditorRef.current) personalityEditorRef.current.innerHTML = data.personality
+      if (tmiEditorRef.current) tmiEditorRef.current.innerHTML = data.tmi
+      editorInitialized.current = true
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated])
+
   const set = (key: keyof CharData) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setData(prev => ({ ...prev, [key]: e.target.value }))
@@ -259,6 +367,25 @@ export default function CharacterCreateContent() {
     if (!confirm('รีเซ็ตข้อมูลทั้งหมดกลับเป็นตัวอย่างเริ่มต้น?')) return
     localStorage.removeItem(STORAGE_KEY)
     setData(DEFAULT_DATA)
+    if (appearanceEditorRef.current) appearanceEditorRef.current.innerHTML = DEFAULT_DATA.appearance
+    if (historyEditorRef.current) historyEditorRef.current.innerHTML = DEFAULT_DATA.history
+    if (personalityEditorRef.current) personalityEditorRef.current.innerHTML = DEFAULT_DATA.personality
+    if (tmiEditorRef.current) tmiEditorRef.current.innerHTML = DEFAULT_DATA.tmi
+  }
+
+  function editorInput(ref: React.RefObject<HTMLDivElement | null>, key: 'appearance' | 'history' | 'personality' | 'tmi') {
+    if (!ref.current) return
+    const html = ref.current.innerHTML.replace(/\n/g, '')
+    setData(prev => ({ ...prev, [key]: html }))
+  }
+
+  function editorFormat(ref: React.RefObject<HTMLDivElement | null>, key: 'appearance' | 'history' | 'personality' | 'tmi', cmd: string, value?: string) {
+    ref.current?.focus()
+    document.execCommand(cmd, false, value ?? undefined)
+    if (ref.current) {
+      const html = ref.current.innerHTML.replace(/\n/g, '')
+      setData(prev => ({ ...prev, [key]: html }))
+    }
   }
 
   const previewSrcdoc = useMemo(() => cssText ? buildPreviewSrcdoc(data, cssText) : '', [data, cssText])
@@ -410,29 +537,64 @@ export default function CharacterCreateContent() {
               <p className="text-xs text-victorian-500 uppercase tracking-widest">รายละเอียดตัวละคร</p>
 
               <Field label="ลักษณะทางกายภาพ" hint="(ส่วนสูง น้ำหนัก สีผม สีตา ลักษณะเด่น)">
-                <textarea className={textareaCls} rows={3} value={data.appearance} onChange={set('appearance')}
-                  placeholder="เช่น ส่วนสูง 165 ซม. น้ำหนัก 55 กก. ผมดำยาวถึงไหล่ ตาสีน้ำตาล..." />
+                <div>
+                  <EditorToolbar onFormat={(cmd, val) => editorFormat(appearanceEditorRef, 'appearance', cmd, val)} />
+                  <div
+                    ref={appearanceEditorRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    onInput={() => editorInput(appearanceEditorRef, 'appearance')}
+                    className="w-full bg-victorian-900/60 border border-victorian-700/50 rounded-b-md px-3 py-2 text-sm text-victorian-100 focus:outline-none focus:border-gold-400/60 transition-colors leading-relaxed min-h-[80px]"
+                    style={{ outline: 'none' }}
+                  />
+                </div>
               </Field>
 
               <Field label="ประวัติโดยสังเขป" hint="(ความทรงจำของร่างใหม่)">
-                <textarea className={textareaCls} rows={5} value={data.history} onChange={set('history')}
-                  placeholder="บ้านเกิด ครอบครัว เหตุการณ์สำคัญในชีวิต..." />
+                <div>
+                  <EditorToolbar onFormat={(cmd, val) => editorFormat(historyEditorRef, 'history', cmd, val)} />
+                  <div
+                    ref={historyEditorRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    onInput={() => editorInput(historyEditorRef, 'history')}
+                    className="w-full bg-victorian-900/60 border border-victorian-700/50 rounded-b-md px-3 py-2 text-sm text-victorian-100 focus:outline-none focus:border-gold-400/60 transition-colors leading-relaxed min-h-[120px]"
+                    style={{ outline: 'none' }}
+                  />
+                </div>
               </Field>
 
               <Field label="ลักษณะนิสัย" hint="(บุคลิกภาพของร่างใหม่)">
-                <textarea className={textareaCls} rows={4} value={data.personality} onChange={set('personality')}
-                  placeholder="บุคลิกภาพ นิสัย จุดเด่น จุดด้อย..." />
+                <div>
+                  <EditorToolbar onFormat={(cmd, val) => editorFormat(personalityEditorRef, 'personality', cmd, val)} />
+                  <div
+                    ref={personalityEditorRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    onInput={() => editorInput(personalityEditorRef, 'personality')}
+                    className="w-full bg-victorian-900/60 border border-victorian-700/50 rounded-b-md px-3 py-2 text-sm text-victorian-100 focus:outline-none focus:border-gold-400/60 transition-colors leading-relaxed min-h-[100px]"
+                    style={{ outline: 'none' }}
+                  />
+                </div>
               </Field>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="งานอดิเรก">
-                  <input type="text" className={inputCls} value={data.hobbies} onChange={set('hobbies')} placeholder="อ่านหนังสือ วาดรูป..." />
-                </Field>
-
-                <Field label="สิ่งที่ชอบ">
-                  <input type="text" className={inputCls} value={data.likes} onChange={set('likes')} placeholder="ความสงบ ดนตรี..." />
-                </Field>
-              </div>
+              <Field label="TMI (ข้อมูลเพิ่มเติม)" hint="(งานอดิเรก สิ่งที่ชอบ ฯลฯ)">
+                <div>
+                  <EditorToolbar onFormat={(cmd, val) => editorFormat(tmiEditorRef, 'tmi', cmd, val)} />
+                  <div
+                    ref={tmiEditorRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    onInput={() => editorInput(tmiEditorRef, 'tmi')}
+                    className="w-full bg-victorian-900/60 border border-victorian-700/50 rounded-b-md px-3 py-2 text-sm text-victorian-100 focus:outline-none focus:border-gold-400/60 transition-colors leading-relaxed min-h-[80px]"
+                    style={{ outline: 'none' }}
+                  />
+                  <p className="mt-1.5 text-xs text-victorian-600 leading-relaxed">
+                    ✦ พิมพ์ <code className="text-gold-400/80 bg-victorian-900/80 px-1 rounded">#ชื่อแท็ก,</code> (ขึ้นต้นด้วย <span className="text-gold-400/80">#</span> และจบด้วย <span className="text-gold-400/80">,</span>) เพื่อสร้าง{' '}
+                    <span style={{ display: 'inline-block', background: '#374151', color: '#e5e7eb', borderRadius: '9999px', padding: '2px 12px', fontSize: '0.8em', fontWeight: 500 }}>tag label</span>
+                  </p>
+                </div>
+              </Field>
             </div>
 
             {/* เส้นทางผู้วิเศษ */}
