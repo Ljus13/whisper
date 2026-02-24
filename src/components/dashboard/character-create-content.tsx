@@ -25,7 +25,6 @@ interface CharData {
   personality: string
   tmi: string
   pathwayPrefs: string[]   // top-3
-  psNote: string
 }
 
 const DEFAULT_DATA: CharData = {
@@ -41,9 +40,8 @@ const DEFAULT_DATA: CharData = {
   appearance: 'ส่วนสูง 165 ซม. ผมดำ ตาสีน้ำตาล ลักษณะเด่น...',
   history: 'เกิดที่เมือง... ครอบครัว... เหตุการณ์ที่สำคัญ...',
   personality: 'ใจเย็น รอบคอบ มีความอยากรู้อยากเห็น...',
-  tmi: '#อ่านหนังสือ, #ทำสวน, #ความสงบ, #ดนตรี,',
+  tmi: 'อ่านหนังสือ\nทำสวน\nความสงบ\nดนตรี',
   pathwayPrefs: ['นักทำนาย', 'นักปราชญ์', 'ผู้ชม'],
-  psNote: '',
 }
 
 // CSS URL — fetched from GitHub Pages at runtime (always latest)
@@ -105,22 +103,18 @@ function buildInnerHtml(d: CharData, tmiContent: string): string {
   return `<div id="WhisperOfTheShadow"><a href="https://discord.com/users/625292873914515456/"></a><div id="wots-profile" class="wots-container"><div class="wots-basic-info"><div class="wots-pic" style="--wots-pic:url(${d.imageUrl});--wots-pos:${d.imagePos};--wots-size:${d.imageSize};"></div><div class="wots-info-mid"><div class="wots-info-name"><div class="wots-name">${d.characterName}</div><div class="wots-dp-name">${d.prevName}</div></div><div class="wots-info-tags"><div class="info-tags" data="เผ่าพันธุ์">${d.race}</div><div class="info-tags" data="อายุ">${d.age}</div><div class="info-tags" data="เพศ">${d.gender}</div></div></div><div class="wots-info-last" church="${churchNum}"><div class="wots-info-church"><div></div></div></div></div>${sections}</div></div>`
 }
 
-/** Parse #tag, syntax → inline tag span */
-function parseTags(html: string): string {
-  return html.replace(/#([^,<>\s][^,<>]*),/g, (_, tag) =>
-    `<span style="display:inline-block;background:#374151;color:#e5e7eb;border-radius:9999px;padding:2px 12px;font-size:0.8em;margin:2px 3px;font-weight:500;line-height:1.6;letter-spacing:0.02em;vertical-align:middle;white-space:nowrap;">${tag}</span>`
-  )
-}
-
-/** TMI content for preview/copy */
+/** TMI content for preview — rendered as HTML list */
 function buildTmiHtml(d: CharData): string {
-  const parsed = parseTags(d.tmi)
-  return parsed.trim() ? parsed : ''
+  const lines = d.tmi.split('\n').map(l => l.trim()).filter(Boolean)
+  if (!lines.length) return ''
+  return `<ul>${lines.map(l => `<li>${l}</li>`).join('')}</ul>`
 }
 
-/** TMI content for copy — same HTML with tags parsed */
+/** TMI content for copy — BBCode list format */
 function buildTmiBBCode(d: CharData): string {
-  return parseTags(d.tmi)
+  const lines = d.tmi.split('\n').map(l => l.trim()).filter(Boolean)
+  if (!lines.length) return ''
+  return `[list]${lines.map(l => `[*]${l}`).join('')}[/list]`
 }
 
 function buildCopyHtml(d: CharData): string {
@@ -266,7 +260,6 @@ export default function CharacterCreateContent() {
   const appearanceEditorRef = useRef<HTMLDivElement>(null)
   const historyEditorRef = useRef<HTMLDivElement>(null)
   const personalityEditorRef = useRef<HTMLDivElement>(null)
-  const tmiEditorRef = useRef<HTMLDivElement>(null)
   const editorInitialized = useRef(false)
   const router = useRouter()
 
@@ -329,7 +322,6 @@ export default function CharacterCreateContent() {
       if (appearanceEditorRef.current) appearanceEditorRef.current.innerHTML = data.appearance
       if (historyEditorRef.current) historyEditorRef.current.innerHTML = data.history
       if (personalityEditorRef.current) personalityEditorRef.current.innerHTML = data.personality
-      if (tmiEditorRef.current) tmiEditorRef.current.innerHTML = data.tmi
       editorInitialized.current = true
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -370,7 +362,6 @@ export default function CharacterCreateContent() {
     if (appearanceEditorRef.current) appearanceEditorRef.current.innerHTML = DEFAULT_DATA.appearance
     if (historyEditorRef.current) historyEditorRef.current.innerHTML = DEFAULT_DATA.history
     if (personalityEditorRef.current) personalityEditorRef.current.innerHTML = DEFAULT_DATA.personality
-    if (tmiEditorRef.current) tmiEditorRef.current.innerHTML = DEFAULT_DATA.tmi
   }
 
   function editorInput(ref: React.RefObject<HTMLDivElement | null>, key: 'appearance' | 'history' | 'personality' | 'tmi') {
@@ -493,8 +484,11 @@ export default function CharacterCreateContent() {
               </Field>
 
               <div className="grid grid-cols-3 gap-3">
-                <Field label="เชื้อชาติ">
-                  <input type="text" className={inputCls} value={data.race} onChange={set('race')} placeholder="มนุษย์" />
+                <Field label="เผ่าพันธุ์">
+                  <select className={selectCls} value={data.race} onChange={set('race')}>
+                    <option value="มนุษย์">มนุษย์</option>
+                    <option value="คนยักษ์">คนยักษ์</option>
+                  </select>
                 </Field>
 
                 <Field label="อายุ">
@@ -580,18 +574,15 @@ export default function CharacterCreateContent() {
 
               <Field label="TMI (ข้อมูลเพิ่มเติม)" hint="(งานอดิเรก สิ่งที่ชอบ ฯลฯ)">
                 <div>
-                  <EditorToolbar onFormat={(cmd, val) => editorFormat(tmiEditorRef, 'tmi', cmd, val)} />
-                  <div
-                    ref={tmiEditorRef}
-                    contentEditable
-                    suppressContentEditableWarning
-                    onInput={() => editorInput(tmiEditorRef, 'tmi')}
-                    className="w-full bg-victorian-900/60 border border-victorian-700/50 rounded-b-md px-3 py-2 text-sm text-victorian-100 focus:outline-none focus:border-gold-400/60 transition-colors leading-relaxed min-h-[80px]"
-                    style={{ outline: 'none' }}
+                  <textarea
+                    className={`${textareaCls} font-mono`}
+                    rows={5}
+                    value={data.tmi}
+                    onChange={set('tmi')}
+                    placeholder={`อ่านหนังสือ\nทำสวน\nความสงบ`}
                   />
                   <p className="mt-1.5 text-xs text-victorian-600 leading-relaxed">
-                    ✦ พิมพ์ <code className="text-gold-400/80 bg-victorian-900/80 px-1 rounded">#ชื่อแท็ก,</code> (ขึ้นต้นด้วย <span className="text-gold-400/80">#</span> และจบด้วย <span className="text-gold-400/80">,</span>) เพื่อสร้าง{' '}
-                    <span style={{ display: 'inline-block', background: '#374151', color: '#e5e7eb', borderRadius: '9999px', padding: '2px 12px', fontSize: '0.8em', fontWeight: 500 }}>tag label</span>
+                    ✦ 1 บรรทัด = 1 รายการ
                   </p>
                 </div>
               </Field>
@@ -666,15 +657,6 @@ export default function CharacterCreateContent() {
                   )
                 })}
               </div>
-            </div>
-
-            {/* หมายเหตุ */}
-            <div className="card-victorian space-y-4">
-              <p className="text-xs text-victorian-500 uppercase tracking-widest">หมายเหตุ</p>
-              <Field label="หมายเหตุ (PS)" hint="(หากไม่มีให้เว้นว่าง จะไม่แสดงผล — รองรับ HTML)">
-                <textarea className={textareaCls} rows={2} value={data.psNote} onChange={set('psNote')}
-                  placeholder="ข้อความเพิ่มเติมหรือ HTML..."/>
-              </Field>
             </div>
 
           </div>

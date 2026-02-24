@@ -74,30 +74,35 @@ export type ModalMode =
   | { type: 'edit-sub'; sub: SubStory; sideStories: SideStory[] }
   | null
 
-// ── Layout constants ───────────────────────────────────────────────────────────
-const CANVAS_CX  = 400   // visual centre of canvas
+// ── Layout constants (horizontal spine: L→R) ──────────────────────────────────
+const CANVAS_CY  = 0     // Y = top edge of the main card row
 const MAIN_W     = 360   // main card width  (w-[360px])
 const SIDE_W     = 224   // side card width  (w-[224px])
 const SUB_W      = 192   // sub  card width  (w-[192px])
-const _ENTRY_GAP = 380   // vertical gap between main entries (now computed dynamically via computeMainYs)
-const SIDE_OFFS  = 390   // horizontal offset: centre of main → centre of side
-const SIDE_H_EST = 260   // estimated side card height for default sub Y
+const H_ENTRY_GAP = 80   // horizontal gap between consecutive main entries
+const SIDE_H_EST = 260   // estimated side card height
 const SUB_GAP    = 210   // vertical gap between sub stories
 
-function defaultSideX(j: number) {
+/** Default X for a side story — centered below/above its parent, offset if same row */
+function defaultSideX(mainX: number, j: number): number {
+  const colIndex = Math.floor(j / 2)   // 0=first below/above pair, 1=second…
+  return mainX + MAIN_W / 2 - SIDE_W / 2 + colIndex * (SIDE_W + 20)
+}
+/** Default Y for a side story — alternate below (j even) and above (j odd) */
+function defaultSideY(mainCardH: number, j: number): number {
   return j % 2 === 0
-    ? CANVAS_CX + SIDE_OFFS - SIDE_W / 2   // right side
-    : CANVAS_CX - SIDE_OFFS - SIDE_W / 2   // left side
+    ? CANVAS_CY + mainCardH + 70      // below main card
+    : CANVAS_CY - SIDE_H_EST - 70     // above main card
 }
 
-function computeMainYs(entries: TimelineEntry[]): number[] {
-  const ys: number[] = []
-  let y = 0
-  for (const e of entries) {
-    ys.push(y)
-    y += (e.image_url ? 460 : 280) + 80
+function computeMainXs(entries: TimelineEntry[]): number[] {
+  const xs: number[] = []
+  let x = 0
+  for (const _e of entries) {
+    xs.push(x)
+    x += MAIN_W + H_ENTRY_GAP
   }
-  return ys
+  return xs
 }
 
 // ── Graph builder ──────────────────────────────────────────────────────────────
@@ -121,12 +126,12 @@ function buildGraph(
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = []
   const edges: Edge[] = []
-  const mainX = CANVAS_CX - MAIN_W / 2
 
-  let currentY = 0
+  let currentX = 0
   entries.forEach((entry, i) => {
     const cardH  = entry.image_url ? 460 : 280
-    const mainY  = currentY
+    const mainX  = currentX
+    const mainY  = CANVAS_CY
     const mainId = `entry-${entry.id}`
 
     nodes.push({
@@ -144,15 +149,15 @@ function buildGraph(
       } satisfies MainNodeData,
     })
 
-    currentY += cardH + 50
+    currentX += MAIN_W + H_ENTRY_GAP
 
     if (i > 0) {
       edges.push({
         id:           `spine-${entry.id}`,
         source:       `entry-${entries[i - 1].id}`,
         target:       mainId,
-        sourceHandle: 'bottom',
-        targetHandle: 'top',
+        sourceHandle: 'right',
+        targetHandle: 'left',
         type:         'straight',
         className: 'rf-spine',
         style: { stroke: 'rgba(184,134,11,0.35)', strokeDasharray: '8 4', strokeWidth: 1.5 },
@@ -162,8 +167,8 @@ function buildGraph(
 
     entry.timeline_side_stories?.forEach((side, j) => {
       const hasPos = (side.position_x != null && side.position_x !== 0) || (side.position_y != null && side.position_y !== 0)
-      const sideX  = hasPos ? side.position_x : defaultSideX(j)
-      const sideY  = hasPos ? side.position_y : mainY + 30
+      const sideX  = hasPos ? side.position_x : defaultSideX(mainX, j)
+      const sideY  = hasPos ? side.position_y : defaultSideY(cardH, j)
       const sideId = `side-${side.id}`
 
       nodes.push({
@@ -181,14 +186,14 @@ function buildGraph(
         },
       })
 
-      const sideCx = sideX + SIDE_W / 2
-      const mainCx = mainX + MAIN_W / 2
+      // side below → connect via bottom/top; side above → connect via top/bottom
+      const isSideBelow = sideY > CANVAS_CY + cardH / 2
       edges.push({
         id:           `ms-${side.id}`,
         source:       mainId,
         target:       sideId,
-        sourceHandle: sideCx >= mainCx ? 'right' : 'left',
-        targetHandle: sideCx >= mainCx ? 'left'  : 'right',
+        sourceHandle: isSideBelow ? 'bottom' : 'top',
+        targetHandle: isSideBelow ? 'top'    : 'bottom',
         type:         'step',
         className: 'rf-side',
         style: { stroke: 'rgba(99,179,237,0.6)', strokeDasharray: '6 3', strokeWidth: 1.5 },
@@ -200,11 +205,14 @@ function buildGraph(
 
       side.timeline_sub_stories?.forEach((sub, k) => {
         const hasSubPos = (sub.position_x != null && sub.position_x !== 0) || (sub.position_y != null && sub.position_y !== 0)
-        // center sub horizontally under its parent side card
         const subX = hasSubPos ? sub.position_x : sideX + SIDE_W / 2 - SUB_W / 2
-        // stack subs below the side card with a 24px gap
         const subCardH = sub.image_url ? 300 : 170
-        const subY = hasSubPos ? sub.position_y : sideY + sideCardH + 24 + k * (subCardH + 20)
+        // subs cascade in same direction as their parent side
+        const subY = hasSubPos
+          ? sub.position_y
+          : isSideBelow
+            ? sideY + sideCardH + 24 + k * (subCardH + 20)     // below side
+            : sideY - 24 - (k + 1) * (subCardH + 20)           // above side
 
         nodes.push({
           id:       `sub-${sub.id}`,
@@ -224,8 +232,8 @@ function buildGraph(
           id:           `ss-${sub.id}`,
           source:       sideId,
           target:       `sub-${sub.id}`,
-          sourceHandle: 'bottom',
-          targetHandle: 'top',
+          sourceHandle: isSideBelow ? 'bottom' : 'top',
+          targetHandle: isSideBelow ? 'top'    : 'bottom',
           type:         'step',
           className: 'rf-sub',
           style: { stroke: 'rgba(52,211,153,0.5)', strokeDasharray: '5 3', strokeWidth: 1.5 },
@@ -385,13 +393,13 @@ export default function TimelineView({ entries, isAdmin }: Props) {
 
   // Persist dragged positions silently (no router.refresh — React Flow already shows correct pos)
   const onNodeDragStop = useCallback(async (_: React.MouseEvent, node: Node) => {
-    // Main entry nodes must not move — snap back to grid position
+    // Main entry nodes must not move — snap back to canonical horizontal position
     if (node.type === 'mainEntry') {
       const entryId = node.id.replace('entry-', '')
       const idx = entries.findIndex(e => e.id === entryId)
       if (idx >= 0) {
-        const canonicalY = computeMainYs(entries)[idx]
-        const origPos = { x: CANVAS_CX - MAIN_W / 2, y: canonicalY }
+        const canonicalX = computeMainXs(entries)[idx]
+        const origPos = { x: canonicalX, y: CANVAS_CY }
         setNodes(nds => nds.map(n => n.id === node.id ? { ...n, position: origPos } : n))
       }
       return
@@ -420,10 +428,12 @@ export default function TimelineView({ entries, isAdmin }: Props) {
 
   const containerRef = useRef<HTMLDivElement>(null)
   const onInit = useCallback((instance: ReactFlowInstance) => {
-    const containerWidth = containerRef.current?.clientWidth ?? window.innerWidth
+    const containerHeight = containerRef.current?.clientHeight ?? 600
     const zoom = 0.85
-    const x = containerWidth / 2 - CANVAS_CX * zoom
-    instance.setViewport({ x, y: 0, zoom })
+    // Start at the first entry, vertically centered on main cards (~280-460px tall)
+    const avgCardH = 320
+    const y = containerHeight / 2 - (CANVAS_CY + avgCardH / 2) * zoom
+    instance.setViewport({ x: 40, y, zoom })
   }, [])
 
   return (

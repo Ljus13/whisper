@@ -1,8 +1,9 @@
 'use client'
 
-import { Copy, Check, ChevronLeft, RotateCcw } from 'lucide-react'
+import { Copy, Check, ChevronLeft, RotateCcw, Sparkles } from 'lucide-react'
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
 const STORAGE_KEY = 'whisper_rp_draft'
 
@@ -197,6 +198,7 @@ export default function RpTemplateContent() {
   const [data, setData] = useState<RpData>(DEFAULT_DATA)
   const [copied, setCopied] = useState(false)
   const [hydrated, setHydrated] = useState(false)
+  const [dbPathways, setDbPathways] = useState<{ pathway: string; lv: string }[]>([])
   const [cssText, setCssText] = useState<string | null>(null)
   const [cssLoading, setCssLoading] = useState(true)
   const [containerWidth, setContainerWidth] = useState(0)
@@ -221,6 +223,41 @@ export default function RpTemplateContent() {
   }, [])
 
   useEffect(() => { fetchCss() }, [fetchCss])
+
+  // Autofill pathway & level from DB if user is logged in
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return
+      const { data: rows } = await supabase
+        .from('player_pathways')
+        .select('skill_pathways(name), skill_sequences(seq_number)')
+        .eq('player_id', user.id)
+        .not('pathway_id', 'is', null)
+      if (!rows?.length) return
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const matched = (rows as any[])
+        .map((r: any) => ({
+          pathway: r.skill_pathways?.name ?? r.skill_pathways?.[0]?.name ?? '',
+          lv: r.skill_sequences?.seq_number != null
+            ? String(r.skill_sequences.seq_number)
+            : r.skill_sequences?.[0]?.seq_number != null
+              ? String(r.skill_sequences[0].seq_number)
+              : '',
+        }))
+        .filter(x => x.pathway && PATHWAYS.some(p => p.name === x.pathway) && x.lv)
+        .filter(x => {
+          const p = PATHWAYS.find(p => p.name === x.pathway)
+          return p ? p.levels.includes(Number(x.lv)) : false
+        })
+      setDbPathways(matched)
+      if (matched.length === 1) {
+        setPathway(matched[0].pathway)
+        setData(prev => ({ ...prev, lv: matched[0].lv }))
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Track container width for scale
   useEffect(() => {
@@ -338,7 +375,7 @@ export default function RpTemplateContent() {
                 สร้างโรลเพลย์
               </h1>
               <p className="text-victorian-400 text-sm">
-                กรอกข้อมูล → ดูตัวอย่าง live → คัดลอกโค้ดพร้อมแปะได้เลย
+                กรอกข้อมูล → ดูตัวอย่าง → คัดลอกโค้ดพร้อมแปะได้เลย
               </p>
             </div>
             <button
@@ -365,25 +402,63 @@ export default function RpTemplateContent() {
                 <input type="text" className={inputCls} value={data.characterName} onChange={set('characterName')} placeholder="Jane Doe" />
               </Field>
 
+              {/* Autofill chips — shown when >1 DB pathway found */}
+              {dbPathways.length > 1 && (
+                <div className="flex flex-wrap gap-1.5 p-2 rounded border border-gold-400/30 bg-gold-400/5">
+                  <span className="text-xs text-gold-400/70 flex items-center gap-1 w-full mb-0.5">
+                    <Sparkles className="w-3 h-3" />
+                    ตรวจพบเส้นทางของคุณ — กดเพื่อเลือก
+                  </span>
+                  {dbPathways.map((d, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => { setPathway(d.pathway); setData(prev => ({ ...prev, lv: d.lv })) }}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-all cursor-pointer ${
+                        data.pathway === d.pathway && data.lv === d.lv
+                          ? 'border-gold-400/70 bg-gold-400/20 text-gold-300'
+                          : 'border-victorian-600/50 text-victorian-300 hover:border-gold-400/50 hover:text-gold-300'
+                      }`}
+                    >
+                      {d.pathway} · ลำดับ {d.lv}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <Field label="เส้นทาง (Pathway)">
-                  <select
-                    className={selectCls}
-                    value={data.pathway}
-                    onChange={e => setPathway(e.target.value)}
-                  >
-                    {PATHWAYS.map(p => (
-                      <option key={p.name} value={p.name}>{p.name}</option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select
+                      className={selectCls}
+                      value={data.pathway}
+                      onChange={e => setPathway(e.target.value)}
+                    >
+                      {PATHWAYS.map(p => (
+                        <option key={p.name} value={p.name}>{p.name}</option>
+                      ))}
+                    </select>
+                    {dbPathways.length === 1 && dbPathways[0].pathway === data.pathway && (
+                      <span className="absolute -top-4 right-0 text-[10px] text-gold-400/70 flex items-center gap-0.5">
+                        <Sparkles className="w-2.5 h-2.5" />ตรวจพบอัตโนมัติ
+                      </span>
+                    )}
+                  </div>
                 </Field>
 
-                <Field label="ลำดับ (Level)">
-                  <select className={selectCls} value={data.lv} onChange={set('lv')}>
-                    {currentPathway.levels.map(lv => (
-                      <option key={lv} value={String(lv)}>ลำดับ {lv}</option>
-                    ))}
-                  </select>
+                <Field label="ลำดับ (Sequence)">
+                  <div className="relative">
+                    <select className={selectCls} value={data.lv} onChange={set('lv')}>
+                      {currentPathway.levels.map(lv => (
+                        <option key={lv} value={String(lv)}>ลำดับ {lv}</option>
+                      ))}
+                    </select>
+                    {dbPathways.length === 1 && dbPathways[0].lv === data.lv && (
+                      <span className="absolute -top-4 right-0 text-[10px] text-gold-400/70 flex items-center gap-0.5">
+                        <Sparkles className="w-2.5 h-2.5" />ตรวจพบอัตโนมัติ
+                      </span>
+                    )}
+                  </div>
                 </Field>
               </div>
             </div>
@@ -448,8 +523,8 @@ export default function RpTemplateContent() {
                 </div>
               </Field>
 
-              <Field label="หมายเหตุ (PS)" hint="(รองรับ HTML — ✦ หมายเหตุ: แสดงอยู่หน้าเสมอ, พิมพ์เนื้อหาต่อท้าย)">  
-                <textarea className={textareaCls} rows={3} value={data.psNote} onChange={set('psNote')} placeholder="ใส่ข้อความหรือ HTML เช่น <iframe> ได้เลย (ไม่ต้องใส่ ✦ หมายเหตุ: เอง)"/>
+              <Field label="หมายเหตุ (PS)" hint="(รองรับ HTML)">  
+                <textarea className={textareaCls} rows={3} value={data.psNote} onChange={set('psNote')} placeholder="ใส่ข้อความหรือ HTML เช่น <iframe> ได้เลย"/>
               </Field>
             </div>
           </div>

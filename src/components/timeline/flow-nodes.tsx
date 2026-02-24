@@ -196,8 +196,10 @@ function MainEntryNode({ data }: NodeProps) {
     return (
       <>
         <Handle type="target" id="top"    position={Position.Top}    style={HH} />
+        <Handle type="target" id="left"   position={Position.Left}   style={HH} />
         <Handle type="source" id="right"  position={Position.Right}  style={HH} />
         <Handle type="source" id="left"   position={Position.Left}   style={HH} />
+        <Handle type="source" id="top"    position={Position.Top}    style={HH} />
         <Handle type="source" id="bottom" position={Position.Bottom} style={HH} />
         <LockedBox width={360} height={hasImage ? 460 : 280} accent="gold" />
       </>
@@ -207,8 +209,10 @@ function MainEntryNode({ data }: NodeProps) {
   return (
     <>
       <Handle type="target" id="top"    position={Position.Top}    style={HH} />
+      <Handle type="target" id="left"   position={Position.Left}   style={HH} />
       <Handle type="source" id="right"  position={Position.Right}  style={HH} />
       <Handle type="source" id="left"   position={Position.Left}   style={HH} />
+      <Handle type="source" id="top"    position={Position.Top}    style={HH} />
       <Handle type="source" id="bottom" position={Position.Bottom} style={HH} />
 
       <div className="nodrag nopan w-[360px] rounded-xl border border-gold-700/50 bg-victorian-900/90 backdrop-blur-sm overflow-hidden transition-shadow cursor-default"
@@ -307,7 +311,9 @@ function SideFlowNode({ data }: NodeProps) {
         <Handle type="target" id="left"   position={Position.Left}   style={HH} />
         <Handle type="target" id="right"  position={Position.Right}  style={HH} />
         <Handle type="target" id="top"    position={Position.Top}    style={HH} />
+        <Handle type="target" id="bottom" position={Position.Bottom} style={HH} />
         <Handle type="source" id="bottom" position={Position.Bottom} style={HH} />
+        <Handle type="source" id="top"    position={Position.Top}    style={HH} />
         <LockedBox width={224} height={hasImage ? 340 : 200} accent="sapphire" />
       </>
     )
@@ -318,7 +324,9 @@ function SideFlowNode({ data }: NodeProps) {
       <Handle type="target" id="left"   position={Position.Left}   style={HH} />
       <Handle type="target" id="right"  position={Position.Right}  style={HH} />
       <Handle type="target" id="top"    position={Position.Top}    style={HH} />
+      <Handle type="target" id="bottom" position={Position.Bottom} style={HH} />
       <Handle type="source" id="bottom" position={Position.Bottom} style={HH} />
+      <Handle type="source" id="top"    position={Position.Top}    style={HH} />
 
       <div className="w-[224px] rounded-xl bg-blue-950/80 backdrop-blur-sm overflow-hidden transition-shadow"
         style={{ height: hasImage ? 340 : 200, boxShadow: getStatusGlow(side.status) || undefined }}
@@ -422,9 +430,11 @@ function SubFlowNode({ data }: NodeProps) {
     return (
       <>
         <Handle type="target" id="top"    position={Position.Top}    style={HH} />
+        <Handle type="target" id="bottom" position={Position.Bottom} style={HH} />
         <Handle type="target" id="left"   position={Position.Left}   style={HH} />
         <Handle type="target" id="right"  position={Position.Right}  style={HH} />
         <Handle type="source" id="bottom" position={Position.Bottom} style={HH} />
+        <Handle type="source" id="top"    position={Position.Top}    style={HH} />
         <LockedBox width={192} height={hasImage ? 300 : 170} accent="emerald" />
       </>
     )
@@ -433,9 +443,11 @@ function SubFlowNode({ data }: NodeProps) {
   return (
     <>
       <Handle type="target" id="top"    position={Position.Top}    style={HH} />
+      <Handle type="target" id="bottom" position={Position.Bottom} style={HH} />
       <Handle type="target" id="left"   position={Position.Left}   style={HH} />
       <Handle type="target" id="right"  position={Position.Right}  style={HH} />
       <Handle type="source" id="bottom" position={Position.Bottom} style={HH} />
+      <Handle type="source" id="top"    position={Position.Top}    style={HH} />
 
       <div className="w-[192px] rounded-xl bg-emerald-950/80 backdrop-blur-sm overflow-hidden transition-shadow"
         style={{ height: hasImage ? 300 : 170, boxShadow: getStatusGlow(sub.status) || undefined }}
