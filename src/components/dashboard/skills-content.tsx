@@ -51,9 +51,23 @@ function AdminPanel({
   const [editSkillId, setEditSkillId] = useState<string | null>(null)
   const [editSkillName, setEditSkillName] = useState('')
   const [editSkillDesc, setEditSkillDesc] = useState('')
+  const [editSkillCategory, setEditSkillCategory] = useState('')
   const [editSkillCost, setEditSkillCost] = useState('0')
   const [editSkillSequenceId, setEditSkillSequenceId] = useState('')
   const [error, setError] = useState<string | null>(null)
+
+  const skillCategories = [
+    'จิตใจ',
+    'คำสาป',
+    'กายภาพ',
+    'โรลเพลย์',
+    'รักษา',
+    'ความตาย',
+    'บัฟ',
+    'เวทมนตร์',
+    'การตรวจสอบ',
+    'ประดิษฐ์'
+  ]
 
   function handleAction(action: () => Promise<{ error?: string; success?: boolean }>) {
     setError(null)
@@ -357,18 +371,27 @@ function AdminPanel({
                                   <textarea name="description" placeholder="คำอธิบายสกิล" className="input-victorian w-full text-sm" rows={2} />
                                   <div className="flex gap-2">
                                     <div className="flex-1">
-                                      <label className="text-victorian-400 text-xs block mb-1">ต้นทุนพลังวิญญาณ</label>
-                                      <input name="spirit_cost" type="number" min="0" defaultValue="0" className="input-victorian w-full text-sm" />
-                                    </div>
-                                    <div className="flex-1">
-                                      <label className="text-victorian-400 text-xs block mb-1">ลำดับที่จำเป็น</label>
-                                      <select name="sequence_id" required className="input-victorian w-full text-sm">
-                                        <option value="">เลือกลำดับ</option>
-                                        {pathSeqs.map(seq => (
-                                          <option key={seq.id} value={seq.id}>#{seq.seq_number} {seq.name}</option>
+                                      <label className="text-victorian-400 text-xs block mb-1">ประเภท</label>
+                                      <select name="category" className="input-victorian w-full text-sm">
+                                        <option value="">ไม่ระบุ</option>
+                                        {skillCategories.map(cat => (
+                                          <option key={cat} value={cat}>{cat}</option>
                                         ))}
                                       </select>
                                     </div>
+                                    <div className="flex-1">
+                                      <label className="text-victorian-400 text-xs block mb-1">ต้นทุนพลังวิญญาณ</label>
+                                      <input name="spirit_cost" type="number" min="0" defaultValue="0" className="input-victorian w-full text-sm" />
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="text-victorian-400 text-xs block mb-1">ลำดับที่จำเป็น</label>
+                                    <select name="sequence_id" required className="input-victorian w-full text-sm">
+                                      <option value="">เลือกลำดับ</option>
+                                      {pathSeqs.map(seq => (
+                                        <option key={seq.id} value={seq.id}>#{seq.seq_number} {seq.name}</option>
+                                      ))}
+                                    </select>
                                   </div>
                                   <div className="flex gap-2">
                                     <button type="submit" disabled={isPending} className="btn-gold px-3 py-1 text-xs">บันทึก</button>
@@ -387,6 +410,7 @@ function AdminPanel({
                                         <div>
                                           <div className="flex flex-wrap items-center gap-2">
                                             <span className="text-victorian-200">{skill.name}</span>
+                                            {skill.category && <span className="text-gold-400/70 text-xs px-1.5 py-0.5 bg-gold-400/10 rounded">{skill.category}</span>}
                                             {seq && <span className="text-victorian-500 text-xs">(ลำดับ {seq.seq_number})</span>}
                                             <span className="text-blue-400/60 text-xs flex items-center gap-0.5">
                                               <Zap className="w-3 h-3" />{skill.spirit_cost}
@@ -403,6 +427,7 @@ function AdminPanel({
                                             setEditSkillId(skill.id)
                                             setEditSkillName(skill.name)
                                             setEditSkillDesc(skill.description || '')
+                                            setEditSkillCategory(skill.category || '')
                                             setEditSkillCost(String(skill.spirit_cost ?? 0))
                                             setEditSkillSequenceId(skill.sequence_id || '')
                                           }}
@@ -428,18 +453,27 @@ function AdminPanel({
                                         <textarea name="description" value={editSkillDesc} onChange={e => setEditSkillDesc(e.target.value)} className="input-victorian w-full text-sm" rows={2} />
                                         <div className="flex gap-2">
                                           <div className="flex-1">
-                                            <label className="text-victorian-400 text-xs block mb-1">ต้นทุนพลังวิญญาณ</label>
-                                            <input name="spirit_cost" type="number" min="0" value={editSkillCost} onChange={e => setEditSkillCost(e.target.value)} className="input-victorian w-full text-sm" />
-                                          </div>
-                                          <div className="flex-1">
-                                            <label className="text-victorian-400 text-xs block mb-1">ลำดับที่จำเป็น</label>
-                                            <select name="sequence_id" value={editSkillSequenceId} onChange={e => setEditSkillSequenceId(e.target.value)} required className="input-victorian w-full text-sm">
-                                              <option value="">เลือกลำดับ</option>
-                                              {pathSeqs.map(seq => (
-                                                <option key={seq.id} value={seq.id}>#{seq.seq_number} {seq.name}</option>
+                                            <label className="text-victorian-400 text-xs block mb-1">ประเภท</label>
+                                            <select name="category" value={editSkillCategory} onChange={e => setEditSkillCategory(e.target.value)} className="input-victorian w-full text-sm">
+                                              <option value="">ไม่ระบุ</option>
+                                              {skillCategories.map(cat => (
+                                                <option key={cat} value={cat}>{cat}</option>
                                               ))}
                                             </select>
                                           </div>
+                                          <div className="flex-1">
+                                            <label className="text-victorian-400 text-xs block mb-1">ต้นทุนพลังวิญญาณ</label>
+                                            <input name="spirit_cost" type="number" min="0" value={editSkillCost} onChange={e => setEditSkillCost(e.target.value)} className="input-victorian w-full text-sm" />
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <label className="text-victorian-400 text-xs block mb-1">ลำดับที่จำเป็น</label>
+                                          <select name="sequence_id" value={editSkillSequenceId} onChange={e => setEditSkillSequenceId(e.target.value)} required className="input-victorian w-full text-sm">
+                                            <option value="">เลือกลำดับ</option>
+                                            {pathSeqs.map(seq => (
+                                              <option key={seq.id} value={seq.id}>#{seq.seq_number} {seq.name}</option>
+                                            ))}
+                                          </select>
                                         </div>
                                         <div className="flex gap-2">
                                           <button type="submit" disabled={isPending} className="btn-gold px-3 py-1 text-xs">บันทึก</button>

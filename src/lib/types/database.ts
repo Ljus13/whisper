@@ -66,6 +66,7 @@ export interface Skill {
   sequence_id: string
   name: string
   description: string | null
+  category: string | null
   spirit_cost: number
   icon_url: string | null
   sort_order: number

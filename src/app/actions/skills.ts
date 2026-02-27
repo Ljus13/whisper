@@ -372,6 +372,7 @@ export async function createSkill(formData: FormData) {
   
   const name = formData.get('name') as string
   const description = formData.get('description') as string | null
+  const category = formData.get('category') as string | null
   const pathway_id = formData.get('pathway_id') as string
   const sequence_id = formData.get('sequence_id') as string
   const spirit_cost = parseInt(formData.get('spirit_cost') as string) || 0
@@ -385,6 +386,7 @@ export async function createSkill(formData: FormData) {
     .insert({
       name: name.trim(),
       description: description?.trim() || null,
+      category: category?.trim() || null,
       pathway_id,
       sequence_id,
       spirit_cost
@@ -400,6 +402,7 @@ export async function updateSkill(id: string, formData: FormData) {
   
   const name = formData.get('name') as string
   const description = formData.get('description') as string | null
+  const category = formData.get('category') as string | null
   const sequence_id = formData.get('sequence_id') as string
   const spirit_cost = parseInt(formData.get('spirit_cost') as string) || 0
 
@@ -410,6 +413,7 @@ export async function updateSkill(id: string, formData: FormData) {
     .update({
       name: name.trim(),
       description: description?.trim() || null,
+      category: category?.trim() || null,
       sequence_id,
       spirit_cost
     })
