@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { getCombatLogs } from '@/app/actions/combat'
 import type { CombatLog } from '@/lib/types/database'
 import { ChevronDown, ExternalLink, Megaphone, Zap, Shield, Swords, Play } from 'lucide-react'
@@ -30,11 +31,38 @@ export default function CombatFeed({ sessionId, initialLogs }: Props) {
   const [page, setPage] = useState(0)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(initialLogs.length >= 10)
+  const mountedRef = useRef(true)
 
   // Update logs when initialLogs changes (from parent refetch)
   useEffect(() => {
     setLogs(initialLogs)
   }, [initialLogs])
+
+  // Listen for new logs across all devices
+  useEffect(() => {
+    mountedRef.current = true
+
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`combat-logs-feed:${sessionId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'combat_logs',
+        filter: `session_id=eq.${sessionId}`
+      }, (payload) => {
+        if (!mountedRef.current) return
+        const newLog = payload.new as CombatLog
+        console.log('[CombatFeed] New log received:', newLog)
+        setLogs(prev => [newLog, ...prev])
+      })
+      .subscribe()
+
+    return () => {
+      mountedRef.current = false
+      supabase.removeChannel(channel)
+    }
+  }, [sessionId])
 
   const loadMore = useCallback(async () => {
     setLoadingMore(true)
