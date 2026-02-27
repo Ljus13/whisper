@@ -55,7 +55,7 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
   const [showAddPlayer, setShowAddPlayer] = useState(false)
   const [showAddNpc, setShowAddNpc] = useState(false)
   const [availablePlayers, setAvailablePlayers] = useState<any[]>([])
-  const [npcForm, setNpcForm] = useState({ name: '', hp: '5', sanity: '10', spirit: '15', avatar: '' })
+  const [npcForm, setNpcForm] = useState({ name: '', hp: '5', sanity: '10', spirit: '15', dex: '10', wis: '10', avatar: '' })
   const [announcementText, setAnnouncementText] = useState('')
   const [pending, setPending] = useState(false)
 
@@ -147,15 +147,18 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
     if (!npcForm.name.trim()) return
     setPending(true)
     const res = await addNpcToCombat(
-      sessionId, npcForm.name.trim(),
+      sessionId,
+      npcForm.name.trim(),
       parseInt(npcForm.hp) || 5,
       parseInt(npcForm.sanity) || 10,
       parseInt(npcForm.spirit) || 15,
+      parseInt(npcForm.dex) || 10,
+      parseInt(npcForm.wis) || 10,
       npcForm.avatar || undefined
     )
     if (res.error) alert(res.error)
     else {
-      setNpcForm({ name: '', hp: '5', sanity: '10', spirit: '15', avatar: '' })
+      setNpcForm({ name: '', hp: '5', sanity: '10', spirit: '15', dex: '10', wis: '10', avatar: '' })
       setShowAddNpc(false)
     }
     setPending(false)
