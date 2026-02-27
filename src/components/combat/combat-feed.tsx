@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { getCombatLogs } from '@/app/actions/combat'
 import type { CombatLog } from '@/lib/types/database'
 import { ChevronDown, ExternalLink, Megaphone, Zap, Shield, Swords, Play } from 'lucide-react'
@@ -30,6 +30,11 @@ export default function CombatFeed({ sessionId, initialLogs }: Props) {
   const [page, setPage] = useState(0)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(initialLogs.length >= 10)
+
+  // Update logs when initialLogs changes (from parent refetch)
+  useEffect(() => {
+    setLogs(initialLogs)
+  }, [initialLogs])
 
   const loadMore = useCallback(async () => {
     setLoadingMore(true)

@@ -230,11 +230,14 @@ export async function addPlayerToCombat(sessionId: string, profileId: string) {
     current_hp: profile.hp ?? 5,
     current_sanity: profile.sanity ?? 10,
     current_spirit: profile.spirituality ?? 15,
+    current_dex: 10,
+    current_wis: 10,
   })
 
   if (error) return { error: error.message }
 
   await broadcastCombat(supabase, sessionId, 'participant_added', { profileId })
+  revalidatePath(`/dashboard/combat/${sessionId}`)
   return { success: true }
 }
 
@@ -249,6 +252,8 @@ export async function addNpcToCombat(
   hp: number,
   sanity: number,
   spirit: number,
+  dex: number,
+  wis: number,
   avatarUrl?: string
 ) {
   const { supabase } = await requireAdmin()
@@ -262,11 +267,14 @@ export async function addNpcToCombat(
     current_hp: Math.max(0, hp),
     current_sanity: Math.max(0, sanity),
     current_spirit: Math.max(0, spirit),
+    current_dex: Math.max(0, dex),
+    current_wis: Math.max(0, wis),
   })
 
   if (error) return { error: error.message }
 
   await broadcastCombat(supabase, sessionId, 'participant_added', { name })
+  revalidatePath(`/dashboard/combat/${sessionId}`)
   return { success: true }
 }
 
@@ -287,6 +295,7 @@ export async function removeParticipant(sessionId: string, participantId: string
   if (error) return { error: error.message }
 
   await broadcastCombat(supabase, sessionId, 'participant_removed', { participantId })
+  revalidatePath(`/dashboard/combat/${sessionId}`)
   return { success: true }
 }
 
@@ -308,6 +317,7 @@ export async function startCombatSession(sessionId: string) {
 
   await addLog(supabase, sessionId, 'session_start', 'ฉากการต่อสู้เริ่มต้นแล้ว!')
   await broadcastCombat(supabase, sessionId, 'session_update', { status: 'active' })
+  revalidatePath(`/dashboard/combat/${sessionId}`)
   return { success: true }
 }
 
@@ -353,15 +363,16 @@ export async function endCombatSession(sessionId: string) {
 export async function updateParticipantStat(
   sessionId: string,
   participantId: string,
-  field: 'current_hp' | 'current_sanity' | 'current_spirit',
-  delta: number
+  field: 'current_hp' | 'current_sanity' | 'current_spirit' | 'current_dex' | 'current_wis',
+  delta: number,
+  reason?: string
 ) {
   const { supabase } = await requireAdmin()
 
   // Get current value
   const { data: p } = await supabase
     .from('combat_participants')
-    .select('current_hp, current_sanity, current_spirit, display_name, profile_id')
+    .select('current_hp, current_sanity, current_spirit, current_dex, current_wis, display_name, profile_id')
     .eq('id', participantId)
     .single()
 
@@ -377,22 +388,31 @@ export async function updateParticipantStat(
 
   if (error) return { error: error.message }
 
-  // Sync to profile if player
-  if (p.profile_id) {
+  // Sync to profile if player (only for HP, Sanity, Spirit)
+  if (p.profile_id && ['current_hp', 'current_sanity', 'current_spirit'].includes(field)) {
     await supabase.rpc('sync_combat_to_profile', { p_participant_id: participantId })
   }
 
-  const fieldLabel = field === 'current_hp' ? 'HP' : field === 'current_sanity' ? 'Sanity' : 'Spirit'
+  const fieldLabels: Record<string, string> = {
+    current_hp: 'HP',
+    current_sanity: 'Sanity',
+    current_spirit: 'Spirit',
+    current_dex: 'DEX',
+    current_wis: 'WIS'
+  }
+  const fieldLabel = fieldLabels[field] || field
+  const reasonText = reason ? ` (${reason})` : ''
   await addLog(supabase, sessionId, 'stat_change',
-    `${p.display_name}: ${fieldLabel} ${oldVal} → ${newVal} (${delta > 0 ? '+' : ''}${delta})`,
+    `${p.display_name}: ${fieldLabel} ${oldVal} → ${newVal} (${delta > 0 ? '+' : ''}${delta})${reasonText}`,
     participantId,
-    { field, old: oldVal, new: newVal, delta }
+    { field, old: oldVal, new: newVal, delta, reason }
   )
 
   await broadcastCombat(supabase, sessionId, 'stat_update', {
     participantId, field, oldVal, newVal, delta,
   })
 
+  revalidatePath(`/dashboard/combat/${sessionId}`)
   return { success: true, newVal }
 }
 
@@ -442,6 +462,7 @@ export async function setParticipantStat(
     participantId, field, oldVal, newVal,
   })
 
+  revalidatePath(`/dashboard/combat/${sessionId}`)
   return { success: true, newVal }
 }
 
@@ -489,6 +510,7 @@ export async function setStatusEffect(
     participantId, slot, effect, oldEffect,
   })
 
+  revalidatePath(`/dashboard/combat/${sessionId}`)
   return { success: true }
 }
 
@@ -527,6 +549,7 @@ export async function giveTurn(sessionId: string, participantId: string) {
   )
 
   await broadcastCombat(supabase, sessionId, 'turn_change', { participantId })
+  revalidatePath(`/dashboard/combat/${sessionId}`)
   return { success: true }
 }
 
@@ -560,6 +583,7 @@ export async function sendAnnouncement(
     message, ackRequired,
   })
 
+  revalidatePath(`/dashboard/combat/${sessionId}`)
   return { success: true }
 }
 
@@ -579,6 +603,7 @@ export async function clearAnnouncement(sessionId: string) {
   if (error) return { error: error.message }
 
   await broadcastCombat(supabase, sessionId, 'announcement_clear', {})
+  revalidatePath(`/dashboard/combat/${sessionId}`)
   return { success: true }
 }
 
@@ -622,6 +647,7 @@ export async function submitRoleplayLink(sessionId: string, url: string) {
     url,
   })
 
+  revalidatePath(`/dashboard/combat/${sessionId}`)
   return { success: true }
 }
 

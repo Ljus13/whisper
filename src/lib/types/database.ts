@@ -445,6 +445,8 @@ export interface CombatParticipant {
   current_hp: number
   current_sanity: number
   current_spirit: number
+  current_dex: number
+  current_wis: number
   status_effect_1: CombatStatusEffect | null
   status_effect_2: CombatStatusEffect | null
   turn_status: CombatTurnStatus
