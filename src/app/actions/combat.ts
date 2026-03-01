@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type {
   CombatSession,
@@ -38,21 +38,37 @@ async function getAuth() {
   return { supabase, user }
 }
 
-/** Broadcast an event to all clients on a combat session channel */
+/** Broadcast an event to all clients on a combat session channel.
+ *  Uses the service-role (admin) client — a plain @supabase/supabase-js
+ *  client that handles Realtime broadcast reliably, unlike the SSR
+ *  cookie-based client which can silently fail on .send().
+ */
 async function broadcastCombat(
-  supabase: Awaited<ReturnType<typeof createClient>>,
   sessionId: string,
   event: string,
   payload: Record<string, unknown> = {}
 ) {
   try {
-    await supabase.channel(`combat:${sessionId}`).send({
+    const admin = createAdminClient()
+    const channelName = `combat:${sessionId}`
+    const ch = admin.channel(channelName)
+
+    // send() on an unsubscribed channel uses the HTTP broadcast fallback
+    const result = await ch.send({
       type: 'broadcast',
       event,
       payload: { ...payload, ts: Date.now() },
     })
-  } catch {
-    // broadcast failure is non-fatal — postgres changes backup
+
+    // Clean up the transient channel
+    await admin.removeChannel(ch)
+
+    if (result !== 'ok') {
+      console.warn(`[broadcastCombat] send result: ${result} for event=${event} session=${sessionId}`)
+    }
+  } catch (err) {
+    console.error('[broadcastCombat] error:', err)
+    // non-fatal — postgres_changes is the backup
   }
 }
 
@@ -221,6 +237,16 @@ export async function addPlayerToCombat(sessionId: string, profileId: string) {
 
   if (!profile) return { error: 'ไม่พบผู้เล่น' }
 
+  // Check if player is already in this session
+  const { data: existing } = await supabase
+    .from('combat_participants')
+    .select('id')
+    .eq('session_id', sessionId)
+    .eq('profile_id', profileId)
+    .maybeSingle()
+
+  if (existing) return { error: 'ผู้เล่นคนนี้อยู่ในห้องแล้ว' }
+
   const { error } = await supabase.from('combat_participants').insert({
     session_id: sessionId,
     profile_id: profileId,
@@ -236,7 +262,7 @@ export async function addPlayerToCombat(sessionId: string, profileId: string) {
 
   if (error) return { error: error.message }
 
-  await broadcastCombat(supabase, sessionId, 'participant_added', { profileId })
+  await broadcastCombat(sessionId, 'participant_added', { profileId })
   revalidatePath(`/dashboard/combat/${sessionId}`)
   return { success: true }
 }
@@ -273,7 +299,7 @@ export async function addNpcToCombat(
 
   if (error) return { error: error.message }
 
-  await broadcastCombat(supabase, sessionId, 'participant_added', { name })
+  await broadcastCombat(sessionId, 'participant_added', { name })
   revalidatePath(`/dashboard/combat/${sessionId}`)
   return { success: true }
 }
@@ -294,7 +320,7 @@ export async function removeParticipant(sessionId: string, participantId: string
 
   if (error) return { error: error.message }
 
-  await broadcastCombat(supabase, sessionId, 'participant_removed', { participantId })
+  await broadcastCombat(sessionId, 'participant_removed', { participantId })
   revalidatePath(`/dashboard/combat/${sessionId}`)
   return { success: true }
 }
@@ -316,7 +342,7 @@ export async function startCombatSession(sessionId: string) {
   if (error) return { error: error.message }
 
   await addLog(supabase, sessionId, 'session_start', 'ฉากการต่อสู้เริ่มต้นแล้ว!')
-  await broadcastCombat(supabase, sessionId, 'session_update', { status: 'active' })
+  await broadcastCombat(sessionId, 'session_update', { status: 'active' })
   revalidatePath(`/dashboard/combat/${sessionId}`)
   return { success: true }
 }
@@ -350,7 +376,7 @@ export async function endCombatSession(sessionId: string) {
   if (error) return { error: error.message }
 
   await addLog(supabase, sessionId, 'session_end', 'ฉากการต่อสู้จบลงแล้ว')
-  await broadcastCombat(supabase, sessionId, 'session_update', { status: 'ended' })
+  await broadcastCombat(sessionId, 'session_update', { status: 'ended' })
   revalidatePath('/dashboard/combat')
   return { success: true }
 }
@@ -408,7 +434,7 @@ export async function updateParticipantStat(
     { field, old: oldVal, new: newVal, delta, reason }
   )
 
-  await broadcastCombat(supabase, sessionId, 'stat_update', {
+  await broadcastCombat(sessionId, 'stat_update', {
     participantId, field, oldVal, newVal, delta,
   })
 
@@ -458,7 +484,7 @@ export async function setParticipantStat(
     { field, old: oldVal, new: newVal, delta: newVal - oldVal }
   )
 
-  await broadcastCombat(supabase, sessionId, 'stat_update', {
+  await broadcastCombat(sessionId, 'stat_update', {
     participantId, field, oldVal, newVal,
   })
 
@@ -506,7 +532,7 @@ export async function setStatusEffect(
     action, effect: effect || oldEffect, slot,
   })
 
-  await broadcastCombat(supabase, sessionId, 'status_update', {
+  await broadcastCombat(sessionId, 'status_update', {
     participantId, slot, effect, oldEffect,
   })
 
@@ -548,7 +574,7 @@ export async function giveTurn(sessionId: string, participantId: string) {
     { to_id: participantId }
   )
 
-  await broadcastCombat(supabase, sessionId, 'turn_change', { participantId })
+  await broadcastCombat(sessionId, 'turn_change', { participantId })
   revalidatePath(`/dashboard/combat/${sessionId}`)
   return { success: true }
 }
@@ -579,7 +605,7 @@ export async function sendAnnouncement(
     text: message, ack_required: ackRequired,
   })
 
-  await broadcastCombat(supabase, sessionId, 'announcement', {
+  await broadcastCombat(sessionId, 'announcement', {
     message, ackRequired,
   })
 
@@ -602,7 +628,7 @@ export async function clearAnnouncement(sessionId: string) {
 
   if (error) return { error: error.message }
 
-  await broadcastCombat(supabase, sessionId, 'announcement_clear', {})
+  await broadcastCombat(sessionId, 'announcement_clear', {})
   revalidatePath(`/dashboard/combat/${sessionId}`)
   return { success: true }
 }
@@ -641,7 +667,7 @@ export async function submitRoleplayLink(sessionId: string, url: string) {
     { url }
   )
 
-  await broadcastCombat(supabase, sessionId, 'roleplay_link', {
+  await broadcastCombat(sessionId, 'roleplay_link', {
     participantId: participant.id,
     displayName: participant.display_name,
     url,
@@ -693,4 +719,32 @@ export async function getPlayersForCombat() {
 
   if (error) return { error: error.message, players: [] }
   return { players: data || [] }
+}
+
+
+/* ══════════════════════════════════════════════
+   ADMIN: Delete a combat session entirely
+   Only allowed for lobby / ended sessions
+   ══════════════════════════════════════════════ */
+
+export async function deleteCombatSession(sessionId: string) {
+  const { supabase } = await requireAdmin()
+
+  // Fetch session to check status
+  const { data: session, error: fetchErr } = await supabase
+    .from('combat_sessions')
+    .select('id, status, name')
+    .eq('id', sessionId)
+    .single()
+
+  if (fetchErr || !session) return { error: 'ไม่พบห้องต่อสู้' }
+  if (session.status === 'active') return { error: 'ไม่สามารถลบห้องที่กำลังต่อสู้อยู่ กรุณาจบฉากก่อน' }
+
+  // Delete session — combat_participants & combat_logs cascade via ON DELETE CASCADE
+  const { error } = await supabase.from('combat_sessions').delete().eq('id', sessionId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/dashboard/combat')
+  return { success: true }
 }
