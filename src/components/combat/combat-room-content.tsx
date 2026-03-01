@@ -156,6 +156,7 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
   const myPrimaryEffect = myParticipant?.status_effect_1 || null
   const myEffects = [myParticipant?.status_effect_1, myParticipant?.status_effect_2].filter(Boolean) as CombatStatusEffect[]
   const isDisabled = myEffects.some(e => DISABLING_EFFECTS.includes(e))
+  const isMyTurn = !isStaff && session?.status === 'active' && !!myParticipant?.is_current_turn && !isDisabled
 
   const players = participants.filter(p => p.type === 'player')
   const npcs = participants.filter(p => p.type === 'npc')
@@ -347,7 +348,40 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
         />
       )}
 
-      <div className="max-w-screen-2xl mx-auto px-4 md:px-6 py-6 space-y-5">
+      {/* ── Mobile sticky RP bar — fixed bottom when it's your turn ── */}
+      {isMyTurn && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden">
+          <div
+            className="bg-victorian-950 border-t-2 border-gold-400/50 px-3 pt-2.5 shadow-2xl shadow-black/60"
+            style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
+          >
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Swords className="w-3.5 h-3.5 text-gold-400 animate-pulse" />
+                <span className="text-gold-300 text-[11px] font-bold whitespace-nowrap">⚔️ เทิร์นคุณ!</span>
+              </div>
+              <input
+                type="url"
+                value={rpLink}
+                onChange={e => setRpLink(e.target.value)}
+                placeholder="วางลิงก์โรลเพลย์..."
+                className="flex-1 min-w-0 bg-victorian-900 border border-gold-400/30 rounded-xl px-3 py-2 text-nouveau-cream text-sm outline-none focus:border-gold-400/60 placeholder:text-victorian-600"
+                onKeyDown={e => e.key === 'Enter' && handleSubmitRp()}
+              />
+              <button
+                type="button"
+                onClick={handleSubmitRp}
+                disabled={pending || !rpLink.trim()}
+                className="w-9 h-9 rounded-xl bg-gold-400/20 border border-gold-400/40 text-gold-300 flex items-center justify-center hover:bg-gold-400/30 cursor-pointer disabled:opacity-40 transition-all shrink-0"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className={`max-w-screen-2xl mx-auto px-4 md:px-6 py-6 space-y-5${isMyTurn ? ' pb-28 md:pb-6' : ''}`}>
 
         {/* ═══════════════════════════════════════
             HEADER — Scene Title & Controls
@@ -447,6 +481,40 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
                     )}
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════
+            YOUR TURN — Roleplay Link Submit (visible right below turn banner)
+           ═══════════════════════════════════════ */}
+        {isMyTurn && (
+          <div className="combat-turn-banner rounded-2xl border-2 border-gold-400/50 p-4 relative overflow-hidden shadow-lg shadow-gold-400/10">
+            <div className="combat-announce-sweep absolute inset-0 pointer-events-none" />
+            <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="w-10 h-10 rounded-full bg-gold-400/20 border border-gold-400/40 flex items-center justify-center combat-turn-active">
+                  <Swords className="w-5 h-5 text-gold-400" />
+                </div>
+                <div>
+                  <p className="text-gold-300 text-sm font-bold">⚔️ ถึงเทิร์นของคุณแล้ว!</p>
+                  <p className="text-gold-400/60 text-[10px]">ส่งลิงก์โรลเพลย์เพื่อดำเนินเทิร์น</p>
+                </div>
+              </div>
+              <div className="flex gap-2 flex-1 w-full sm:w-auto">
+                <input
+                  type="url"
+                  value={rpLink}
+                  onChange={e => setRpLink(e.target.value)}
+                  placeholder="วางลิงก์โรลเพลย์ที่นี่..."
+                  className="flex-1 bg-victorian-950/60 border border-gold-400/30 rounded-xl px-4 py-2.5 text-nouveau-cream text-sm outline-none focus:border-gold-400/60 focus:shadow-gold transition-all placeholder:text-victorian-600"
+                  onKeyDown={e => e.key === 'Enter' && handleSubmitRp()}
+                />
+                <button type="button" onClick={handleSubmitRp} disabled={pending || !rpLink.trim()}
+                  className="px-4 py-2.5 rounded-xl bg-gold-400/20 border border-gold-400/40 text-gold-300 font-bold hover:bg-gold-400/30 cursor-pointer disabled:opacity-40 transition-all shrink-0">
+                  <Send className="w-5 h-5" />
+                </button>
               </div>
             </div>
           </div>
@@ -600,31 +668,34 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
                 <p className="text-victorian-500 text-[10px]">{players.length} ตัวละคร</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-              {players.map(p => (
-                <CombatCard
-                  key={p.id}
-                  participant={p}
-                  isMe={p.profile_id === userId}
-                  isStaff={isStaff}
-                  sessionStatus={session.status}
-                  onStatClick={(field, label, value) => setStatModal({
-                    participantId: p.id,
-                    participantName: p.display_name,
-                    field,
-                    fieldLabel: label,
-                    currentValue: value
-                  })}
-                  onStatusClick={(slot, effect) => setStatusModal({
-                    participantId: p.id,
-                    participantName: p.display_name,
-                    slot,
-                    currentEffect: effect
-                  })}
-                  onGiveTurn={() => handleGiveTurn(p.id)}
-                  onRemove={() => handleRemove(p.id)}
-                />
-              ))}
+            <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0 md:overflow-visible">
+              <div className="flex gap-3 md:grid md:grid-cols-2 xl:grid-cols-3 w-max md:w-auto snap-x snap-mandatory md:snap-none pb-2 md:pb-0">
+                {players.map(p => (
+                  <div key={p.id} className="w-[270px] flex-shrink-0 snap-start md:w-auto">
+                    <CombatCard
+                      participant={p}
+                      isMe={p.profile_id === userId}
+                      isStaff={isStaff}
+                      sessionStatus={session.status}
+                      onStatClick={(field, label, value) => setStatModal({
+                        participantId: p.id,
+                        participantName: p.display_name,
+                        field,
+                        fieldLabel: label,
+                        currentValue: value
+                      })}
+                      onStatusClick={(slot, effect) => setStatusModal({
+                        participantId: p.id,
+                        participantName: p.display_name,
+                        slot,
+                        currentEffect: effect
+                      })}
+                      onGiveTurn={() => handleGiveTurn(p.id)}
+                      onRemove={() => handleRemove(p.id)}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -655,69 +726,40 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
                   <p className="text-victorian-500 text-[10px]">{npcs.length} ตัว</p>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                {npcs.map(p => (
-                  <CombatCard
-                    key={p.id}
-                    participant={p}
-                    isMe={false}
-                    isStaff={isStaff}
-                    sessionStatus={session.status}
-                    onStatClick={(field, label, value) => setStatModal({
-                      participantId: p.id,
-                      participantName: p.display_name,
-                      field,
-                      fieldLabel: label,
-                      currentValue: value
-                    })}
-                    onStatusClick={(slot, effect) => setStatusModal({
-                      participantId: p.id,
-                      participantName: p.display_name,
-                      slot,
-                      currentEffect: effect
-                    })}
-                    onGiveTurn={() => handleGiveTurn(p.id)}
-                    onRemove={() => handleRemove(p.id)}
-                  />
-                ))}
+              <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0 md:overflow-visible">
+                <div className="flex gap-3 md:grid md:grid-cols-2 xl:grid-cols-3 w-max md:w-auto snap-x snap-mandatory md:snap-none pb-2 md:pb-0">
+                  {npcs.map(p => (
+                    <div key={p.id} className="w-[270px] flex-shrink-0 snap-start md:w-auto">
+                      <CombatCard
+                        participant={p}
+                        isMe={false}
+                        isStaff={isStaff}
+                        sessionStatus={session.status}
+                        onStatClick={(field, label, value) => setStatModal({
+                          participantId: p.id,
+                          participantName: p.display_name,
+                          field,
+                          fieldLabel: label,
+                          currentValue: value
+                        })}
+                        onStatusClick={(slot, effect) => setStatusModal({
+                          participantId: p.id,
+                          participantName: p.display_name,
+                          slot,
+                          currentEffect: effect
+                        })}
+                        onGiveTurn={() => handleGiveTurn(p.id)}
+                        onRemove={() => handleRemove(p.id)}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* ═══════════════════════════════════════
-            YOUR TURN — Roleplay Link Submit
-           ═══════════════════════════════════════ */}
-        {!isStaff && session.status === 'active' && myParticipant?.is_current_turn && !isDisabled && (
-          <div className="combat-turn-banner rounded-2xl border-2 border-gold-400/40 p-5 space-y-3 relative overflow-hidden">
-            <div className="combat-announce-sweep absolute inset-0 pointer-events-none" />
-            <div className="relative">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-gold-400/20 border border-gold-400/40 flex items-center justify-center combat-turn-active">
-                  <Swords className="w-5 h-5 text-gold-400" />
-                </div>
-                <div>
-                  <p className="text-gold-300 text-sm font-bold">⚔️ ถึงเทิร์นของคุณแล้ว!</p>
-                  <p className="text-gold-400/60 text-[10px]">ส่งลิงก์โรลเพลย์เพื่อดำเนินเทิร์น</p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  value={rpLink}
-                  onChange={e => setRpLink(e.target.value)}
-                  placeholder="วางลิงก์โรลเพลย์ที่นี่..."
-                  className="flex-1 bg-victorian-950/60 border border-gold-400/20 rounded-xl px-4 py-3 text-nouveau-cream text-sm outline-none focus:border-gold-400/50 focus:shadow-gold transition-all placeholder:text-victorian-600"
-                  onKeyDown={e => e.key === 'Enter' && handleSubmitRp()}
-                />
-                <button type="button" onClick={handleSubmitRp} disabled={pending || !rpLink.trim()}
-                  className="px-5 py-3 rounded-xl bg-gold-400/20 border border-gold-400/40 text-gold-300 font-bold hover:bg-gold-400/30 cursor-pointer disabled:opacity-40 transition-all">
-                  <Send className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+
 
         {/* ═══════════════════════════════════════
             COMBAT LOG / FEED
