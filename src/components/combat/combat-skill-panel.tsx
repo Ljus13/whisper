@@ -2,7 +2,11 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Sparkles, X, ChevronDown, ChevronUp, Loader2, Dice1, Copy, Check } from 'lucide-react'
-import { getCombatSkills, useCombatSkill, useCombatGrantedSkill } from '@/app/actions/combat'
+import {
+  getCombatSkills,
+  useCombatSkill as castCombatSkill,
+  useCombatGrantedSkill as castCombatGrantedSkill,
+} from '@/app/actions/combat'
 
 /* ═══════════════════════════════════════════════
    Types
@@ -137,8 +141,8 @@ export default function CombatSkillPanel({ sessionId, isMyTurn, isDisabled }: Pr
     setPending(true)
     try {
       const res = selectedSkill.type === 'pathway'
-        ? await useCombatSkill(sessionId, selectedSkill.id, rate, finalRoll, note || null)
-        : await useCombatGrantedSkill(sessionId, selectedSkill.id, rate, finalRoll, note || null)
+        ? await castCombatSkill(sessionId, selectedSkill.id, rate, finalRoll, note || null)
+        : await castCombatGrantedSkill(sessionId, selectedSkill.id, rate, finalRoll, note || null)
 
       if (res.error) {
         setResult({ skillName: selectedSkill.name, outcome: 'fail', roll: finalRoll, successRate: rate, referenceCode: '', spiritCost: 0, remaining: spirit, error: res.error })

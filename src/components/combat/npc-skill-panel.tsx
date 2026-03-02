@@ -2,7 +2,13 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Sparkles, X, Loader2, Dice1, Copy, Check, Plus, Trash2, Gift } from 'lucide-react'
-import { getNpcCombatSkills, useNpcCombatSkill, useNpcGrantedSkill, addNpcGrantedSkill, removeNpcGrantedSkill } from '@/app/actions/combat'
+import {
+  getNpcCombatSkills,
+  useNpcCombatSkill as castNpcCombatSkill,
+  useNpcGrantedSkill as castNpcGrantedSkill,
+  addNpcGrantedSkill,
+  removeNpcGrantedSkill,
+} from '@/app/actions/combat'
 
 /* ═══════════════════════════════════════════════
    Types
@@ -126,8 +132,8 @@ export default function NpcSkillPanel({ sessionId, participantId, participantNam
     setPending(true)
     try {
       const res = selectedSkill.type === 'pathway'
-        ? await useNpcCombatSkill(sessionId, participantId, selectedSkill.id, rate, finalRoll, note || null)
-        : await useNpcGrantedSkill(sessionId, participantId, selectedSkill.id, rate, finalRoll, note || null)
+        ? await castNpcCombatSkill(sessionId, participantId, selectedSkill.id, rate, finalRoll, note || null)
+        : await castNpcGrantedSkill(sessionId, participantId, selectedSkill.id, rate, finalRoll, note || null)
 
       if (res.error) {
         setResult({ skillName: selectedSkill.name, outcome: 'fail', roll: finalRoll, successRate: rate, referenceCode: '', spiritCost: 0, remaining: spirit, error: res.error })
