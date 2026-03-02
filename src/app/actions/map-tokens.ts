@@ -344,7 +344,7 @@ export async function moveTokenWithRoleplay(
   roleplayUrl: string,
   targetMapId?: string
 ) {
-  const { supabase, user, isAdmin } = await getAuthUser()
+  const { supabase, user, isAdmin, profile } = await getAuthUser()
 
   const destination = roleplayUrl?.trim()
   if (!destination) return { error: 'กรุณากรอกลิงก์โรลเพลย์' }
