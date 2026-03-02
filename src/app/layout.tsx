@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Kanit, Uncial_Antiqua } from 'next/font/google'
 import { SpeedInsights } from '@vercel/speed-insights/next'
+import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
 /* ── next/font: eliminates render-blocking @import ── */
@@ -44,6 +45,7 @@ export default function RootLayout({
       <body className={`min-h-screen ${kanit.className}`}>
         {children}
         <SpeedInsights />
+        <Analytics />
       </body>
     </html>
   )
