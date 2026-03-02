@@ -21,14 +21,16 @@ export default function StatAdjustmentModal({
   const [mode, setMode] = useState<'increase' | 'decrease'>('decrease')
   const [amount, setAmount] = useState('1')
   const [reason, setReason] = useState('')
+  const [validationError, setValidationError] = useState<string | null>(null)
 
   const handleSubmit = () => {
     const delta = mode === 'increase' ? parseInt(amount) || 0 : -(parseInt(amount) || 0)
     if (delta === 0) return
     if (!reason.trim()) {
-      alert('กรุณาระบุเหตุผล')
+      setValidationError('กรุณาระบุเหตุผล')
       return
     }
+    setValidationError(null)
     onConfirm(delta, reason.trim())
   }
 
@@ -142,12 +144,18 @@ export default function StatAdjustmentModal({
             <label className="text-victorian-400 text-[10px] font-bold uppercase tracking-wider block mb-2 px-0.5">เหตุผล *</label>
             <textarea
               value={reason}
-              onChange={e => setReason(e.target.value)}
+              onChange={e => { setReason(e.target.value); if (e.target.value.trim()) setValidationError(null) }}
               className="input-victorian w-full !rounded-xl"
               rows={2}
               placeholder="เช่น ถูกโจมตี, ใช้สกิล, ฟื้นฟู..."
               required
             />
+            {validationError && (
+              <p className="text-red-400 text-xs mt-1.5 flex items-center gap-1">
+                <span className="w-1 h-1 bg-red-400 rounded-full inline-block" />
+                {validationError}
+              </p>
+            )}
           </div>
         </div>
 

@@ -702,6 +702,27 @@ export default function DashboardContent({
             </div>
           </a>
 
+          <Link
+            href="/dashboard/combat"
+            className="group relative overflow-hidden card-victorian p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center gap-3 md:gap-5 
+                        hover:border-red-500/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[140px] md:min-h-[200px] cursor-pointer"
+          >
+            <CornerOrnament className="absolute top-0 left-0 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute top-0 right-0 -scale-x-100 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 w-8 h-8 md:w-14 md:h-14" />
+            <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] w-8 h-8 md:w-14 md:h-14" />
+            <div className="relative z-10 flex flex-col items-center gap-2 md:gap-4">
+              <div className="w-12 h-12 md:w-18 md:h-18 rounded-full bg-red-900/30 border-2 border-red-500/30
+                              flex items-center justify-center group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(239,68,68,0.3)] transition-all duration-300">
+                <Swords className="w-6 h-6 md:w-9 md:h-9 text-red-400" />
+              </div>
+              <h3 className="heading-victorian text-lg md:text-2xl">ต่อสู้</h3>
+              <p className="text-victorian-400 text-center text-xs md:text-sm font-body hidden md:block">
+                ห้องต่อสู้แบบเรียลไทม์
+              </p>
+            </div>
+          </Link>
+
           <a 
             href={isSanityLocked ? "#" : "/dashboard/action-quest/quests"} 
             className={`group relative overflow-hidden card-victorian p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center gap-3 md:gap-5 

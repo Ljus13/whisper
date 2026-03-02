@@ -27,7 +27,7 @@ import type {
   CombatStatusEffect,
 } from '@/lib/types/database'
 import { STATUS_EFFECT_LABELS, DISABLING_EFFECTS } from '@/lib/types/database'
-import { ArrowLeft, Plus, Trash2, Play, Square, Megaphone, Send, Swords, X, UserPlus, Bot, Edit2, Shield, Heart, Brain, Sparkles, Target, Eye, ChevronRight, Crown, Skull, Zap } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Play, Square, Megaphone, Send, Swords, X, UserPlus, Bot, Edit2, Shield, Heart, Brain, Sparkles, Target, Eye, ChevronRight, Crown, Skull, Zap, Loader2, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import StatusEffectOverlay from './status-effect-overlay'
@@ -69,6 +69,15 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
   const [npcForm, setNpcForm] = useState({ name: '', hp: '5', sanity: '10', spirit: '15', dex: '10', wis: '10', avatar: '' })
   const [announcementText, setAnnouncementText] = useState('')
   const [pending, setPending] = useState(false)
+
+  // Modal states — replaces browser alert/confirm
+  const [alertModal, setAlertModal] = useState<{ message: string; type?: 'error' | 'info' } | null>(null)
+  const [confirmModal, setConfirmModal] = useState<{
+    message: string
+    subMessage?: string
+    destructive?: boolean
+    onConfirm: () => void
+  } | null>(null)
 
   // Stat adjustment modal
   const [statModal, setStatModal] = useState<{
@@ -167,7 +176,7 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
   const handleAddPlayer = async (profileId: string) => {
     setPending(true)
     const res = await addPlayerToCombat(sessionId, profileId)
-    if (res.error) alert(res.error)
+    if (res.error) setAlertModal({ message: res.error, type: 'error' })
     else {
       setShowAddPlayer(false)
       await fetchData()
@@ -187,7 +196,7 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
       parseInt(npcForm.wis) || 10,
       npcForm.avatar || undefined
     )
-    if (res.error) alert(res.error)
+    if (res.error) setAlertModal({ message: res.error, type: 'error' })
     else {
       setNpcForm({ name: '', hp: '5', sanity: '10', spirit: '15', dex: '10', wis: '10', avatar: '' })
       setShowAddNpc(false)
@@ -196,38 +205,62 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
     setPending(false)
   }
 
-  const handleRemove = async (pid: string) => {
-    if (!confirm('ลบผู้เข้าร่วมนี้?')) return
-    setPending(true)
-    const res = await removeParticipant(sessionId, pid)
-    if (res.error) alert('ลบไม่สำเร็จ: ' + res.error)
-    else await fetchData()
-    setPending(false)
+  const handleRemove = (pid: string) => {
+    setConfirmModal({
+      message: 'ลบผู้เข้าร่วมนี้?',
+      destructive: true,
+      onConfirm: async () => {
+        setConfirmModal(null)
+        setPending(true)
+        const res = await removeParticipant(sessionId, pid)
+        if (res.error) setAlertModal({ message: 'ลบไม่สำเร็จ: ' + res.error, type: 'error' })
+        else await fetchData()
+        setPending(false)
+      },
+    })
   }
 
-  const handleStart = async () => {
-    if (!confirm('เริ่มฉากการต่อสู้? (จะล็อคห้อง)')) return
-    setPending(true)
-    const res = await startCombatSession(sessionId)
-    if (res.error) alert(res.error)
-    setPending(false)
+  const handleStart = () => {
+    setConfirmModal({
+      message: 'เริ่มฉากการต่อสู้?',
+      subMessage: 'ห้องจะถูกล็อคและเริ่มนับเทิร์น',
+      onConfirm: async () => {
+        setConfirmModal(null)
+        setPending(true)
+        const res = await startCombatSession(sessionId)
+        if (res.error) setAlertModal({ message: res.error, type: 'error' })
+        setPending(false)
+      },
+    })
   }
 
-  const handleEnd = async () => {
-    if (!confirm('จบฉากการต่อสู้? (ค่า stats จะถูก sync กลับ profile)')) return
-    setPending(true)
-    const res = await endCombatSession(sessionId)
-    if (res.error) alert(res.error)
-    setPending(false)
+  const handleEnd = () => {
+    setConfirmModal({
+      message: 'จบฉากการต่อสู้?',
+      subMessage: 'ค่า stats จะถูก sync กลับ profile ของผู้เล่นทุกคน',
+      onConfirm: async () => {
+        setConfirmModal(null)
+        setPending(true)
+        const res = await endCombatSession(sessionId)
+        if (res.error) setAlertModal({ message: res.error, type: 'error' })
+        setPending(false)
+      },
+    })
   }
 
-  const handleDelete = async () => {
-    if (!confirm('ลบห้องต่อสู้นี้ถาวร? จะลบผู้เข้าร่วมและบันทึกทั้งหมด')) return
-    if (!confirm('ยืนยันอีกครั้ง — การลบไม่สามารถย้อนกลับได้')) return
-    setPending(true)
-    const res = await deleteCombatSession(sessionId)
-    if (res.error) { alert(res.error); setPending(false); return }
-    router.push('/dashboard/combat')
+  const handleDelete = () => {
+    setConfirmModal({
+      message: 'ลบห้องต่อสู้นี้ถาวร?',
+      subMessage: 'จะลบผู้เข้าร่วมและบันทึกทั้งหมด — ไม่สามารถย้อนกลับได้',
+      destructive: true,
+      onConfirm: async () => {
+        setConfirmModal(null)
+        setPending(true)
+        const res = await deleteCombatSession(sessionId)
+        if (res.error) { setAlertModal({ message: res.error, type: 'error' }); setPending(false); return }
+        router.push('/dashboard/combat')
+      },
+    })
   }
 
   const handleStatAdjust = async (delta: number, reason: string) => {
@@ -256,7 +289,7 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
     if (!announcementText.trim()) return
     setPending(true)
     const res = await sendAnnouncement(sessionId, announcementText.trim(), true)
-    if (res.error) alert(res.error)
+    if (res.error) setAlertModal({ message: res.error, type: 'error' })
     else setAnnouncementText('')
     setPending(false)
   }
@@ -271,7 +304,7 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
     if (!rpLink.trim()) return
     setPending(true)
     const res = await submitRoleplayLink(sessionId, rpLink.trim())
-    if (res.error) alert(res.error)
+    if (res.error) setAlertModal({ message: res.error, type: 'error' })
     else setRpLink('')
     setPending(false)
   }
@@ -317,6 +350,80 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
 
   return (
     <>
+      {/* ── Alert Modal — replaces browser alert() ── */}
+      {alertModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setAlertModal(null)} />
+          <div className="relative bg-victorian-900 border border-victorian-700/50 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="flex flex-col items-center gap-4 text-center">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                alertModal.type === 'error'
+                  ? 'bg-red-500/15 border border-red-500/30'
+                  : 'bg-blue-500/15 border border-blue-500/30'
+              }`}>
+                {alertModal.type === 'error'
+                  ? <AlertTriangle className="w-6 h-6 text-red-400" />
+                  : <Swords className="w-6 h-6 text-blue-400" />}
+              </div>
+              <p className="text-nouveau-cream text-sm leading-relaxed">{alertModal.message}</p>
+              <button
+                type="button"
+                onClick={() => setAlertModal(null)}
+                className="px-6 py-2.5 rounded-xl bg-victorian-800 border border-victorian-600/30 text-victorian-300 text-sm font-bold hover:bg-victorian-700 cursor-pointer transition-all"
+              >
+                ตกลง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Confirm Modal — replaces browser confirm() ── */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div className="relative bg-victorian-900 border border-victorian-700/50 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="flex flex-col items-center gap-4 text-center">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                confirmModal.destructive
+                  ? 'bg-red-500/15 border border-red-500/30'
+                  : 'bg-gold-400/10 border border-gold-400/30'
+              }`}>
+                {confirmModal.destructive
+                  ? <Trash2 className="w-6 h-6 text-red-400" />
+                  : <Swords className="w-6 h-6 text-gold-400" />}
+              </div>
+              <div>
+                <p className="text-nouveau-cream text-sm font-bold">{confirmModal.message}</p>
+                {confirmModal.subMessage && (
+                  <p className="text-victorian-400 text-xs mt-1.5 leading-relaxed">{confirmModal.subMessage}</p>
+                )}
+              </div>
+              <div className="flex gap-3 w-full">
+                <button
+                  type="button"
+                  onClick={() => setConfirmModal(null)}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-victorian-800 border border-victorian-600/30 text-victorian-300 text-sm cursor-pointer hover:bg-victorian-700 transition-colors"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmModal.onConfirm}
+                  className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold cursor-pointer transition-all ${
+                    confirmModal.destructive
+                      ? 'bg-red-600/20 border border-red-500/40 text-red-300 hover:bg-red-600/30'
+                      : 'bg-gold-400/20 border border-gold-400/40 text-gold-300 hover:bg-gold-400/30'
+                  }`}
+                >
+                  ยืนยัน
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {!isStaff && myPrimaryEffect && (
         <StatusEffectOverlay effect={myPrimaryEffect} allEffects={myEffects} />
       )}
@@ -374,7 +481,7 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
                 disabled={pending || !rpLink.trim()}
                 className="w-9 h-9 rounded-xl bg-gold-400/20 border border-gold-400/40 text-gold-300 flex items-center justify-center hover:bg-gold-400/30 cursor-pointer disabled:opacity-40 transition-all shrink-0"
               >
-                <Send className="w-4 h-4" />
+                {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </button>
             </div>
           </div>
@@ -412,13 +519,13 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
                   {session.status === 'lobby' && (
                     <button type="button" onClick={handleStart} disabled={pending || participants.length < 2}
                       className="group inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-500/40 text-green-300 text-sm font-bold hover:from-green-600/30 hover:to-emerald-600/30 cursor-pointer disabled:opacity-50 transition-all">
-                      <Play className="w-4 h-4 group-hover:scale-110 transition-transform" /> เริ่มฉากต่อสู้
+                      {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 group-hover:scale-110 transition-transform" />} เริ่มฉากต่อสู้
                     </button>
                   )}
                   {session.status === 'active' && (
                     <button type="button" onClick={handleEnd} disabled={pending}
                       className="group inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-600/20 to-rose-600/20 border border-red-500/40 text-red-300 text-sm font-bold hover:from-red-600/30 hover:to-rose-600/30 cursor-pointer disabled:opacity-50 transition-all">
-                      <Square className="w-4 h-4 group-hover:scale-110 transition-transform" /> จบฉาก
+                      {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-4 h-4 group-hover:scale-110 transition-transform" />} จบฉาก
                     </button>
                   )}
                 </div>
@@ -429,7 +536,7 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
                 <button type="button" onClick={handleDelete} disabled={pending}
                   className="group inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-red-950/30 border border-red-500/20 text-red-400/60 text-xs font-bold hover:bg-red-950/50 hover:text-red-400 hover:border-red-500/40 cursor-pointer disabled:opacity-50 transition-all"
                   title="ลบห้องต่อสู้">
-                  <Trash2 className="w-3.5 h-3.5" /> ลบห้อง
+                  {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} ลบห้อง
                 </button>
               )}
             </div>
@@ -513,7 +620,7 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
                 />
                 <button type="button" onClick={handleSubmitRp} disabled={pending || !rpLink.trim()}
                   className="px-4 py-2.5 rounded-xl bg-gold-400/20 border border-gold-400/40 text-gold-300 font-bold hover:bg-gold-400/30 cursor-pointer disabled:opacity-40 transition-all shrink-0">
-                  <Send className="w-5 h-5" />
+                  {pending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                 </button>
               </div>
             </div>
@@ -539,7 +646,8 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
               />
               <div className="flex gap-2 shrink-0">
                 <button type="button" onClick={handleAnnounce} disabled={pending || !announcementText.trim()}
-                  className="px-4 py-2 rounded-xl bg-red-600/20 border border-red-500/40 text-red-300 text-xs font-bold hover:bg-red-600/30 cursor-pointer disabled:opacity-40 transition-all">
+                  className="px-4 py-2 rounded-xl bg-red-600/20 border border-red-500/40 text-red-300 text-xs font-bold hover:bg-red-600/30 cursor-pointer disabled:opacity-40 transition-all inline-flex items-center gap-1.5">
+                  {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                   📢 ประกาศ
                 </button>
                 {session.announcement && (
@@ -646,7 +754,8 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
             <div className="flex gap-2 justify-end">
               <button type="button" onClick={() => setShowAddNpc(false)} className="px-4 py-2 text-victorian-400 text-xs cursor-pointer hover:text-victorian-300 transition-colors">ยกเลิก</button>
               <button type="button" onClick={handleAddNpc} disabled={pending || !npcForm.name.trim()}
-                className="px-5 py-2 rounded-xl bg-purple-600/20 border border-purple-500/40 text-purple-300 text-xs font-bold hover:bg-purple-600/30 cursor-pointer disabled:opacity-50 transition-all">
+                className="px-5 py-2 rounded-xl bg-purple-600/20 border border-purple-500/40 text-purple-300 text-xs font-bold hover:bg-purple-600/30 cursor-pointer disabled:opacity-50 transition-all inline-flex items-center gap-1.5">
+                {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                 ✨ สร้าง NPC
               </button>
             </div>

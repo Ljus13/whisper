@@ -19,8 +19,7 @@ type TravelLog = {
   from_y: number | null
   to_x: number | null
   to_y: number | null
-  origin_url: string
-  destination_url: string
+  roleplay_url: string
   move_type: string
   created_at: string
 }
@@ -96,8 +95,7 @@ export default function TravelLogsContent() {
                   {isAdmin && <th className="text-left px-4 py-2 font-medium">ผู้เล่น</th>}
                   <th className="text-left px-4 py-2 font-medium">ต้นทาง</th>
                   <th className="text-left px-4 py-2 font-medium">ปลายทาง</th>
-                  <th className="text-left px-4 py-2 font-medium">ลิงก์ต้นทาง</th>
-                  <th className="text-left px-4 py-2 font-medium">ลิงก์ปลายทาง</th>
+                  <th className="text-left px-4 py-2 font-medium">ลิงก์โรลเพลย์</th>
                   <th className="text-left px-4 py-2 font-medium">ประเภท</th>
                 </tr>
               </thead>
@@ -112,24 +110,13 @@ export default function TravelLogsContent() {
                     <td className="px-4 py-2">{log.to_map_name}</td>
                     <td className="px-4 py-2">
                       <a
-                        href={log.origin_url}
+                        href={log.roleplay_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-gold-400 hover:text-gold-300"
                       >
                         <ExternalLink className="w-3 h-3" />
-                        <span className="truncate">{shortenUrl(log.origin_url)}</span>
-                      </a>
-                    </td>
-                    <td className="px-4 py-2">
-                      <a
-                        href={log.destination_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-gold-400 hover:text-gold-300"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                        <span className="truncate">{shortenUrl(log.destination_url)}</span>
+                        <span className="truncate">{shortenUrl(log.roleplay_url)}</span>
                       </a>
                     </td>
                     <td className="px-4 py-2">{moveTypeLabel(log.move_type)}</td>

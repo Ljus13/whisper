@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS public.travel_roleplay_logs (
   from_y          float,
   to_x            float,
   to_y            float,
-  origin_url      text        NOT NULL,
   destination_url text        NOT NULL,
   move_type       text        NOT NULL DEFAULT 'same_map'
                               CHECK (move_type IN ('same_map', 'cross_map', 'first_entry')),
@@ -32,4 +31,7 @@ CREATE POLICY "Players can view own travel roleplay logs"
 DROP POLICY IF EXISTS "Players can insert own travel roleplay logs" ON public.travel_roleplay_logs;
 CREATE POLICY "Players can insert own travel roleplay logs"
   ON public.travel_roleplay_logs FOR INSERT
-  WITH CHECK (auth.uid() = player_id);
+  WITH CHECK (
+    auth.uid() = player_id
+    OR public.get_my_role() IN ('admin', 'dm')
+  );

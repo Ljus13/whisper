@@ -340,16 +340,14 @@ export async function moveTokenWithRoleplay(
   tokenId: string,
   newX: number,
   newY: number,
-  originUrl: string,
-  destinationUrl: string,
+  roleplayUrl: string,
   targetMapId?: string
 ) {
   const { supabase, user, isAdmin } = await getAuthUser()
 
-  const origin = originUrl?.trim()
-  const destination = destinationUrl?.trim()
-  if (!origin || !destination) return { error: 'กรุณากรอกลิงก์ต้นทางและปลายทาง' }
-  if (!isValidUrl(origin) || !isValidUrl(destination)) return { error: 'ลิงก์ต้องเป็น URL ที่ถูกต้อง' }
+  const destination = roleplayUrl?.trim()
+  if (!destination) return { error: 'กรุณากรอกลิงก์โรลเพลย์' }
+  if (!isValidUrl(destination)) return { error: 'ลิงก์ต้องเป็น URL ที่ถูกต้อง' }
 
   const { data: token, error: fetchErr } = await supabase
     .from('map_tokens')
@@ -421,12 +419,14 @@ export async function moveTokenWithRoleplay(
       from_y: token.position_y,
       to_x: clampedX,
       to_y: clampedY,
-      origin_url: origin,
       destination_url: destination,
       move_type: isCrossMap ? 'cross_map' : 'same_map',
     })
 
-  if (logErr) return { error: logErr.message }
+  if (logErr) {
+    console.error('[moveTokenWithRoleplay] log insert error:', logErr)
+    return { error: logErr.message }
+  }
 
   revalidatePath('/dashboard/maps', 'layout')
   return { success: true, cost: 0, resource: 'roleplay' }
@@ -434,18 +434,16 @@ export async function moveTokenWithRoleplay(
 
 export async function addPlayerToMapWithRoleplay(
   mapId: string,
-  originUrl: string,
-  destinationUrl: string,
+  roleplayUrl: string,
   targetUserId?: string,
   positionX?: number,
   positionY?: number
 ) {
   const { supabase, user, isAdmin } = await getAuthUser()
 
-  const origin = originUrl?.trim()
-  const destination = destinationUrl?.trim()
-  if (!origin || !destination) return { error: 'กรุณากรอกลิงก์ต้นทางและปลายทาง' }
-  if (!isValidUrl(origin) || !isValidUrl(destination)) return { error: 'ลิงก์ต้องเป็น URL ที่ถูกต้อง' }
+  const destination = roleplayUrl?.trim()
+  if (!destination) return { error: 'กรุณากรอกลิงก์โรลเพลย์' }
+  if (!isValidUrl(destination)) return { error: 'ลิงก์ต้องเป็น URL ที่ถูกต้อง' }
 
   const userId = targetUserId ?? user.id
   const isSelf = userId === user.id
@@ -511,12 +509,14 @@ export async function addPlayerToMapWithRoleplay(
         from_y: existing.position_y,
         to_x: startX,
         to_y: startY,
-        origin_url: origin,
         destination_url: destination,
         move_type: 'cross_map',
       })
 
-    if (logErr) return { error: logErr.message }
+    if (logErr) {
+      console.error('[addPlayerToMapWithRoleplay] existing log insert error:', logErr)
+      return { error: logErr.message }
+    }
   } else {
     const { data: insertRow, error: insertErr } = await supabase
       .from('map_tokens')
@@ -544,12 +544,14 @@ export async function addPlayerToMapWithRoleplay(
         from_y: null,
         to_x: startX,
         to_y: startY,
-        origin_url: origin,
         destination_url: destination,
         move_type: 'first_entry',
       })
 
-    if (logErr) return { error: logErr.message }
+    if (logErr) {
+      console.error('[addPlayerToMapWithRoleplay] new token log insert error:', logErr)
+      return { error: logErr.message }
+    }
   }
 
   revalidatePath('/dashboard/maps', 'layout')
@@ -618,8 +620,7 @@ export async function getTravelRoleplayLogs(page: number = 1) {
       from_y: r.from_y,
       to_x: r.to_x,
       to_y: r.to_y,
-      origin_url: r.origin_url,
-      destination_url: r.destination_url,
+      roleplay_url: r.destination_url,
       move_type: r.move_type,
       created_at: r.created_at,
     }

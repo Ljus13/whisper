@@ -358,9 +358,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   const isDragActiveRef = useRef(false)
   const [showRoleplayMoveModal, setShowRoleplayMoveModal] = useState(false)
   const [showRoleplayJoinModal, setShowRoleplayJoinModal] = useState(false)
-  const [roleplayMoveOriginUrl, setRoleplayMoveOriginUrl] = useState('')
   const [roleplayMoveDestinationUrl, setRoleplayMoveDestinationUrl] = useState('')
-  const [roleplayJoinOriginUrl, setRoleplayJoinOriginUrl] = useState('')
   const [roleplayJoinDestinationUrl, setRoleplayJoinDestinationUrl] = useState('')
   const [isRoleplayMoveMode, setIsRoleplayMoveMode] = useState(false)
   const [isRoleplayJoinMode, setIsRoleplayJoinMode] = useState(false)
@@ -822,14 +820,13 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       showToast('💤 กำลังนอนหลับ — ไม่สามารถย้ายตัวละครได้', 'error')
       return
     }
-    setRoleplayMoveOriginUrl('')
     setRoleplayMoveDestinationUrl('')
     setShowRoleplayMoveModal(true)
   }
 
   function confirmRoleplayMoveLinks() {
-    if (!roleplayMoveOriginUrl.trim() || !roleplayMoveDestinationUrl.trim()) {
-      showToast('กรุณากรอกลิงก์ต้นทางและปลายทาง', 'error')
+    if (!roleplayMoveDestinationUrl.trim()) {
+      showToast('กรุณากรอกลิงก์โรลเพลย์', 'error')
       return
     }
     setShowRoleplayMoveModal(false)
@@ -842,14 +839,13 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       showToast('กำลังนอนหลับ — ไม่สามารถย้ายแมพได้', 'error')
       return
     }
-    setRoleplayJoinOriginUrl('')
     setRoleplayJoinDestinationUrl('')
     setShowRoleplayJoinModal(true)
   }
 
   function confirmRoleplayJoinLinks() {
-    if (!roleplayJoinOriginUrl.trim() || !roleplayJoinDestinationUrl.trim()) {
-      showToast('กรุณากรอกลิงก์ต้นทางและปลายทาง', 'error')
+    if (!roleplayJoinDestinationUrl.trim()) {
+      showToast('กรุณากรอกลิงก์โรลเพลย์', 'error')
       return
     }
     setShowRoleplayJoinModal(false)
@@ -976,8 +972,8 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
   }
 
   async function saveRoleplayMoves() {
-    if (!roleplayMoveOriginUrl.trim() || !roleplayMoveDestinationUrl.trim()) {
-      showToast('กรุณากรอกลิงก์ต้นทางและปลายทาง', 'error')
+    if (!roleplayMoveDestinationUrl.trim()) {
+      showToast('กรุณากรอกลิงก์โรลเพลย์', 'error')
       return
     }
     setIsSavingMoves(true)
@@ -1006,7 +1002,6 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
           tokenId,
           pos.x,
           pos.y,
-          roleplayMoveOriginUrl,
           roleplayMoveDestinationUrl
         )
         pendingMovesRef.current.delete(tokenId)
@@ -1391,15 +1386,14 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
   function submitJoinMapRoleplay(pos: { x: number; y: number }) {
     startTransition(async () => {
-      if (!roleplayJoinOriginUrl.trim() || !roleplayJoinDestinationUrl.trim()) {
-        showToast('กรุณากรอกลิงก์ต้นทางและปลายทาง', 'error')
+      if (!roleplayJoinDestinationUrl.trim()) {
+        showToast('กรุณากรอกลิงก์โรลเพลย์', 'error')
         return
       }
       setIsRoleplayLoading(true)
       await waitRoleplayDelay()
       const result = await addPlayerToMapWithRoleplay(
         map.id,
-        roleplayJoinOriginUrl,
         roleplayJoinDestinationUrl,
         undefined,
         pos.x,
@@ -2465,14 +2459,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
               <li>ทีมงานสามารถตรวจสอบประวัติการเดินทางแบบโรลเพลย์ได้ ดังนั้นโปรดโรลเพลย์เดินทางตามจริง</li>
             </ul>
           </div>
-          <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">ลิงก์ต้นทาง *</label>
-          <input
-            value={roleplayMoveOriginUrl}
-            onChange={e => setRoleplayMoveOriginUrl(e.target.value)}
-            className="input-victorian !py-2 !px-3 w-full mb-3"
-            placeholder="https://..."
-          />
-          <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">ลิงก์ปลายทาง *</label>
+          <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">ลิงก์โรลเพลย์ *</label>
           <input
             value={roleplayMoveDestinationUrl}
             onChange={e => setRoleplayMoveDestinationUrl(e.target.value)}
@@ -2499,17 +2486,10 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
               <li>การย้ายแมพด้วยโรลเพลย์จะ<strong>ใช้เวลาสักครู่</strong> (ไม่ทันทีเหมือนใช้แต้ม)</li>
               <li>บางเส้นทาง/เงื่อนไขพิเศษ การใช้แต้มอาจ<strong>คุ้มค่ากว่า</strong></li>
               <li>ทีมงานสามารถตรวจสอบประวัติย้อนหลังได้ โปรด<strong>โรลเพลย์ตามจริง</strong></li>
-              <li>จุดต้นทาง คือ โรลเพลย์เริ่มออกเดินทาง / จุดปลายทาง คือโรลเพลย์ถึงที่หมายแล้ว</li>
+              <li>แนบลิงก์โรลเพลย์ที่แสดงการเดินทางมาถึงสถานที่นี้</li>
             </ul>
           </div>
-          <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">ลิงก์ต้นทาง *</label>
-          <input
-            value={roleplayJoinOriginUrl}
-            onChange={e => setRoleplayJoinOriginUrl(e.target.value)}
-            className="input-victorian !py-2 !px-3 w-full mb-3"
-            placeholder="https://..."
-          />
-          <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">ลิงก์ปลายทาง *</label>
+          <label className="block text-xs text-gold-400 mb-1 font-display uppercase tracking-wider">ลิงก์โรลเพลย์ *</label>
           <input
             value={roleplayJoinDestinationUrl}
             onChange={e => setRoleplayJoinDestinationUrl(e.target.value)}

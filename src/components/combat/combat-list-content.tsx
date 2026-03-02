@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { debouncedCall } from '@/lib/client-cache'
 import { getCombatSessions, createCombatSession, deleteCombatSession } from '@/app/actions/combat'
 import type { CombatSession } from '@/lib/types/database'
-import { Swords, Plus, Clock, Play, CheckCircle, ArrowRight, Shield, Skull, Sparkles, Trash2 } from 'lucide-react'
+import { Swords, Plus, Clock, Play, CheckCircle, ArrowRight, Shield, Skull, Sparkles, Trash2, AlertTriangle, Loader2, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
 interface Props {
@@ -30,6 +30,9 @@ export default function CombatListContent({ userId, isStaff }: Props) {
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [showCreate, setShowCreate] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [alertModal, setAlertModal] = useState<{ message: string; type?: 'error' | 'info' } | null>(null)
+  const [confirmModal, setConfirmModal] = useState<{ message: string; subMessage?: string; destructive?: boolean; onConfirm: () => void } | null>(null)
   const mountedRef = useRef(true)
 
   const fetchData = useCallback(() => {
@@ -65,7 +68,7 @@ export default function CombatListContent({ userId, isStaff }: Props) {
     setCreating(true)
     const res = await createCombatSession(newName.trim())
     if (res.error) {
-      alert(res.error)
+      setAlertModal({ message: res.error, type: 'error' })
     } else {
       setNewName('')
       setShowCreate(false)
@@ -74,14 +77,22 @@ export default function CombatListContent({ userId, isStaff }: Props) {
     setCreating(false)
   }
 
-  const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
+  const handleDelete = (e: React.MouseEvent, sessionId: string) => {
     e.preventDefault()
     e.stopPropagation()
-    if (!confirm('ลบห้องต่อสู้นี้ถาวร?')) return
-    if (!confirm('ยืนยันอีกครั้ง — การลบไม่สามารถย้อนกลับได้')) return
-    const res = await deleteCombatSession(sessionId)
-    if (res.error) alert(res.error)
-    else fetchData()
+    setConfirmModal({
+      message: 'ลบห้องต่อสู้นี้ถาวร?',
+      subMessage: 'การลบไม่สามารถย้อนกลับได้',
+      destructive: true,
+      onConfirm: async () => {
+        setConfirmModal(null)
+        setDeletingId(sessionId)
+        const res = await deleteCombatSession(sessionId)
+        if (res.error) setAlertModal({ message: res.error, type: 'error' })
+        else fetchData()
+        setDeletingId(null)
+      }
+    })
   }
 
   if (loading) {
@@ -97,13 +108,63 @@ export default function CombatListContent({ userId, isStaff }: Props) {
   }
 
   return (
-    <div className="max-w-screen-xl mx-auto px-4 md:px-8 py-8 space-y-6">
+    <>
+      {/* Alert Modal */}
+      {alertModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" onClick={() => setAlertModal(null)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative bg-victorian-900 border border-victorian-700/50 rounded-2xl p-6 max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start gap-3 mb-4">
+              <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+              <p className="text-nouveau-cream text-sm leading-relaxed">{alertModal.message}</p>
+            </div>
+            <div className="flex justify-end">
+              <button type="button" onClick={() => setAlertModal(null)} className="px-4 py-2 rounded-xl bg-victorian-800 border border-victorian-600/30 text-victorian-300 text-sm hover:text-nouveau-cream cursor-pointer transition-colors">
+                ตกลง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Modal */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setConfirmModal(null)} />
+          <div className="relative bg-victorian-900 border border-victorian-700/50 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="flex items-start gap-3 mb-2">
+              <Trash2 className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-nouveau-cream text-sm font-bold">{confirmModal.message}</p>
+                {confirmModal.subMessage && <p className="text-victorian-400 text-xs mt-1">{confirmModal.subMessage}</p>}
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end mt-5">
+              <button type="button" onClick={() => setConfirmModal(null)} className="px-4 py-2 rounded-xl bg-victorian-800 border border-victorian-600/30 text-victorian-300 text-sm hover:text-nouveau-cream cursor-pointer transition-colors">
+                ยกเลิก
+              </button>
+              <button type="button" onClick={confirmModal.onConfirm} className="px-4 py-2 rounded-xl bg-red-900/40 border border-red-500/40 text-red-300 text-sm font-bold hover:bg-red-900/60 cursor-pointer transition-all">
+                ยืนยัน ลบ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-screen-xl mx-auto px-4 md:px-8 py-8 space-y-6">
       {/* Header */}
       <div className="relative">
         <div className="absolute inset-0 bg-gradient-to-r from-victorian-950 via-victorian-900/80 to-victorian-950 rounded-2xl" />
         <div className="relative p-5 rounded-2xl border border-victorian-700/40">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 md:gap-4">
+              <Link
+                href="/dashboard"
+                className="w-10 h-10 rounded-xl bg-victorian-800/80 border border-victorian-600/30 flex items-center justify-center text-victorian-400 hover:text-gold-400 hover:border-gold-400/30 transition-all shrink-0"
+                title="กลับแดชบอร์ด"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
               <div className="relative">
                 <div className="w-12 h-12 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center">
                   <Swords className="w-6 h-6 text-red-400" />
@@ -158,7 +219,7 @@ export default function CombatListContent({ userId, isStaff }: Props) {
               disabled={creating || !newName.trim()}
               className="px-5 py-2.5 rounded-xl bg-gold-400/15 border border-gold-400/30 text-gold-300 text-sm font-bold hover:bg-gold-400/25 cursor-pointer disabled:opacity-50 transition-all"
             >
-              {creating ? 'กำลังสร้าง...' : '⚔️ สร้างฉาก'}
+              {creating ? <><Loader2 className="w-4 h-4 animate-spin inline mr-1" />กำลังสร้าง...</> : '⚔️ สร้างฉาก'}
             </button>
           </div>
         </div>
@@ -222,7 +283,7 @@ export default function CombatListContent({ userId, isStaff }: Props) {
                     className="w-8 h-8 rounded-lg bg-red-950/30 border border-red-500/20 flex items-center justify-center text-red-400/50 hover:text-red-400 hover:bg-red-950/60 hover:border-red-500/40 cursor-pointer transition-all shrink-0 ml-1"
                     title="ลบห้อง"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    {deletingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                   </button>
                 )}
               </Link>
@@ -231,5 +292,6 @@ export default function CombatListContent({ userId, isStaff }: Props) {
         </div>
       )}
     </div>
+    </>
   )
 }
