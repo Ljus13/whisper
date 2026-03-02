@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { normalizePathwayRows, resolveTravelRule } from '@/lib/travel-rules'
 import { revalidatePath } from 'next/cache'
 
@@ -401,31 +401,64 @@ export async function moveTokenWithRoleplay(
     updateData.map_id = targetMapId
   }
 
-  const { error: updateErr } = await supabase
+  /* ── Step 1: Update token position (must succeed) ── */
+  const { data: updatedRow, error: updateErr } = await supabase
     .from('map_tokens')
     .update(updateData)
     .eq('id', tokenId)
+    .select('id')
+    .single()
 
-  if (updateErr) return { error: updateErr.message }
+  if (updateErr || !updatedRow) {
+    console.error('[moveTokenWithRoleplay] token update failed:', updateErr)
+    return { error: updateErr?.message ?? 'ไม่สามารถอัพเดทตำแหน่งได้' }
+  }
 
-  const { error: logErr } = await supabase
-    .from('travel_roleplay_logs')
-    .insert({
-      player_id: token.user_id,
-      token_id: token.id,
-      from_map_id: token.map_id,
-      to_map_id: isCrossMap ? targetMapId : token.map_id,
-      from_x: token.position_x,
-      from_y: token.position_y,
-      to_x: clampedX,
-      to_y: clampedY,
-      destination_url: destination,
-      move_type: isCrossMap ? 'cross_map' : 'same_map',
-    })
+  /* ── Step 2: Insert travel log (best-effort, don't block move) ── */
+  const playerId = token.user_id ?? user.id
+  try {
+    const adminDb = createAdminClient()
+    const { data: logData, error: logErr } = await adminDb
+      .from('travel_roleplay_logs')
+      .insert({
+        player_id: playerId,
+        token_id: token.id,
+        from_map_id: token.map_id,
+        to_map_id: isCrossMap ? targetMapId : token.map_id,
+        from_x: token.position_x,
+        from_y: token.position_y,
+        to_x: clampedX,
+        to_y: clampedY,
+        destination_url: destination,
+        move_type: isCrossMap ? 'cross_map' : 'same_map',
+      })
+      .select('id')
+      .single()
 
-  if (logErr) {
-    console.error('[moveTokenWithRoleplay] log insert error:', logErr)
-    return { error: logErr.message }
+    if (logErr || !logData) {
+      console.error('[moveTokenWithRoleplay] log insert failed (admin):', logErr)
+      // Fallback: try with user's own client
+      const { error: fallbackErr } = await supabase
+        .from('travel_roleplay_logs')
+        .insert({
+          player_id: playerId,
+          token_id: token.id,
+          from_map_id: token.map_id,
+          to_map_id: isCrossMap ? targetMapId : token.map_id,
+          from_x: token.position_x,
+          from_y: token.position_y,
+          to_x: clampedX,
+          to_y: clampedY,
+          destination_url: destination,
+          move_type: isCrossMap ? 'cross_map' : 'same_map',
+        })
+      if (fallbackErr) {
+        console.error('[moveTokenWithRoleplay] log insert failed (fallback):', fallbackErr)
+      }
+    }
+  } catch (logInsertErr) {
+    console.error('[moveTokenWithRoleplay] log insert threw:', logInsertErr)
+    // Don't fail the move just because the log couldn't be saved
   }
 
   revalidatePath('/dashboard/maps', 'layout')
@@ -491,31 +524,59 @@ export async function addPlayerToMapWithRoleplay(
       return { error: 'ตัวละครอยู่ในแมพนี้แล้ว' }
     }
 
-    const { error: moveErr } = await supabase
+    const { data: movedRow, error: moveErr } = await supabase
       .from('map_tokens')
       .update({ map_id: mapId, position_x: startX, position_y: startY })
       .eq('id', existing.id)
+      .select('id')
+      .single()
 
-    if (moveErr) return { error: moveErr.message }
+    if (moveErr || !movedRow) {
+      console.error('[addPlayerToMapWithRoleplay] token move failed:', moveErr)
+      return { error: moveErr?.message ?? 'ไม่สามารถย้ายตัวละครได้' }
+    }
 
-    const { error: logErr } = await supabase
-      .from('travel_roleplay_logs')
-      .insert({
-        player_id: existing.user_id,
-        token_id: existing.id,
-        from_map_id: existing.map_id,
-        to_map_id: mapId,
-        from_x: existing.position_x,
-        from_y: existing.position_y,
-        to_x: startX,
-        to_y: startY,
-        destination_url: destination,
-        move_type: 'cross_map',
-      })
+    // Best-effort log insert — don't block the move on failure
+    try {
+      const adminDb = createAdminClient()
+      const { data: logData, error: logErr } = await adminDb
+        .from('travel_roleplay_logs')
+        .insert({
+          player_id: existing.user_id ?? user.id,
+          token_id: existing.id,
+          from_map_id: existing.map_id,
+          to_map_id: mapId,
+          from_x: existing.position_x,
+          from_y: existing.position_y,
+          to_x: startX,
+          to_y: startY,
+          destination_url: destination,
+          move_type: 'cross_map',
+        })
+        .select('id')
+        .single()
 
-    if (logErr) {
-      console.error('[addPlayerToMapWithRoleplay] existing log insert error:', logErr)
-      return { error: logErr.message }
+      if (logErr || !logData) {
+        console.error('[addPlayerToMapWithRoleplay] log insert failed (admin):', logErr)
+        // Fallback: try with user's own client
+        const { error: fbErr } = await supabase
+          .from('travel_roleplay_logs')
+          .insert({
+            player_id: existing.user_id ?? user.id,
+            token_id: existing.id,
+            from_map_id: existing.map_id,
+            to_map_id: mapId,
+            from_x: existing.position_x,
+            from_y: existing.position_y,
+            to_x: startX,
+            to_y: startY,
+            destination_url: destination,
+            move_type: 'cross_map',
+          })
+        if (fbErr) console.error('[addPlayerToMapWithRoleplay] log fallback failed:', fbErr)
+      }
+    } catch (err) {
+      console.error('[addPlayerToMapWithRoleplay] log insert threw:', err)
     }
   } else {
     const { data: insertRow, error: insertErr } = await supabase
@@ -533,24 +594,47 @@ export async function addPlayerToMapWithRoleplay(
 
     if (insertErr) return { error: insertErr.message }
 
-    const { error: logErr } = await supabase
-      .from('travel_roleplay_logs')
-      .insert({
-        player_id: userId,
-        token_id: insertRow?.id ?? null,
-        from_map_id: null,
-        to_map_id: mapId,
-        from_x: null,
-        from_y: null,
-        to_x: startX,
-        to_y: startY,
-        destination_url: destination,
-        move_type: 'first_entry',
-      })
+    // Best-effort log insert — don't block the join on failure
+    try {
+      const adminDb = createAdminClient()
+      const { data: logData, error: logErr } = await adminDb
+        .from('travel_roleplay_logs')
+        .insert({
+          player_id: userId,
+          token_id: insertRow?.id ?? null,
+          from_map_id: null,
+          to_map_id: mapId,
+          from_x: null,
+          from_y: null,
+          to_x: startX,
+          to_y: startY,
+          destination_url: destination,
+          move_type: 'first_entry',
+        })
+        .select('id')
+        .single()
 
-    if (logErr) {
-      console.error('[addPlayerToMapWithRoleplay] new token log insert error:', logErr)
-      return { error: logErr.message }
+      if (logErr || !logData) {
+        console.error('[addPlayerToMapWithRoleplay] log insert failed (admin):', logErr)
+        // Fallback: try with user's own client
+        const { error: fbErr } = await supabase
+          .from('travel_roleplay_logs')
+          .insert({
+            player_id: userId,
+            token_id: insertRow?.id ?? null,
+            from_map_id: null,
+            to_map_id: mapId,
+            from_x: null,
+            from_y: null,
+            to_x: startX,
+            to_y: startY,
+            destination_url: destination,
+            move_type: 'first_entry',
+          })
+        if (fbErr) console.error('[addPlayerToMapWithRoleplay] log fallback failed:', fbErr)
+      }
+    } catch (err) {
+      console.error('[addPlayerToMapWithRoleplay] log insert threw:', err)
     }
   }
 

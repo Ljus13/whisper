@@ -508,7 +508,12 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       if (pos) {
         const isDesktop = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches
         if (isDesktop) {
-          submitJoinMap(pos)
+          // Check if this is roleplay join mode
+          if (isRoleplayJoinMode) {
+            submitJoinMapRoleplay(pos)
+          } else {
+            submitJoinMap(pos)
+          }
         } else {
           setJoinPreviewPos(pos)
         }
@@ -877,7 +882,8 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       setTokens(prev => prev.map(t => t.id === tokenId ? { ...t, position_x: x, position_y: y } : t))
       pendingMovesRef.current.set(tokenId, { x, y })
       batchMovesRef.current.tokens.set(tokenId, { x, y })
-      setBatchMoveCount(batchMovesRef.current.tokens.size + batchMovesRef.current.churches.size + batchMovesRef.current.restPoints.size)
+      const newCount = batchMovesRef.current.tokens.size + batchMovesRef.current.churches.size + batchMovesRef.current.restPoints.size
+      setBatchMoveCount(newCount)
       setMovingTokenId(null)
       setMovePreview(null)
       setMoveOriginalPos(null)
@@ -998,19 +1004,25 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       shouldCleanup = true
       const errors: string[] = []
       for (const [tokenId, pos] of tokenMoves) {
-        const result = await moveTokenWithRoleplay(
-          tokenId,
-          pos.x,
-          pos.y,
-          roleplayMoveDestinationUrl
-        )
-        pendingMovesRef.current.delete(tokenId)
-        if (result?.error) {
-          errors.push(result.error)
-        } else {
-          const x = Math.max(0, Math.min(100, pos.x))
-          const y = Math.max(0, Math.min(100, pos.y))
-          broadcastRef.current('token_moved', { id: tokenId, x, y })
+        try {
+          const result = await moveTokenWithRoleplay(
+            tokenId,
+            pos.x,
+            pos.y,
+            roleplayMoveDestinationUrl
+          )
+          pendingMovesRef.current.delete(tokenId)
+          if (result?.error) {
+            errors.push(result.error)
+          } else {
+            const x = Math.max(0, Math.min(100, pos.x))
+            const y = Math.max(0, Math.min(100, pos.y))
+            broadcastRef.current('token_moved', { id: tokenId, x, y })
+          }
+        } catch (err) {
+          console.error('[saveRoleplayMoves] moveTokenWithRoleplay threw:', err)
+          errors.push(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการบันทึก')
+          pendingMovesRef.current.delete(tokenId)
         }
       }
 
@@ -1021,6 +1033,11 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
         setMoveNotif({ name: 'บันทึก', status: 'success', msg: 'บันทึกตำแหน่งทั้งหมดสำเร็จ' })
         setTimeout(() => setMoveNotif(null), 2000)
       }
+    } catch (err) {
+      console.error('[saveRoleplayMoves] unexpected error:', err)
+      setMoveNotif({ name: 'บันทึก', status: 'error', msg: 'เกิดข้อผิดพลาดไม่คาดคิด' })
+      setTimeout(() => setMoveNotif(null), 3000)
+      shouldCleanup = true
     } finally {
       setIsRoleplayLoading(false)
       if (shouldCleanup) {

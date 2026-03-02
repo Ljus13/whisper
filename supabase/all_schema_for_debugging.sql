@@ -17,6 +17,8 @@ CREATE TABLE public.action_codes (
   expires_at timestamp with time zone,
   max_repeats integer,
   archived boolean NOT NULL DEFAULT false,
+  cooldown_minutes integer,
+  max_roleplay_submissions integer,
   CONSTRAINT action_codes_pkey PRIMARY KEY (id),
   CONSTRAINT action_codes_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
 );
@@ -34,6 +36,55 @@ CREATE TABLE public.action_submissions (
   CONSTRAINT action_submissions_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.profiles(id),
   CONSTRAINT action_submissions_action_code_id_fkey FOREIGN KEY (action_code_id) REFERENCES public.action_codes(id),
   CONSTRAINT action_submissions_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.combat_logs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  session_id uuid NOT NULL,
+  participant_id uuid,
+  type USER-DEFINED NOT NULL,
+  message text NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT combat_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT combat_logs_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.combat_sessions(id),
+  CONSTRAINT combat_logs_participant_id_fkey FOREIGN KEY (participant_id) REFERENCES public.combat_participants(id)
+);
+CREATE TABLE public.combat_participants (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  session_id uuid NOT NULL,
+  profile_id uuid,
+  type USER-DEFINED NOT NULL DEFAULT 'player'::combat_participant_type,
+  display_name text NOT NULL,
+  avatar_url text,
+  current_hp integer NOT NULL DEFAULT 5 CHECK (current_hp >= 0),
+  current_sanity integer NOT NULL DEFAULT 10 CHECK (current_sanity >= 0),
+  current_spirit integer NOT NULL DEFAULT 15 CHECK (current_spirit >= 0),
+  status_effect_1 USER-DEFINED,
+  status_effect_2 USER-DEFINED,
+  turn_status USER-DEFINED NOT NULL DEFAULT 'waiting'::combat_turn_status,
+  is_current_turn boolean NOT NULL DEFAULT false,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  current_dex integer NOT NULL DEFAULT 10 CHECK (current_dex >= 0),
+  current_wis integer NOT NULL DEFAULT 10 CHECK (current_wis >= 0),
+  CONSTRAINT combat_participants_pkey PRIMARY KEY (id),
+  CONSTRAINT combat_participants_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.combat_sessions(id),
+  CONSTRAINT combat_participants_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.combat_sessions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  status USER-DEFINED NOT NULL DEFAULT 'lobby'::combat_session_status,
+  announcement text,
+  announcement_ack boolean NOT NULL DEFAULT false,
+  started_at timestamp with time zone,
+  ended_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid NOT NULL,
+  CONSTRAINT combat_sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT combat_sessions_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.granted_skill_logs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -316,6 +367,8 @@ CREATE TABLE public.quest_codes (
   reward_max_travel integer NOT NULL DEFAULT 0,
   reward_max_spirituality integer NOT NULL DEFAULT 0,
   is_public boolean NOT NULL DEFAULT true,
+  cooldown_minutes integer,
+  max_roleplay_submissions integer,
   CONSTRAINT quest_codes_pkey PRIMARY KEY (id),
   CONSTRAINT quest_codes_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id),
   CONSTRAINT quest_codes_map_id_fkey FOREIGN KEY (map_id) REFERENCES public.maps(id),
@@ -444,6 +497,7 @@ CREATE TABLE public.skills (
   sort_order integer NOT NULL DEFAULT 0,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  category text,
   CONSTRAINT skills_pkey PRIMARY KEY (id),
   CONSTRAINT skills_pathway_id_fkey FOREIGN KEY (pathway_id) REFERENCES public.skill_pathways(id),
   CONSTRAINT skills_sequence_id_fkey FOREIGN KEY (sequence_id) REFERENCES public.skill_sequences(id)
@@ -461,6 +515,115 @@ CREATE TABLE public.sleep_requests (
   CONSTRAINT sleep_requests_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.profiles(id),
   CONSTRAINT sleep_requests_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.profiles(id)
 );
+CREATE TABLE public.timeline_entries (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  description text,
+  full_detail text,
+  goal text,
+  image_url text,
+  sort_order integer NOT NULL DEFAULT 0,
+  is_published boolean NOT NULL DEFAULT false,
+  created_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  started_at date,
+  ended_at date,
+  status text CHECK (status = ANY (ARRAY['running'::text, 'end'::text, 'failed'::text])),
+  CONSTRAINT timeline_entries_pkey PRIMARY KEY (id),
+  CONSTRAINT timeline_entries_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.timeline_side_stories (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  timeline_id uuid NOT NULL,
+  title text NOT NULL,
+  description text,
+  full_detail text,
+  goal text,
+  image_url text,
+  position_x double precision NOT NULL DEFAULT 0,
+  position_y double precision NOT NULL DEFAULT 0,
+  sort_order integer NOT NULL DEFAULT 0,
+  is_published boolean NOT NULL DEFAULT false,
+  created_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  started_at date,
+  ended_at date,
+  status text CHECK (status = ANY (ARRAY['running'::text, 'end'::text, 'failed'::text])),
+  CONSTRAINT timeline_side_stories_pkey PRIMARY KEY (id),
+  CONSTRAINT timeline_side_stories_timeline_id_fkey FOREIGN KEY (timeline_id) REFERENCES public.timeline_entries(id),
+  CONSTRAINT timeline_side_stories_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.timeline_side_story_moderators (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  side_story_id uuid NOT NULL,
+  profile_id uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT timeline_side_story_moderators_pkey PRIMARY KEY (id),
+  CONSTRAINT timeline_side_story_moderators_side_story_id_fkey FOREIGN KEY (side_story_id) REFERENCES public.timeline_side_stories(id),
+  CONSTRAINT timeline_side_story_moderators_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.timeline_side_story_participants (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  side_story_id uuid NOT NULL,
+  profile_id uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT timeline_side_story_participants_pkey PRIMARY KEY (id),
+  CONSTRAINT timeline_side_story_participants_side_story_id_fkey FOREIGN KEY (side_story_id) REFERENCES public.timeline_side_stories(id),
+  CONSTRAINT timeline_side_story_participants_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.timeline_side_story_punishments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  side_story_id uuid NOT NULL,
+  punishment_id uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  position_x double precision NOT NULL DEFAULT 0,
+  position_y double precision NOT NULL DEFAULT 0,
+  CONSTRAINT timeline_side_story_punishments_pkey PRIMARY KEY (id),
+  CONSTRAINT timeline_side_story_punishments_side_story_id_fkey FOREIGN KEY (side_story_id) REFERENCES public.timeline_side_stories(id),
+  CONSTRAINT timeline_side_story_punishments_punishment_id_fkey FOREIGN KEY (punishment_id) REFERENCES public.punishments(id)
+);
+CREATE TABLE public.timeline_sub_stories (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  side_story_id uuid NOT NULL,
+  title text NOT NULL,
+  description text,
+  full_detail text,
+  goal text,
+  image_url text,
+  position_x double precision NOT NULL DEFAULT 0,
+  position_y double precision NOT NULL DEFAULT 0,
+  sort_order integer NOT NULL DEFAULT 0,
+  is_published boolean NOT NULL DEFAULT false,
+  created_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  started_at date,
+  ended_at date,
+  status text CHECK (status = ANY (ARRAY['running'::text, 'end'::text, 'failed'::text])),
+  CONSTRAINT timeline_sub_stories_pkey PRIMARY KEY (id),
+  CONSTRAINT timeline_sub_stories_side_story_id_fkey FOREIGN KEY (side_story_id) REFERENCES public.timeline_side_stories(id),
+  CONSTRAINT timeline_sub_stories_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.timeline_sub_story_moderators (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  sub_story_id uuid NOT NULL,
+  profile_id uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT timeline_sub_story_moderators_pkey PRIMARY KEY (id),
+  CONSTRAINT timeline_sub_story_moderators_sub_story_id_fkey FOREIGN KEY (sub_story_id) REFERENCES public.timeline_sub_stories(id),
+  CONSTRAINT timeline_sub_story_moderators_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.timeline_sub_story_participants (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  sub_story_id uuid NOT NULL,
+  profile_id uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT timeline_sub_story_participants_pkey PRIMARY KEY (id),
+  CONSTRAINT timeline_sub_story_participants_sub_story_id_fkey FOREIGN KEY (sub_story_id) REFERENCES public.timeline_sub_stories(id),
+  CONSTRAINT timeline_sub_story_participants_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.travel_roleplay_logs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   player_id uuid NOT NULL,
@@ -471,7 +634,6 @@ CREATE TABLE public.travel_roleplay_logs (
   from_y double precision,
   to_x double precision,
   to_y double precision,
-  origin_url text NOT NULL,
   destination_url text NOT NULL,
   move_type text NOT NULL DEFAULT 'same_map'::text CHECK (move_type = ANY (ARRAY['same_map'::text, 'cross_map'::text, 'first_entry'::text])),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
