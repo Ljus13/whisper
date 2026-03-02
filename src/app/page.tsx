@@ -13,6 +13,21 @@ export default async function HomePage() {
 
   return (
     <main className="relative min-h-screen flex items-center justify-center overflow-hidden">
+      {/* Background video — sepia, muted, subtle */}
+      <video
+        autoPlay
+        muted
+        loop
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover"
+        style={{ filter: 'sepia(1) brightness(0.25) saturate(0.7)', opacity: 0.55 }}
+      >
+        <source src="https://res.cloudinary.com/dehp6efwc/video/upload/v1771648009/train_le8mda.mp4" type="video/mp4" />
+      </video>
+
+      {/* Overlay to deepen contrast */}
+      <div className="absolute inset-0 bg-victorian-950/60 pointer-events-none" />
+
       {/* Background decorative elements */}
       <div className="absolute inset-0 pointer-events-none">
         {/* Large radial glow */}
@@ -55,7 +70,7 @@ export default async function HomePage() {
       {/* Bottom attribution */}
       <div className="absolute bottom-6 left-0 right-0 text-center">
         <p className="text-victorian-600 text-sm font-body tracking-widest uppercase">
-          Whisper — Campaign Companion
+          Campaign Companion
         </p>
       </div>
     </main>

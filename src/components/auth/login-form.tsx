@@ -2,6 +2,7 @@
 
 import { signInWithGoogle, signInWithDiscord } from '@/app/actions/auth'
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 
 /* ── SVG Icons ── */
 function GoogleIcon() {
@@ -147,18 +148,30 @@ export default function LoginForm() {
       <div className="relative z-10 px-4 py-8 sm:px-8">
         {/* Header */}
         <div className="text-center mb-10">
-          {/* Logo / D20 symbol */}
-          <div className="inline-flex items-center justify-center w-24 h-24 mb-6
-                          border border-gold-400/30 rounded-full
-                          bg-victorian-800/50 shadow-gold">
-            <span className="text-4xl text-gold-400 font-display">⚜</span>
-          </div>
+          {/* Logo */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772424893/wots-logo-w_fyr8dc.png"
+            alt="Whisper of the Shadow"
+            className="w-24 h-24 object-contain mx-auto mb-4 drop-shadow-[0_0_12px_rgba(212,175,55,0.3)]"
+          />
 
-          <h1 className="heading-victorian text-4xl mb-4 md:text-6xl">
-            Whisper
+          <h1
+            style={{
+              fontFamily: "'Cinzel Decorative', serif",
+              background: 'linear-gradient(135deg, #c9a84c 0%, #f0d080 35%, #e8c055 55%, #b8881e 80%, #d4a030 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              textShadow: 'none',
+              letterSpacing: '0.04em',
+            }}
+            className="text-2xl font-bold leading-tight mb-3 md:text-3xl"
+          >
+            Whisper of the Shadow
           </h1>
           <p className="text-victorian-300 font-body text-lg tracking-wide md:text-xl">
-            เข้าสู่ดินแดนแห่งการผจญภัย
+            เข้าสู่โลกแห่งศาสตร์เร้นลับ
           </p>
         </div>
 
@@ -214,6 +227,17 @@ export default function LoginForm() {
           <br />
           <span className="text-gold-400/40">ขอให้ลูกเต๋าเข้าข้างคุณ</span>
         </p>
+
+        {/* Docs link */}
+        <div className="mt-4 text-center">
+          <Link
+            href="/docs"
+            className="inline-flex items-center gap-1.5 text-victorian-500 text-xs hover:text-gold-400/70 transition-colors"
+          >
+            <span>📘</span>
+            <span>คู่มือและเอกสารระบบ</span>
+          </Link>
+        </div>
       </div>
     </div>
     </>
