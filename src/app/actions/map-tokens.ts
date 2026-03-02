@@ -3,6 +3,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { normalizePathwayRows, resolveTravelRule } from '@/lib/travel-rules'
 import { revalidatePath } from 'next/cache'
+import { notifyTravelRoleplay } from '@/lib/discord-notify'
 
 /* ── Helper: get user + role ── */
 async function getAuthUser() {
@@ -461,6 +462,23 @@ export async function moveTokenWithRoleplay(
     // Don't fail the move just because the log couldn't be saved
   }
 
+  // Fire-and-forget Discord travel notification
+  void (async () => {
+    try {
+      const toMapId = (isCrossMap ? targetMapId : token.map_id) as string
+      const uniqueMapIds = [...new Set([token.map_id, toMapId].filter(Boolean))] as string[]
+      const { data: maps } = await createAdminClient().from('maps').select('id, name').in('id', uniqueMapIds)
+      const mm = new Map((maps ?? []).map((m: { id: string; name: string }) => [m.id, m.name]))
+      await notifyTravelRoleplay({
+        playerName: profile.display_name ?? 'ไม่ทราบชื่อ',
+        fromMapName: mm.get(token.map_id) ?? null,
+        toMapName: mm.get(toMapId) ?? null,
+        roleplayUrl: destination,
+        moveType: isCrossMap ? 'cross_map' : 'same_map',
+      })
+    } catch { /* fail silently */ }
+  })()
+
   revalidatePath('/dashboard/maps', 'layout')
   return { success: true, cost: 0, resource: 'roleplay' }
 }
@@ -578,6 +596,23 @@ export async function addPlayerToMapWithRoleplay(
     } catch (err) {
       console.error('[addPlayerToMapWithRoleplay] log insert threw:', err)
     }
+
+    // Fire-and-forget Discord travel notification (cross_map)
+    void (async () => {
+      try {
+        const uniqueMapIds = [...new Set([existing.map_id, mapId].filter(Boolean))] as string[]
+        const { data: maps } = await createAdminClient().from('maps').select('id, name').in('id', uniqueMapIds)
+        const mm = new Map((maps ?? []).map((m: { id: string; name: string }) => [m.id, m.name]))
+        const { data: tp } = await createAdminClient().from('profiles').select('display_name').eq('id', userId).single()
+        await notifyTravelRoleplay({
+          playerName: tp?.display_name ?? 'ไม่ทราบชื่อ',
+          fromMapName: existing.map_id ? (mm.get(existing.map_id) ?? null) : null,
+          toMapName: mm.get(mapId) ?? null,
+          roleplayUrl: destination,
+          moveType: 'cross_map',
+        })
+      } catch { /* fail silently */ }
+    })()
   } else {
     const { data: insertRow, error: insertErr } = await supabase
       .from('map_tokens')
@@ -636,6 +671,21 @@ export async function addPlayerToMapWithRoleplay(
     } catch (err) {
       console.error('[addPlayerToMapWithRoleplay] log insert threw:', err)
     }
+
+    // Fire-and-forget Discord travel notification (first_entry)
+    void (async () => {
+      try {
+        const { data: mapRow } = await createAdminClient().from('maps').select('name').eq('id', mapId).single()
+        const { data: tp } = await createAdminClient().from('profiles').select('display_name').eq('id', userId).single()
+        await notifyTravelRoleplay({
+          playerName: tp?.display_name ?? 'ไม่ทรบชื่อ',
+          fromMapName: null,
+          toMapName: (mapRow as { name: string } | null)?.name ?? null,
+          roleplayUrl: destination,
+          moveType: 'first_entry',
+        })
+      } catch { /* fail silently */ }
+    })()
   }
 
   revalidatePath('/dashboard/maps', 'layout')

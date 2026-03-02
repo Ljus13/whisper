@@ -339,3 +339,57 @@ export async function notifyPunishmentUpdated(params: PunishmentNotifyParams): P
     }],
   })
 }
+
+// ─── Travel Roleplay Notification ────────────────────────────────────────────
+
+export interface TravelRoleplayNotifyParams {
+  playerName: string
+  fromMapName?: string | null
+  toMapName?: string | null
+  roleplayUrl: string
+  moveType: 'same_map' | 'cross_map' | 'first_entry'
+}
+
+export async function notifyTravelRoleplay(params: TravelRoleplayNotifyParams): Promise<void> {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_TRAVEL
+  if (!webhookUrl) return
+
+  const moveTypeLabels: Record<string, string> = {
+    same_map: '📍 เดินทางในแมพเดียวกัน',
+    cross_map: '🗺️ ข้ามแมพ',
+    first_entry: '🚪 เข้าสู่แมพครั้งแรก',
+  }
+
+  const fields: NonNullable<DiscordEmbed['fields']> = []
+
+  fields.push({ name: '👤 ผู้เล่น', value: params.playerName, inline: true })
+  fields.push({ name: '🧭 ประเภท', value: moveTypeLabels[params.moveType] ?? params.moveType, inline: true })
+
+  if (params.fromMapName) {
+    fields.push({ name: '📌 จากแมพ', value: params.fromMapName, inline: true })
+  }
+
+  if (params.toMapName) {
+    fields.push({ name: '📍 ถึงแมพ', value: params.toMapName, inline: true })
+  }
+
+  fields.push({ name: '🔗 ลิงก์โรลเพลย์', value: `[คลิกเพื่อดู](${params.roleplayUrl})`, inline: false })
+
+  const moveTitles: Record<string, string> = {
+    same_map: '📍 การเดินทางบนแผนที่',
+    cross_map: '🗺️ การเดินทางข้ามแมพ',
+    first_entry: '🚪 เข้าสู่แผนที่ครั้งแรก',
+  }
+
+  await sendDiscordNotification(webhookUrl, {
+    username: 'ระบบการเดินทาง',
+    embeds: [{
+      title: moveTitles[params.moveType] ?? '🗺️ การเดินทาง',
+      description: `> **${params.playerName}** ได้เดินทางผ่านการโรลเพลย์บนแผนที่`,
+      color: 0x3B82F6,
+      fields,
+      footer: { text: 'Whisper of the Shadow • ระบบการเดินทาง' },
+      timestamp: new Date().toISOString(),
+    }],
+  })
+}
