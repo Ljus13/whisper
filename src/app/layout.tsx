@@ -25,7 +25,12 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'Whisper of the Shadow',
   description: 'ระบบควบคุมการโรลเพลย์ โลกแห่งศาสตร์เร้นรับ',
-  icons: { icon: '/favicon.ico' },
+  icons: {
+    icon: [
+      { url: '/icon.png', type: 'image/png' },
+    ],
+    apple: '/icon.png',
+  },
 }
 
 export default function RootLayout({

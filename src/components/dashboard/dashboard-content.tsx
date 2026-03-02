@@ -323,6 +323,7 @@ export default function DashboardContent({
   return (
     <div className="min-h-screen">
       <style dangerouslySetInnerHTML={{__html: `
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&display=swap');
         @keyframes flowEnergy {
           0% { background-position: 200% 0; }
           100% { background-position: 0% 0; }
@@ -332,9 +333,25 @@ export default function DashboardContent({
       <header className="border-b border-gold-400/10 bg-victorian-950/80 backdrop-blur-sm">
         <div className="max-w-screen-2xl mx-auto px-4 py-3 pr-14 sm:pr-4 md:px-8 md:py-4 flex items-center justify-between">
           {/* Logo */}
-          <div className="flex items-center gap-3 md:gap-6">
-            <span className="text-gold-400 text-3xl md:text-5xl">⚜</span>
-            <h1 className="heading-victorian text-lg md:text-2xl">Whisper</h1>
+          <div className="flex items-center gap-2 md:gap-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772424893/wots-logo-w_fyr8dc.png"
+              alt="Whisper of the Shadow"
+              className="h-9 md:h-14 w-auto object-contain"
+            />
+            <h1
+              style={{
+                fontFamily: "'Cinzel Decorative', serif",
+                background: 'linear-gradient(135deg, #c9a84c 0%, #f0d080 35%, #e8c055 55%, #b8881e 80%, #d4a030 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                textShadow: 'none',
+                letterSpacing: '0.04em',
+              }}
+              className="text-sm md:text-xl font-bold leading-tight"
+            >Whisper of the Shadow</h1>
           </div>
 
           {/* User info */}
