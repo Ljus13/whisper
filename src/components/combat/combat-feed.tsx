@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getCombatLogs } from '@/app/actions/combat'
 import type { CombatLog } from '@/lib/types/database'
-import { ChevronDown, ExternalLink, Megaphone, Zap, Shield, Swords, Play, Scroll } from 'lucide-react'
+import { ChevronDown, ExternalLink, Megaphone, Zap, Shield, Swords, Play, Scroll, Sparkles } from 'lucide-react'
 
 interface Props {
   sessionId: string
@@ -24,6 +24,7 @@ const typeConfig: Record<string, { icon: React.ReactNode; color: string }> = {
   turn_change: { icon: <Swords className="w-3 h-3" />, color: 'text-gold-400' },
   session_start: { icon: <Play className="w-3 h-3" />, color: 'text-green-400' },
   session_end: { icon: <Play className="w-3 h-3" />, color: 'text-victorian-400' },
+  skill_use: { icon: <Sparkles className="w-3 h-3" />, color: 'text-cyan-400' },
 }
 
 export default function CombatFeed({ sessionId, initialLogs }: Props) {

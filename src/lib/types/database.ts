@@ -383,7 +383,7 @@ export interface PrayerLog {
 export type CombatSessionStatus = 'lobby' | 'active' | 'ended'
 export type CombatParticipantType = 'player' | 'npc'
 export type CombatTurnStatus = 'waiting' | 'active' | 'done'
-export type CombatLogType = 'stat_change' | 'roleplay_link' | 'announcement' | 'status_effect' | 'turn_change' | 'session_start' | 'session_end'
+export type CombatLogType = 'stat_change' | 'roleplay_link' | 'announcement' | 'status_effect' | 'turn_change' | 'session_start' | 'session_end' | 'skill_use'
 
 export type CombatStatusEffect =
   | 'stunned'       // มึนงง (ห้ามเล่น)

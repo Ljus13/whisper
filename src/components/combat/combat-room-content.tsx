@@ -18,7 +18,9 @@ import {
   sendAnnouncement,
   clearAnnouncement,
   submitRoleplayLink,
+  submitNpcRoleplayLink,
   getPlayersForCombat,
+  getPathwaysForNpc,
 } from '@/app/actions/combat'
 import type {
   CombatSession,
@@ -33,6 +35,8 @@ import { useRouter } from 'next/navigation'
 import StatusEffectOverlay from './status-effect-overlay'
 import AnnouncementOverlay from './announcement-overlay'
 import CombatFeed from './combat-feed'
+import CombatSkillPanel from './combat-skill-panel'
+import NpcSkillPanel from './npc-skill-panel'
 import StatAdjustmentModal from './stat-adjustment-modal'
 
 interface Props {
@@ -66,9 +70,15 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
   const [showAddPlayer, setShowAddPlayer] = useState(false)
   const [showAddNpc, setShowAddNpc] = useState(false)
   const [availablePlayers, setAvailablePlayers] = useState<any[]>([])
-  const [npcForm, setNpcForm] = useState({ name: '', hp: '5', sanity: '10', spirit: '15', dex: '10', wis: '10', avatar: '' })
+  const [npcForm, setNpcForm] = useState({ name: '', hp: '5', sanity: '10', spirit: '15', dex: '10', wis: '10', avatar: '', pathwayId: '', sequenceId: '' })
+  const [npcPathways, setNpcPathways] = useState<{ id: string; name: string; sequences: { id: string; seqNumber: number; name: string }[] }[]>([])
   const [announcementText, setAnnouncementText] = useState('')
   const [pending, setPending] = useState(false)
+
+  // NPC RP Link + Skill panel
+  const [npcRpTarget, setNpcRpTarget] = useState<{ id: string; name: string } | null>(null)
+  const [npcRpLink, setNpcRpLink] = useState('')
+  const [npcSkillTarget, setNpcSkillTarget] = useState<{ id: string; name: string } | null>(null)
 
   // Modal states — replaces browser alert/confirm
   const [alertModal, setAlertModal] = useState<{ message: string; type?: 'error' | 'info' } | null>(null)
@@ -147,6 +157,7 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
         setShowAnnouncement(false)
         fetchData()
       })
+      .on('broadcast', { event: 'skill_use' }, () => { console.log('[RT] broadcast: skill_use'); fetchData() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'combat_sessions', filter: `id=eq.${sessionId}` }, (p) => { console.log('[RT] pg: combat_sessions', p.eventType); debouncedFetch() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'combat_participants', filter: `session_id=eq.${sessionId}` }, (p) => { console.log('[RT] pg: combat_participants', p.eventType); debouncedFetch() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'combat_logs', filter: `session_id=eq.${sessionId}` }, (p) => { console.log('[RT] pg: combat_logs', p.eventType); debouncedFetch() })
@@ -184,6 +195,18 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
     setPending(false)
   }
 
+  // Fetch NPC pathways when opening NPC form
+  const fetchNpcPathways = useCallback(async () => {
+    const data = await getPathwaysForNpc()
+    setNpcPathways(data)
+  }, [])
+
+  useEffect(() => {
+    if (showAddNpc && npcPathways.length === 0 && isStaff) {
+      fetchNpcPathways()
+    }
+  }, [showAddNpc, npcPathways.length, isStaff, fetchNpcPathways])
+
   const handleAddNpc = async () => {
     if (!npcForm.name.trim()) return
     setPending(true)
@@ -194,14 +217,25 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
       parseInt(npcForm.spirit) || 15,
       parseInt(npcForm.dex) || 10,
       parseInt(npcForm.wis) || 10,
-      npcForm.avatar || undefined
+      npcForm.avatar || undefined,
+      npcForm.pathwayId || undefined,
+      npcForm.sequenceId || undefined
     )
     if (res.error) setAlertModal({ message: res.error, type: 'error' })
     else {
-      setNpcForm({ name: '', hp: '5', sanity: '10', spirit: '15', dex: '10', wis: '10', avatar: '' })
+      setNpcForm({ name: '', hp: '5', sanity: '10', spirit: '15', dex: '10', wis: '10', avatar: '', pathwayId: '', sequenceId: '' })
       setShowAddNpc(false)
       await fetchData()
     }
+    setPending(false)
+  }
+
+  const handleNpcRpSubmit = async () => {
+    if (!npcRpTarget || !npcRpLink.trim()) return
+    setPending(true)
+    const res = await submitNpcRoleplayLink(sessionId, npcRpTarget.id, npcRpLink.trim())
+    if (res.error) setAlertModal({ message: res.error, type: 'error' })
+    else { setNpcRpLink(''); setNpcRpTarget(null) }
     setPending(false)
   }
 
@@ -628,6 +662,13 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
         )}
 
         {/* ═══════════════════════════════════════
+            COMBAT SKILL PANEL (Player only, active session)
+           ═══════════════════════════════════════ */}
+        {!isStaff && session.status === 'active' && myParticipant && (
+          <CombatSkillPanel sessionId={sessionId} isMyTurn={isMyTurn} isDisabled={isDisabled} />
+        )}
+
+        {/* ═══════════════════════════════════════
             DM ANNOUNCEMENT BAR
            ═══════════════════════════════════════ */}
         {isStaff && session.status === 'active' && (
@@ -751,6 +792,38 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
                   placeholder="https://..." className="input-victorian !py-2.5 !text-xs !rounded-xl" />
               </label>
             </div>
+
+            {/* Pathway & Sequence dropdowns */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-cyan-400 text-[10px] font-bold px-0.5">⚔️ เส้นทางสกิล (ไม่บังคับ)</span>
+                <select
+                  value={npcForm.pathwayId}
+                  onChange={e => setNpcForm({ ...npcForm, pathwayId: e.target.value, sequenceId: '' })}
+                  className="input-victorian !py-2.5 !text-xs !rounded-xl"
+                >
+                  <option value="">— ไม่กำหนด —</option>
+                  {npcPathways.map(pw => (
+                    <option key={pw.id} value={pw.id}>{pw.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-cyan-400 text-[10px] font-bold px-0.5">📊 ลำดับขั้น (Sequence)</span>
+                <select
+                  value={npcForm.sequenceId}
+                  onChange={e => setNpcForm({ ...npcForm, sequenceId: e.target.value })}
+                  disabled={!npcForm.pathwayId}
+                  className="input-victorian !py-2.5 !text-xs !rounded-xl disabled:opacity-40"
+                >
+                  <option value="">— เลือกลำดับขั้น —</option>
+                  {(npcPathways.find(pw => pw.id === npcForm.pathwayId)?.sequences ?? []).map(seq => (
+                    <option key={seq.id} value={seq.id}>ลำดับ {seq.seqNumber} — {seq.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
             <div className="flex gap-2 justify-end">
               <button type="button" onClick={() => setShowAddNpc(false)} className="px-4 py-2 text-victorian-400 text-xs cursor-pointer hover:text-victorian-300 transition-colors">ยกเลิก</button>
               <button type="button" onClick={handleAddNpc} disabled={pending || !npcForm.name.trim()}
@@ -868,7 +941,84 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
           )}
         </div>
 
+        {/* ═══════════════════════════════════════
+            STAFF: NPC Control Panel (RP Link + Skills)
+           ═══════════════════════════════════════ */}
+        {isStaff && session.status === 'active' && npcs.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center">
+                <Bot className="w-4 h-4 text-purple-400" />
+              </div>
+              <div>
+                <h3 className="text-purple-300 text-sm font-bold">🎮 ควบคุม NPC</h3>
+                <p className="text-victorian-500 text-[10px]">ส่งลิงก์โรลเพลย์ / ใช้สกิลแทน NPC</p>
+              </div>
+            </div>
 
+            {/* NPC RP Link Submit */}
+            <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-b from-purple-950/20 to-victorian-950/60 p-4 space-y-3">
+              <p className="text-purple-300 text-xs font-bold">🔗 ส่งลิงก์โรลเพลย์ (NPC)</p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  value={npcRpTarget?.id ?? ''}
+                  onChange={e => {
+                    const npc = npcs.find(n => n.id === e.target.value)
+                    setNpcRpTarget(npc ? { id: npc.id, name: npc.display_name } : null)
+                  }}
+                  className="input-victorian !py-2.5 !text-xs !rounded-xl sm:w-48 shrink-0"
+                >
+                  <option value="">— เลือก NPC —</option>
+                  {npcs.map(n => (
+                    <option key={n.id} value={n.id}>{n.display_name}</option>
+                  ))}
+                </select>
+                <input
+                  type="url"
+                  value={npcRpLink}
+                  onChange={e => setNpcRpLink(e.target.value)}
+                  placeholder="วางลิงก์โรลเพลย์ที่นี่..."
+                  disabled={!npcRpTarget}
+                  className="flex-1 bg-victorian-950/60 border border-purple-500/30 rounded-xl px-4 py-2.5 text-nouveau-cream text-sm outline-none focus:border-purple-500/60 transition-all placeholder:text-victorian-600 disabled:opacity-40"
+                  onKeyDown={e => e.key === 'Enter' && handleNpcRpSubmit()}
+                />
+                <button type="button" onClick={handleNpcRpSubmit} disabled={pending || !npcRpTarget || !npcRpLink.trim()}
+                  className="px-4 py-2.5 rounded-xl bg-purple-600/20 border border-purple-500/40 text-purple-300 font-bold hover:bg-purple-600/30 cursor-pointer disabled:opacity-40 transition-all shrink-0">
+                  {pending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* NPC Skill Usage */}
+            <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-b from-purple-950/20 to-victorian-950/60 p-4 space-y-3">
+              <p className="text-purple-300 text-xs font-bold">⚔️ ใช้สกิล NPC</p>
+              <div className="flex flex-wrap gap-2">
+                {npcs.map(n => (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => setNpcSkillTarget(npcSkillTarget?.id === n.id ? null : { id: n.id, name: n.display_name })}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      npcSkillTarget?.id === n.id
+                        ? 'bg-cyan-600/20 border-cyan-500/40 text-cyan-300'
+                        : 'bg-victorian-800/40 border-victorian-700/20 text-victorian-400 hover:text-victorian-300 hover:border-victorian-600/40'
+                    }`}
+                  >
+                    <Sparkles className="w-3 h-3 inline mr-1.5" />{n.display_name}
+                  </button>
+                ))}
+              </div>
+              {npcSkillTarget && (
+                <NpcSkillPanel
+                  sessionId={sessionId}
+                  participantId={npcSkillTarget.id}
+                  participantName={npcSkillTarget.name}
+                  onClose={() => setNpcSkillTarget(null)}
+                />
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ═══════════════════════════════════════
             COMBAT LOG / FEED

@@ -140,8 +140,10 @@ export async function getCombatSessions() {
    ══════════════════════════════════════════════ */
 
 export async function getCombatSession(sessionId: string) {
-  const { supabase, user } = await getAuth()
-  const { data: profile } = await supabase
+  const { user } = await getAuth()
+  const admin = createAdminClient()
+
+  const { data: profile } = await admin
     .from('profiles')
     .select('role')
     .eq('id', user.id)
@@ -150,17 +152,17 @@ export async function getCombatSession(sessionId: string) {
   const isStaff = profile?.role === 'admin' || profile?.role === 'dm'
 
   const [sessionRes, participantsRes, logsRes] = await Promise.all([
-    supabase
+    admin
       .from('combat_sessions')
       .select('*')
       .eq('id', sessionId)
       .single(),
-    supabase
+    admin
       .from('combat_participants')
       .select('*')
       .eq('session_id', sessionId)
       .order('created_at', { ascending: true }),
-    supabase
+    admin
       .from('combat_logs')
       .select('*')
       .eq('session_id', sessionId)
@@ -169,6 +171,14 @@ export async function getCombatSession(sessionId: string) {
   ])
 
   if (sessionRes.error) return { error: sessionRes.error.message }
+
+  // Access check: staff can view any session; players must be participants
+  if (!isStaff) {
+    const isParticipant = (participantsRes.data || []).some(
+      (p: any) => p.profile_id === user.id
+    )
+    if (!isParticipant) return { error: 'คุณไม่ได้อยู่ในห้องต่อสู้นี้' }
+  }
 
   return {
     session: sessionRes.data as CombatSession,
@@ -185,11 +195,12 @@ export async function getCombatSession(sessionId: string) {
    ══════════════════════════════════════════════ */
 
 export async function getCombatLogs(sessionId: string, page: number = 0) {
-  const { supabase } = await getAuth()
+  await getAuth()
+  const admin = createAdminClient()
   const limit = 10
   const offset = page * limit
 
-  const { data, error } = await supabase
+  const { data, error } = await admin
     .from('combat_logs')
     .select('*')
     .eq('session_id', sessionId)
@@ -280,7 +291,9 @@ export async function addNpcToCombat(
   spirit: number,
   dex: number,
   wis: number,
-  avatarUrl?: string
+  avatarUrl?: string,
+  pathwayId?: string,
+  sequenceId?: string
 ) {
   const { supabase } = await requireAdmin()
 
@@ -295,6 +308,8 @@ export async function addNpcToCombat(
     current_spirit: Math.max(0, spirit),
     current_dex: Math.max(0, dex),
     current_wis: Math.max(0, wis),
+    pathway_id: pathwayId || null,
+    sequence_id: sequenceId || null,
   })
 
   if (error) return { error: error.message }
@@ -747,4 +762,931 @@ export async function deleteCombatSession(sessionId: string) {
 
   revalidatePath('/dashboard/combat')
   return { success: true }
+}
+
+
+/* ══════════════════════════════════════════════
+   PLAYER: Get available skills for combat
+   ══════════════════════════════════════════════ */
+
+export async function getCombatSkills() {
+  const { supabase, user } = await getAuth()
+
+  // ── Pathway skills ──
+  const { data: playerPathways } = await supabase
+    .from('player_pathways')
+    .select('pathway_id, sequence_id')
+    .eq('player_id', user.id)
+    .not('pathway_id', 'is', null)
+
+  const pp = playerPathways ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let pathwaySkills: any[] = []
+
+  if (pp.length > 0) {
+    const pathwayIds = pp.map(p => p.pathway_id).filter(Boolean)
+    const [skillsRes, seqRes] = await Promise.all([
+      supabase
+        .from('skills')
+        .select('id, name, description, spirit_cost, pathway_id, sequence_id, icon_url, sequence:skill_sequences(id, seq_number)')
+        .in('pathway_id', pathwayIds),
+      supabase
+        .from('skill_sequences')
+        .select('id, seq_number')
+        .in('id', pp.map(p => p.sequence_id).filter(Boolean)),
+    ])
+
+    if (!skillsRes.error && skillsRes.data) {
+      const playerSeqMap = new Map<string, number>(
+        (seqRes.data ?? []).map(s => [s.id, s.seq_number])
+      )
+      pathwaySkills = skillsRes.data.filter(skill => {
+        const entry = pp.find(p => p.pathway_id === skill.pathway_id)
+        if (!entry?.sequence_id) return false
+        const playerSeqNum = playerSeqMap.get(entry.sequence_id)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const skillSeqNum = (skill.sequence as any)?.seq_number
+        if (playerSeqNum === undefined || skillSeqNum === undefined) return false
+        return skillSeqNum >= playerSeqNum
+      })
+    }
+  }
+
+  // ── Granted skills ──
+  const { data: grantedRaw } = await supabase
+    .from('granted_skills')
+    .select('id, title, detail, reuse_policy, cooldown_minutes, last_used_at, times_used, expires_at, image_url, skill:skills(id, name, description, spirit_cost)')
+    .eq('player_id', user.id)
+    .eq('is_active', true)
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const grantedSkills = (grantedRaw ?? []).filter((g: any) => {
+    if (g.reuse_policy === 'once' && g.times_used > 0) return false
+    if (g.expires_at && new Date(g.expires_at) < new Date()) return false
+    if (g.reuse_policy === 'cooldown' && g.last_used_at && g.cooldown_minutes) {
+      const end = new Date(g.last_used_at)
+      end.setMinutes(end.getMinutes() + g.cooldown_minutes)
+      if (new Date() < end) return false
+    }
+    return true
+  })
+
+  // ── Player spirit info ──
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('spirituality, max_spirituality')
+    .eq('id', user.id)
+    .single()
+
+  return {
+    pathwaySkills: pathwaySkills.map(s => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      spiritCost: s.spirit_cost,
+      type: 'pathway' as const,
+    })),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    grantedSkills: grantedSkills.map((g: any) => ({
+      id: g.id,
+      name: g.title,
+      description: g.detail || (g.skill as any)?.description || null,
+      spiritCost: (g.skill as any)?.spirit_cost ?? 0,
+      linkedSkillName: (g.skill as any)?.name ?? null,
+      type: 'granted' as const,
+    })),
+    spirit: profile?.spirituality ?? 0,
+    maxSpirit: profile?.max_spirituality ?? 0,
+  }
+}
+
+
+/* ══════════════════════════════════════════════
+   PLAYER: Use a pathway skill in combat
+   ══════════════════════════════════════════════ */
+
+export async function useCombatSkill(
+  sessionId: string,
+  skillId: string,
+  successRate: number,
+  roll: number,
+  note?: string | null
+) {
+  const { supabase, user } = await getAuth()
+
+  const normalizedRate = Math.floor(successRate)
+  const normalizedRoll = Math.floor(roll)
+  if (!Number.isFinite(normalizedRate) || normalizedRate < 1 || normalizedRate > 20) return { error: 'Success Rate ต้องเป็น 1-20' }
+  if (!Number.isFinite(normalizedRoll) || normalizedRoll < 1 || normalizedRoll > 20) return { error: 'Roll ไม่ถูกต้อง' }
+
+  // 1) Verify participant in combat
+  const { data: participant } = await supabase
+    .from('combat_participants')
+    .select('id, display_name, is_current_turn, status_effect_1, status_effect_2')
+    .eq('session_id', sessionId)
+    .eq('profile_id', user.id)
+    .single()
+
+  if (!participant) return { error: 'คุณไม่ได้อยู่ในฉากนี้' }
+  if (!participant.is_current_turn) return { error: 'ยังไม่ถึงเทิร์นของคุณ' }
+
+  const disabling = ['stunned', 'frozen', 'paralyzed', 'charmed']
+  if (
+    (participant.status_effect_1 && disabling.includes(participant.status_effect_1)) ||
+    (participant.status_effect_2 && disabling.includes(participant.status_effect_2))
+  ) {
+    return { error: 'คุณถูกสถานะผิดปกติ ไม่สามารถใช้สกิลได้' }
+  }
+
+  // 2) Fetch skill
+  const { data: skill } = await supabase
+    .from('skills')
+    .select('id, name, description, spirit_cost, pathway_id, sequence_id')
+    .eq('id', skillId)
+    .single()
+
+  if (!skill) return { error: 'ไม่พบสกิล' }
+
+  // 3) Check spirituality
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('spirituality, max_spirituality')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) return { error: 'ไม่พบโปรไฟล์' }
+  if (profile.spirituality < skill.spirit_cost) {
+    return { error: `พลังวิญญาณไม่พอ (ต้องการ ${skill.spirit_cost} มี ${profile.spirituality})` }
+  }
+
+  // 4) Check pathway access
+  const { data: ppData } = await supabase
+    .from('player_pathways')
+    .select('id, sequence_id')
+    .eq('player_id', user.id)
+    .eq('pathway_id', skill.pathway_id)
+    .single()
+
+  if (!ppData?.sequence_id) return { error: 'คุณไม่มีสิทธิ์ใช้สกิลในเส้นทางนี้' }
+
+  const [playerSeqRes, skillSeqRes] = await Promise.all([
+    supabase.from('skill_sequences').select('seq_number').eq('id', ppData.sequence_id).single(),
+    supabase.from('skill_sequences').select('seq_number').eq('id', skill.sequence_id).single(),
+  ])
+
+  if (!playerSeqRes.data || !skillSeqRes.data) return { error: 'ข้อมูลลำดับผิดพลาด' }
+  if (skillSeqRes.data.seq_number < playerSeqRes.data.seq_number) {
+    return { error: `ลำดับของคุณยังไม่ถึง` }
+  }
+
+  // 5) Deduct spirit from profile
+  const newSpirit = profile.spirituality - skill.spirit_cost
+  await supabase.from('profiles').update({ spirituality: newSpirit }).eq('id', user.id)
+
+  // 6) Also update combat participant spirit
+  await supabase
+    .from('combat_participants')
+    .update({ current_spirit: newSpirit })
+    .eq('id', participant.id)
+
+  // 7) Determine outcome
+  const isSuccess = normalizedRoll >= normalizedRate
+  const outcome = isSuccess ? 'success' : 'fail'
+
+  // 8) Generate reference code
+  const now = new Date()
+  const dd = String(now.getDate()).padStart(2, '0')
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const yyyy = String(now.getFullYear())
+  const uidSuffix = user.id.replace(/-/g, '').slice(-4).toUpperCase()
+  const outcomeCode = isSuccess ? 'S' : 'F'
+  const referenceCode = `SKL-${uidSuffix}${dd}${mm}${yyyy}-T${normalizedRate}-R${normalizedRoll}-${outcomeCode}`
+
+  // 9) Log to skill_usage_logs (unified history)
+  await supabase.from('skill_usage_logs').insert({
+    player_id: user.id,
+    skill_id: skillId,
+    spirit_cost: skill.spirit_cost,
+    reference_code: referenceCode,
+    note: note?.trim() || null,
+    success_rate: normalizedRate,
+    roll: normalizedRoll,
+    outcome,
+  })
+
+  // 10) Log to combat
+  const resultEmoji = isSuccess ? '✅' : '❌'
+  const combatMessage = `${resultEmoji} ${participant.display_name} ใช้สกิล「${skill.name}」— Roll ${normalizedRoll}/${normalizedRate} → ${isSuccess ? 'สำเร็จ!' : 'พลาด'} (✨ -${skill.spirit_cost})`
+
+  await addLog(supabase, sessionId, 'skill_use' as CombatLogType, combatMessage, participant.id, {
+    skillId: skill.id,
+    skillName: skill.name,
+    spiritCost: skill.spirit_cost,
+    successRate: normalizedRate,
+    roll: normalizedRoll,
+    outcome,
+    referenceCode,
+    remainingSpirit: newSpirit,
+    note: note?.trim() || null,
+  })
+
+  await broadcastCombat(sessionId, 'skill_use', {
+    participantId: participant.id,
+    displayName: participant.display_name,
+    skillName: skill.name,
+    outcome,
+    roll: normalizedRoll,
+    successRate: normalizedRate,
+  })
+
+  revalidatePath(`/dashboard/combat/${sessionId}`)
+  return {
+    success: true,
+    skillName: skill.name,
+    outcome,
+    roll: normalizedRoll,
+    successRate: normalizedRate,
+    referenceCode,
+    spiritCost: skill.spirit_cost,
+    remaining: newSpirit,
+  }
+}
+
+
+/* ══════════════════════════════════════════════
+   PLAYER: Use a granted skill in combat
+   ══════════════════════════════════════════════ */
+
+export async function useCombatGrantedSkill(
+  sessionId: string,
+  grantedSkillId: string,
+  successRate: number,
+  roll: number,
+  note?: string | null
+) {
+  const { supabase, user } = await getAuth()
+
+  const normalizedRate = Math.floor(successRate)
+  const normalizedRoll = Math.floor(roll)
+  if (!Number.isFinite(normalizedRate) || normalizedRate < 1 || normalizedRate > 20) return { error: 'Success Rate ต้องเป็น 1-20' }
+  if (!Number.isFinite(normalizedRoll) || normalizedRoll < 1 || normalizedRoll > 20) return { error: 'Roll ไม่ถูกต้อง' }
+
+  // 1) Verify participant
+  const { data: participant } = await supabase
+    .from('combat_participants')
+    .select('id, display_name, is_current_turn, status_effect_1, status_effect_2')
+    .eq('session_id', sessionId)
+    .eq('profile_id', user.id)
+    .single()
+
+  if (!participant) return { error: 'คุณไม่ได้อยู่ในฉากนี้' }
+  if (!participant.is_current_turn) return { error: 'ยังไม่ถึงเทิร์นของคุณ' }
+
+  const disabling = ['stunned', 'frozen', 'paralyzed', 'charmed']
+  if (
+    (participant.status_effect_1 && disabling.includes(participant.status_effect_1)) ||
+    (participant.status_effect_2 && disabling.includes(participant.status_effect_2))
+  ) {
+    return { error: 'คุณถูกสถานะผิดปกติ ไม่สามารถใช้สกิลได้' }
+  }
+
+  // 2) Fetch granted skill
+  const { data: gs } = await supabase
+    .from('granted_skills')
+    .select('*, skill:skills(id, name, description, spirit_cost)')
+    .eq('id', grantedSkillId)
+    .eq('player_id', user.id)
+    .single()
+
+  if (!gs || !gs.is_active) return { error: 'ไม่พบสิ่งนี้หรือถูกปิดแล้ว' }
+
+  // 3) Expiration check
+  if (gs.expires_at && new Date(gs.expires_at) < new Date()) {
+    await supabase.from('granted_skills').update({ is_active: false }).eq('id', gs.id)
+    return { error: 'สิ่งนี้หมดอายุแล้ว' }
+  }
+
+  // 4) Reuse check
+  if (gs.reuse_policy === 'once' && gs.times_used > 0) return { error: 'ใช้ได้ครั้งเดียวและถูกใช้แล้ว' }
+  if (gs.reuse_policy === 'cooldown' && gs.last_used_at && gs.cooldown_minutes) {
+    const cooldownEnd = new Date(gs.last_used_at)
+    cooldownEnd.setMinutes(cooldownEnd.getMinutes() + gs.cooldown_minutes)
+    if (new Date() < cooldownEnd) {
+      const rem = Math.ceil((cooldownEnd.getTime() - Date.now()) / 60000)
+      return { error: `ติดคูลดาวน์ อีก ${rem} นาที` }
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const skill = gs.skill as any
+  if (!skill) return { error: 'ไม่พบข้อมูลสกิล' }
+
+  // 5) Check spirit & profile
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('hp, sanity, max_sanity, travel_points, max_travel_points, spirituality, max_spirituality, potion_digest_progress')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) return { error: 'ไม่พบโปรไฟล์' }
+  if (profile.spirituality < skill.spirit_cost) {
+    return { error: `พลังวิญญาณไม่พอ (ต้องการ ${skill.spirit_cost} มี ${profile.spirituality})` }
+  }
+
+  // 6) Apply effects
+  const spiritAfterCost = profile.spirituality - skill.spirit_cost
+  const updates: Record<string, number> = { spirituality: spiritAfterCost }
+  if (gs.effect_hp !== 0) updates.hp = Math.max(0, profile.hp + gs.effect_hp)
+  if (gs.effect_sanity !== 0) updates.sanity = Math.max(0, Math.min(profile.max_sanity + (gs.effect_max_sanity || 0), profile.sanity + gs.effect_sanity))
+  if (gs.effect_max_sanity !== 0) updates.max_sanity = Math.max(0, profile.max_sanity + gs.effect_max_sanity)
+  if (gs.effect_travel !== 0) updates.travel_points = Math.max(0, profile.travel_points + gs.effect_travel)
+  if (gs.effect_max_travel !== 0) updates.max_travel_points = Math.max(0, profile.max_travel_points + gs.effect_max_travel)
+  if (gs.effect_spirituality !== 0) updates.spirituality = Math.max(0, spiritAfterCost + gs.effect_spirituality)
+  if (gs.effect_max_spirituality !== 0) updates.max_spirituality = Math.max(0, profile.max_spirituality + gs.effect_max_spirituality)
+  if (gs.effect_potion_digest !== 0) updates.potion_digest_progress = Math.max(0, Math.min(100, (profile.potion_digest_progress ?? 0) + gs.effect_potion_digest))
+
+  await supabase.from('profiles').update(updates).eq('id', user.id)
+
+  // 7) Update combat participant spirit + HP + sanity to stay in sync
+  const combatUpdates: Record<string, number> = { current_spirit: updates.spirituality ?? spiritAfterCost }
+  if (updates.hp !== undefined) combatUpdates.current_hp = updates.hp
+  if (updates.sanity !== undefined) combatUpdates.current_sanity = updates.sanity
+  await supabase.from('combat_participants').update(combatUpdates).eq('id', participant.id)
+
+  // 8) Update granted skill tracking
+  await supabase.from('granted_skills').update({
+    times_used: gs.times_used + 1,
+    last_used_at: new Date().toISOString(),
+    is_active: gs.reuse_policy === 'once' ? false : gs.is_active,
+  }).eq('id', gs.id)
+
+  // 9) Outcome
+  const isSuccess = normalizedRoll >= normalizedRate
+  const outcome = isSuccess ? 'success' : 'fail'
+
+  // 10) Reference code
+  const now = new Date()
+  const dd = String(now.getDate()).padStart(2, '0')
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const yyyy = String(now.getFullYear())
+  const uidSuffix = user.id.replace(/-/g, '').slice(-4).toUpperCase()
+  const outcomeCode = isSuccess ? 'S' : 'F'
+  const referenceCode = `GS-${uidSuffix}${dd}${mm}${yyyy}-T${normalizedRate}-R${normalizedRoll}-${outcomeCode}`
+
+  // 11) Log to granted_skill_logs
+  await supabase.from('granted_skill_logs').insert({
+    granted_skill_id: gs.id,
+    player_id: user.id,
+    skill_id: gs.skill_id,
+    granted_by: gs.granted_by,
+    action: 'use',
+    title: gs.title,
+    detail: gs.detail,
+    effects_json: {
+      outcome, success_rate: normalizedRate, roll: normalizedRoll, spirit_cost: skill.spirit_cost,
+    },
+    reference_code: referenceCode,
+    note: note?.trim() || null,
+  })
+
+  // Also log to skill_usage_logs
+  await supabase.from('skill_usage_logs').insert({
+    player_id: user.id,
+    skill_id: gs.skill_id,
+    spirit_cost: skill.spirit_cost,
+    reference_code: referenceCode,
+    note: `[มอบพลัง/คอมแบท] ${gs.title}${note?.trim() ? ' — ' + note.trim() : ''}`,
+    success_rate: normalizedRate,
+    roll: normalizedRoll,
+    outcome,
+  })
+
+  // 12) Combat log
+  const resultEmoji = isSuccess ? '✅' : '❌'
+  const skillLabel = gs.title || skill.name
+  const combatMessage = `${resultEmoji} ${participant.display_name} ใช้「${skillLabel}」— Roll ${normalizedRoll}/${normalizedRate} → ${isSuccess ? 'สำเร็จ!' : 'พลาด'} (✨ -${skill.spirit_cost})`
+
+  // Collect effects for display
+  const effectParts: string[] = []
+  if (gs.effect_hp !== 0) effectParts.push(`❤️ HP ${gs.effect_hp > 0 ? '+' : ''}${gs.effect_hp}`)
+  if (gs.effect_sanity !== 0) effectParts.push(`🧠 Sanity ${gs.effect_sanity > 0 ? '+' : ''}${gs.effect_sanity}`)
+  if (gs.effect_spirituality !== 0) effectParts.push(`✨ Spirit ${gs.effect_spirituality > 0 ? '+' : ''}${gs.effect_spirituality}`)
+
+  await addLog(supabase, sessionId, 'skill_use' as CombatLogType, combatMessage, participant.id, {
+    skillId: gs.skill_id,
+    skillName: skillLabel,
+    grantedSkillId: gs.id,
+    spiritCost: skill.spirit_cost,
+    successRate: normalizedRate,
+    roll: normalizedRoll,
+    outcome,
+    referenceCode,
+    remainingSpirit: updates.spirituality ?? spiritAfterCost,
+    effects: effectParts,
+    note: note?.trim() || null,
+  })
+
+  await broadcastCombat(sessionId, 'skill_use', {
+    participantId: participant.id,
+    displayName: participant.display_name,
+    skillName: skillLabel,
+    outcome,
+    roll: normalizedRoll,
+    successRate: normalizedRate,
+  })
+
+  revalidatePath(`/dashboard/combat/${sessionId}`)
+  return {
+    success: true,
+    skillName: skillLabel,
+    outcome,
+    roll: normalizedRoll,
+    successRate: normalizedRate,
+    referenceCode,
+    spiritCost: skill.spirit_cost,
+    remaining: updates.spirituality ?? spiritAfterCost,
+    effects: effectParts,
+  }
+}
+
+
+/* ══════════════════════════════════════════════
+   STAFF: Get all pathways + sequences for NPC creation dropdown
+   ══════════════════════════════════════════════ */
+
+export async function getPathwaysForNpc() {
+  const { supabase } = await requireAdmin()
+
+  const { data: pathways } = await supabase
+    .from('skill_pathways')
+    .select('id, name, skill_sequences(id, seq_number, name)')
+    .order('sort_order')
+
+  return (pathways ?? []).map(pw => ({
+    id: pw.id,
+    name: pw.name,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    sequences: ((pw as any).skill_sequences ?? [])
+      .sort((a: any, b: any) => b.seq_number - a.seq_number)  // 9 (weakest) first
+      .map((s: any) => ({ id: s.id, seqNumber: s.seq_number, name: s.name })),
+  }))
+}
+
+
+/* ══════════════════════════════════════════════
+   STAFF: Submit roleplay link on behalf of NPC
+   ══════════════════════════════════════════════ */
+
+export async function submitNpcRoleplayLink(sessionId: string, participantId: string, url: string) {
+  const { supabase } = await requireAdmin()
+
+  const { data: participant } = await supabase
+    .from('combat_participants')
+    .select('id, display_name, type')
+    .eq('id', participantId)
+    .eq('session_id', sessionId)
+    .single()
+
+  if (!participant) return { error: 'ไม่พบตัวละครนี้' }
+
+  await addLog(supabase, sessionId, 'roleplay_link',
+    `${participant.display_name} ส่งลิงก์โรลเพลย์`,
+    participant.id,
+    { url }
+  )
+
+  await broadcastCombat(sessionId, 'roleplay_link', {
+    participantId: participant.id,
+    displayName: participant.display_name,
+    url,
+  })
+
+  revalidatePath(`/dashboard/combat/${sessionId}`)
+  return { success: true }
+}
+
+
+/* ══════════════════════════════════════════════
+   STAFF: Get NPC's available skills (based on pathway + sequence)
+   ══════════════════════════════════════════════ */
+
+export async function getNpcCombatSkills(sessionId: string, participantId: string) {
+  const { supabase } = await requireAdmin()
+
+  const { data: participant } = await supabase
+    .from('combat_participants')
+    .select('id, display_name, pathway_id, sequence_id, current_spirit, type, npc_granted_skills')
+    .eq('id', participantId)
+    .eq('session_id', sessionId)
+    .single()
+
+  if (!participant) return { pathwaySkills: [], grantedSkills: [], spirit: 0, maxSpirit: 0 }
+
+  // ── Pathway skills ──
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let pathwaySkills: any[] = []
+
+  if (participant.pathway_id && participant.sequence_id) {
+    const { data: npcSeq } = await supabase
+      .from('skill_sequences')
+      .select('seq_number')
+      .eq('id', participant.sequence_id)
+      .single()
+
+    if (npcSeq) {
+      const { data: skills } = await supabase
+        .from('skills')
+        .select('id, name, description, spirit_cost, sequence_id, sequence:skill_sequences(id, seq_number)')
+        .eq('pathway_id', participant.pathway_id)
+
+      pathwaySkills = (skills ?? []).filter(skill => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const skillSeqNum = (skill.sequence as any)?.seq_number
+        if (skillSeqNum === undefined) return false
+        return skillSeqNum >= npcSeq.seq_number
+      })
+    }
+  }
+
+  // ── NPC Granted skills (from JSONB) ──
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawGranted = (participant.npc_granted_skills as any[]) ?? []
+  const grantedSkills = rawGranted.filter((g: any) => {
+    if (g.reuse_policy === 'once' && g.times_used > 0) return false
+    if (g.reuse_policy === 'cooldown' && g.last_used_at && g.cooldown_minutes) {
+      const end = new Date(g.last_used_at)
+      end.setMinutes(end.getMinutes() + g.cooldown_minutes)
+      if (new Date() < end) return false
+    }
+    return true
+  })
+
+  return {
+    pathwaySkills: pathwaySkills.map(s => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      spiritCost: s.spirit_cost,
+      type: 'pathway' as const,
+    })),
+    grantedSkills: grantedSkills.map((g: any) => ({
+      id: g.id,
+      name: g.name,
+      description: g.description || null,
+      spiritCost: g.spirit_cost ?? 0,
+      type: 'granted' as const,
+      reusePolicy: g.reuse_policy,
+      effectHp: g.effect_hp ?? 0,
+      effectSanity: g.effect_sanity ?? 0,
+      effectSpirit: g.effect_spirit ?? 0,
+    })),
+    spirit: participant.current_spirit ?? 0,
+    maxSpirit: participant.current_spirit ?? 0,
+  }
+}
+
+
+/* ══════════════════════════════════════════════
+   STAFF: Use a skill on behalf of NPC in combat
+   ══════════════════════════════════════════════ */
+
+export async function useNpcCombatSkill(
+  sessionId: string,
+  participantId: string,
+  skillId: string,
+  successRate: number,
+  roll: number,
+  note?: string | null
+) {
+  const { supabase } = await requireAdmin()
+
+  const normalizedRate = Math.floor(successRate)
+  const normalizedRoll = Math.floor(roll)
+  if (!Number.isFinite(normalizedRate) || normalizedRate < 1 || normalizedRate > 20) return { error: 'Success Rate ต้องเป็น 1-20' }
+  if (!Number.isFinite(normalizedRoll) || normalizedRoll < 1 || normalizedRoll > 20) return { error: 'Roll ไม่ถูกต้อง' }
+
+  // 1) Get participant
+  const { data: participant } = await supabase
+    .from('combat_participants')
+    .select('id, display_name, current_spirit, pathway_id, sequence_id, type')
+    .eq('id', participantId)
+    .eq('session_id', sessionId)
+    .single()
+
+  if (!participant) return { error: 'ไม่พบตัวละคร NPC' }
+
+  // 2) Fetch skill
+  const { data: skill } = await supabase
+    .from('skills')
+    .select('id, name, description, spirit_cost, pathway_id, sequence_id')
+    .eq('id', skillId)
+    .single()
+
+  if (!skill) return { error: 'ไม่พบสกิล' }
+
+  // 3) Check spirit
+  if ((participant.current_spirit ?? 0) < skill.spirit_cost) {
+    return { error: `Spirit ไม่พอ (ต้องการ ${skill.spirit_cost}, มี ${participant.current_spirit})` }
+  }
+
+  // 4) Deduct spirit from participant
+  const spiritAfterCost = (participant.current_spirit ?? 0) - skill.spirit_cost
+  await supabase
+    .from('combat_participants')
+    .update({ current_spirit: spiritAfterCost })
+    .eq('id', participant.id)
+
+  // 5) Determine outcome (roll >= rate = success, same as castSkill)
+  const outcome = normalizedRoll >= normalizedRate ? 'success' : 'fail'
+
+  // 6) Generate reference code
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  const rand = Math.random().toString(36).substring(2, 6).toUpperCase()
+  const referenceCode = `NCSK-${dateStr}-${rand}`
+
+  // 7) Log to combat
+  await addLog(supabase, sessionId, 'skill_use',
+    `🎲 ${participant.display_name} ใช้สกิล「${skill.name}」— ` +
+    `ทอย ${normalizedRoll}/${normalizedRate} → ${outcome === 'success' ? '✅ สำเร็จ' : '❌ พลาด'}` +
+    ` | ✨ ${spiritAfterCost} (-${skill.spirit_cost})` +
+    (note?.trim() ? ` | 📝 ${note.trim()}` : '') +
+    ` | 🏷️ ${referenceCode}`,
+    participant.id,
+    {
+      skillId: skill.id,
+      skillName: skill.name,
+      outcome,
+      roll: normalizedRoll,
+      successRate: normalizedRate,
+      spiritCost: skill.spirit_cost,
+      remaining: spiritAfterCost,
+      referenceCode,
+      note: note?.trim() || null,
+      isNpc: true,
+    }
+  )
+
+  await broadcastCombat(sessionId, 'skill_use', {
+    participantId: participant.id,
+    displayName: participant.display_name,
+    skillName: skill.name,
+    outcome,
+    roll: normalizedRoll,
+    successRate: normalizedRate,
+  })
+
+  // Also broadcast stat update so cards refresh
+  await broadcastCombat(sessionId, 'stat_update', {
+    participantId: participant.id,
+    field: 'current_spirit',
+    value: spiritAfterCost,
+  })
+
+  revalidatePath(`/dashboard/combat/${sessionId}`)
+  return {
+    success: true,
+    skillName: skill.name,
+    outcome,
+    roll: normalizedRoll,
+    successRate: normalizedRate,
+    referenceCode,
+    spiritCost: skill.spirit_cost,
+    remaining: spiritAfterCost,
+  }
+}
+
+
+/* ══════════════════════════════════════════════
+   STAFF: Add a granted skill to NPC (temporary, combat-only)
+   ══════════════════════════════════════════════ */
+
+export async function addNpcGrantedSkill(
+  sessionId: string,
+  participantId: string,
+  skill: {
+    name: string
+    description?: string
+    spiritCost: number
+    reusePolicy: 'once' | 'cooldown' | 'unlimited'
+    cooldownMinutes?: number
+    effectHp?: number
+    effectSanity?: number
+    effectSpirit?: number
+  }
+) {
+  const { supabase } = await requireAdmin()
+
+  const { data: participant } = await supabase
+    .from('combat_participants')
+    .select('id, npc_granted_skills, type')
+    .eq('id', participantId)
+    .eq('session_id', sessionId)
+    .single()
+
+  if (!participant) return { error: 'ไม่พบ NPC' }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const existing = (participant.npc_granted_skills as any[]) ?? []
+  const newSkill = {
+    id: crypto.randomUUID(),
+    name: skill.name.trim(),
+    description: skill.description?.trim() || null,
+    spirit_cost: Math.max(0, skill.spiritCost),
+    reuse_policy: skill.reusePolicy,
+    cooldown_minutes: skill.reusePolicy === 'cooldown' ? (skill.cooldownMinutes ?? 5) : null,
+    times_used: 0,
+    last_used_at: null,
+    effect_hp: skill.effectHp ?? 0,
+    effect_sanity: skill.effectSanity ?? 0,
+    effect_spirit: skill.effectSpirit ?? 0,
+  }
+
+  const { error } = await supabase
+    .from('combat_participants')
+    .update({ npc_granted_skills: [...existing, newSkill] })
+    .eq('id', participantId)
+
+  if (error) return { error: error.message }
+
+  await broadcastCombat(sessionId, 'stat_update', { participantId })
+  revalidatePath(`/dashboard/combat/${sessionId}`)
+  return { success: true, skillId: newSkill.id }
+}
+
+
+/* ══════════════════════════════════════════════
+   STAFF: Remove a granted skill from NPC
+   ══════════════════════════════════════════════ */
+
+export async function removeNpcGrantedSkill(sessionId: string, participantId: string, skillId: string) {
+  const { supabase } = await requireAdmin()
+
+  const { data: participant } = await supabase
+    .from('combat_participants')
+    .select('id, npc_granted_skills')
+    .eq('id', participantId)
+    .eq('session_id', sessionId)
+    .single()
+
+  if (!participant) return { error: 'ไม่พบ NPC' }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const existing = (participant.npc_granted_skills as any[]) ?? []
+  const updated = existing.filter((g: any) => g.id !== skillId)
+
+  const { error } = await supabase
+    .from('combat_participants')
+    .update({ npc_granted_skills: updated })
+    .eq('id', participantId)
+
+  if (error) return { error: error.message }
+
+  await broadcastCombat(sessionId, 'stat_update', { participantId })
+  revalidatePath(`/dashboard/combat/${sessionId}`)
+  return { success: true }
+}
+
+
+/* ══════════════════════════════════════════════
+   STAFF: Use a granted skill on behalf of NPC in combat
+   ══════════════════════════════════════════════ */
+
+export async function useNpcGrantedSkill(
+  sessionId: string,
+  participantId: string,
+  grantedSkillId: string,
+  successRate: number,
+  roll: number,
+  note?: string | null
+) {
+  const { supabase } = await requireAdmin()
+
+  const normalizedRate = Math.floor(successRate)
+  const normalizedRoll = Math.floor(roll)
+  if (!Number.isFinite(normalizedRate) || normalizedRate < 1 || normalizedRate > 20) return { error: 'Success Rate ต้องเป็น 1-20' }
+  if (!Number.isFinite(normalizedRoll) || normalizedRoll < 1 || normalizedRoll > 20) return { error: 'Roll ไม่ถูกต้อง' }
+
+  // 1) Get participant
+  const { data: participant } = await supabase
+    .from('combat_participants')
+    .select('id, display_name, current_hp, current_sanity, current_spirit, npc_granted_skills, type')
+    .eq('id', participantId)
+    .eq('session_id', sessionId)
+    .single()
+
+  if (!participant) return { error: 'ไม่พบ NPC' }
+
+  // 2) Find the granted skill from JSONB
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const grantedSkills = (participant.npc_granted_skills as any[]) ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const gs = grantedSkills.find((g: any) => g.id === grantedSkillId)
+  if (!gs) return { error: 'ไม่พบสกิลพิเศษนี้' }
+
+  // 3) Reuse check
+  if (gs.reuse_policy === 'once' && gs.times_used > 0) return { error: 'สกิลนี้ใช้ได้ครั้งเดียวและถูกใช้แล้ว' }
+  if (gs.reuse_policy === 'cooldown' && gs.last_used_at && gs.cooldown_minutes) {
+    const cooldownEnd = new Date(gs.last_used_at)
+    cooldownEnd.setMinutes(cooldownEnd.getMinutes() + gs.cooldown_minutes)
+    if (new Date() < cooldownEnd) {
+      const rem = Math.ceil((cooldownEnd.getTime() - Date.now()) / 60000)
+      return { error: `ติดคูลดาวน์ อีก ${rem} นาที` }
+    }
+  }
+
+  // 4) Check spirit
+  const spiritCost = gs.spirit_cost ?? 0
+  if ((participant.current_spirit ?? 0) < spiritCost) {
+    return { error: `Spirit ไม่พอ (ต้องการ ${spiritCost}, มี ${participant.current_spirit})` }
+  }
+
+  // 5) Calculate stat updates (NPC stats are only in combat_participants)
+  const spiritAfterCost = (participant.current_spirit ?? 0) - spiritCost
+  const combatUpdates: Record<string, unknown> = { current_spirit: spiritAfterCost }
+  const effectParts: string[] = []
+
+  if (gs.effect_hp && gs.effect_hp !== 0) {
+    combatUpdates.current_hp = Math.max(0, (participant.current_hp ?? 0) + gs.effect_hp)
+    effectParts.push(`❤️ HP ${gs.effect_hp > 0 ? '+' : ''}${gs.effect_hp}`)
+  }
+  if (gs.effect_sanity && gs.effect_sanity !== 0) {
+    combatUpdates.current_sanity = Math.max(0, (participant.current_sanity ?? 0) + gs.effect_sanity)
+    effectParts.push(`🧠 Sanity ${gs.effect_sanity > 0 ? '+' : ''}${gs.effect_sanity}`)
+  }
+  if (gs.effect_spirit && gs.effect_spirit !== 0) {
+    combatUpdates.current_spirit = Math.max(0, spiritAfterCost + gs.effect_spirit)
+    effectParts.push(`✨ Spirit ${gs.effect_spirit > 0 ? '+' : ''}${gs.effect_spirit}`)
+  }
+
+  // 6) Update the granted skill tracking in JSONB
+  const updatedSkills = grantedSkills.map((g: any) =>
+    g.id === grantedSkillId
+      ? {
+          ...g,
+          times_used: (g.times_used ?? 0) + 1,
+          last_used_at: new Date().toISOString(),
+        }
+      : g
+  )
+  combatUpdates.npc_granted_skills = updatedSkills
+
+  await supabase.from('combat_participants').update(combatUpdates).eq('id', participant.id)
+
+  // 7) Outcome
+  const outcome = normalizedRoll >= normalizedRate ? 'success' : 'fail'
+
+  // 8) Reference code
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  const rand = Math.random().toString(36).substring(2, 6).toUpperCase()
+  const referenceCode = `NGSK-${dateStr}-${rand}`
+
+  // 9) Combat log
+  await addLog(supabase, sessionId, 'skill_use',
+    `🎲 ${participant.display_name} ใช้สกิลพิเศษ「${gs.name}」— ` +
+    `ทอย ${normalizedRoll}/${normalizedRate} → ${outcome === 'success' ? '✅ สำเร็จ' : '❌ พลาด'}` +
+    ` | ✨ ${combatUpdates.current_spirit as number} (-${spiritCost})` +
+    (effectParts.length > 0 ? ` | ${effectParts.join(' ')}` : '') +
+    (note?.trim() ? ` | 📝 ${note.trim()}` : '') +
+    ` | 🏷️ ${referenceCode}`,
+    participant.id,
+    {
+      grantedSkillId,
+      skillName: gs.name,
+      outcome,
+      roll: normalizedRoll,
+      successRate: normalizedRate,
+      spiritCost,
+      remaining: combatUpdates.current_spirit,
+      referenceCode,
+      effects: effectParts,
+      note: note?.trim() || null,
+      isNpc: true,
+    }
+  )
+
+  await broadcastCombat(sessionId, 'skill_use', {
+    participantId: participant.id,
+    displayName: participant.display_name,
+    skillName: gs.name,
+    outcome,
+    roll: normalizedRoll,
+    successRate: normalizedRate,
+  })
+
+  await broadcastCombat(sessionId, 'stat_update', {
+    participantId: participant.id,
+  })
+
+  revalidatePath(`/dashboard/combat/${sessionId}`)
+  return {
+    success: true,
+    skillName: gs.name,
+    outcome,
+    roll: normalizedRoll,
+    successRate: normalizedRate,
+    referenceCode,
+    spiritCost,
+    remaining: combatUpdates.current_spirit as number,
+    effects: effectParts,
+  }
 }
