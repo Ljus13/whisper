@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Kanit, Uncial_Antiqua } from 'next/font/google'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import './globals.css'
 
 /* ── next/font: eliminates render-blocking @import ── */
@@ -42,6 +43,7 @@ export default function RootLayout({
     <html lang="en" className={`dark ${kanit.variable} ${uncialAntiqua.variable}`}>
       <body className={`min-h-screen ${kanit.className}`}>
         {children}
+        <SpeedInsights />
       </body>
     </html>
   )
