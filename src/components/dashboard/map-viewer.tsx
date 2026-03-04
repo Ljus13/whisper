@@ -1682,7 +1682,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
 
         {/* ══ LEFT SIDEBAR (desktop) / TOP PANEL (mobile) ══ */}
-        <aside className="shrink-0 lg:w-72 max-h-[38vh] lg:max-h-none min-h-0 border-b lg:border-b-0 lg:border-r border-gold-400/10 overflow-y-auto overflow-x-hidden"
+        <aside className="shrink-0 lg:w-72 max-h-[32vh] lg:max-h-none min-h-0 border-b lg:border-b-0 lg:border-r border-gold-400/10 overflow-y-auto overflow-x-hidden"
           style={{ backgroundColor: '#1A1612' }}>
 
           {/* ── You are here indicator ── */}
@@ -1796,7 +1796,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
           {/* ── 🚶‍♂️ Move / Save Position Button ── */}
           {(isOnThisMap || isAdmin) && (isAdmin || !isSleepPending) && (
-            <div className="px-4 py-2 lg:py-3 border-b border-gold-400/10 space-y-2">
+            <div className="px-4 py-2 lg:py-3 border-b border-gold-400/10 flex flex-wrap gap-1.5 lg:flex-col">
               {isMoveModeActive ? (
                 <>
                   {/* Currently dragging indicator */}
@@ -1847,7 +1847,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                   <button
                     onClick={() => (isRoleplayMoveMode ? saveRoleplayMoves() : startTransition(() => saveAllMoves()))}
                     disabled={isPending || isSavingMoves || batchMoveCount === 0}
-                    className={`w-full flex items-center justify-center gap-2 py-2.5 lg:py-3 px-4 rounded-sm font-display text-sm lg:text-base uppercase tracking-wider transition-all ${
+                    className={`w-full flex items-center justify-center gap-2 py-2 lg:py-3 px-4 rounded-xl lg:rounded-sm font-display text-xs lg:text-sm lg:uppercase lg:tracking-wider transition-all ${
                       isSavingMoves || batchMoveCount > 0
                         ? 'bg-gradient-to-r from-green-500 to-emerald-400 hover:from-green-400 hover:to-emerald-300 text-white shadow-lg shadow-green-500/40'
                         : 'bg-amber-400 text-amber-900 hover:bg-amber-300 shadow-lg shadow-amber-400/30 animate-pulse'
@@ -1899,7 +1899,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                   {/* Cancel button */}
                   <button
                     onClick={cancelMoveMode}
-                    className="w-full flex items-center justify-center gap-2 py-2 lg:py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-sm font-display text-sm lg:text-base transition-colors shadow-lg shadow-red-900/30"
+                    className="w-full flex items-center justify-center gap-2 py-1.5 lg:py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl lg:rounded-sm font-display text-xs lg:text-base transition-colors shadow-lg shadow-red-900/30"
                   >
                     <X className="w-4 h-4 lg:w-5 lg:h-5" />
                     ❌ ยกเลิก
@@ -1910,17 +1910,17 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                   <button
                     onClick={toggleMoveMode}
                     disabled={!isAdmin && travelPoints <= 0}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 lg:py-3 px-4 rounded-sm font-display text-sm lg:text-base uppercase tracking-wider transition-all bg-gradient-to-r from-amber-500 to-yellow-400 text-amber-900 hover:from-amber-400 hover:to-yellow-300 shadow-md hover:shadow-lg hover:shadow-amber-400/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 lg:py-3 px-2 lg:px-4 rounded-xl lg:rounded-sm font-display text-xs lg:text-sm lg:uppercase lg:tracking-wider transition-all bg-gradient-to-r from-amber-500 to-yellow-400 text-amber-900 hover:from-amber-400 hover:to-yellow-300 shadow-md hover:shadow-lg hover:shadow-amber-400/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Move className="w-5 h-5" />
-                    ✨ ย้ายตำแหน่ง
+                    <Move className="w-4 h-4 lg:w-5 lg:h-5" />
+                    <span className="truncate">✨ ย้ายตำแหน่ง</span>
                   </button>
                   <button
                     onClick={openRoleplayMoveModal}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 lg:py-3 px-4 rounded-sm font-display text-sm lg:text-base uppercase tracking-wider transition-all bg-victorian-900/70 border border-emerald-400/30 text-emerald-300 hover:bg-victorian-800/80"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 lg:py-3 px-2 lg:px-4 rounded-xl lg:rounded-sm font-display text-xs lg:text-sm lg:uppercase lg:tracking-wider transition-all bg-victorian-900/70 border border-emerald-400/30 text-emerald-300 hover:bg-victorian-800/80"
                   >
-                    <Footprints className="w-5 h-5" />
-                    ย้ายตำแหน่ง (โรลเพลย์)
+                    <Footprints className="w-4 h-4 lg:w-5 lg:h-5" />
+                    <span className="truncate">ย้าย (โรลเพลย์)</span>
                   </button>
                   {!isAdmin && travelPoints <= 0 && (
                     <p className="text-red-500 text-[10px] lg:text-xs text-center mt-1 font-semibold">🚫 {travelLabel}หมด</p>
@@ -1930,13 +1930,13 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
             </div>
           )}
 
-          <div className="px-4 py-2 lg:py-3 border-b border-gold-400/10">
+          <div className="px-4 py-1.5 lg:py-3 border-b border-gold-400/10">
             <Link
               href="/dashboard/maps/travel-logs"
-              className="w-full flex items-center justify-center gap-2 py-2.5 lg:py-3 px-4 rounded-sm font-display text-sm lg:text-base uppercase tracking-wider transition-all bg-victorian-900/70 border border-gold-400/20 text-gold-300 hover:bg-victorian-800/80"
+              className="w-full flex items-center justify-center gap-1.5 py-2 lg:py-3 px-3 lg:px-4 rounded-xl lg:rounded-sm font-display text-xs lg:text-sm lg:uppercase lg:tracking-wider transition-all bg-victorian-900/70 border border-gold-400/20 text-gold-300 hover:bg-victorian-800/80"
             >
               <ScrollText className="w-4 h-4 lg:w-5 lg:h-5" />
-              ประวัติการเดินทาง
+              <span>ประวัติการเดินทาง</span>
             </Link>
           </div>
 
@@ -1959,7 +1959,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
 
           {/* ── Admin Tools ── */}
           {isAdmin && (
-            <div className="px-4 py-2 lg:py-3 border-b border-gold-400/10">
+            <div className="px-3 py-2 lg:px-4 lg:py-3 border-b border-gold-400/10">
               <p className="text-gold-400 font-display text-[10px] lg:text-xs uppercase tracking-wider mb-1.5">เครื่องมือ DM</p>
               <div className="flex flex-wrap gap-1.5 lg:gap-2">
                 <button onClick={() => { setNpcName(''); setNpcUrl(''); setShowNpcModal(true) }} title="เพิ่ม NPC"

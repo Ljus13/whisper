@@ -2009,26 +2009,28 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
 
         {/* ══════ ADMIN TOOLS ══════ */}
         {isAdmin && (
-          <Card className="p-5 md:p-8">
-            <h2 className="heading-victorian text-xl md:text-2xl flex items-center gap-3 mb-5">
-              <Shield className="w-5 h-5 text-gold-400" /> เครื่องมือ DM / Admin
+          <Card className="p-4 md:p-6">
+            <h2 className="heading-victorian text-base md:text-xl flex items-center gap-2 mb-3">
+              <Shield className="w-4 h-4 md:w-5 md:h-5 text-gold-400" /> เครื่องมือ DM / Admin
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <button type="button"
-                onClick={openGenQuestModal}
-                className="btn-gold !px-5 !py-4 !text-sm flex items-center justify-center gap-2 cursor-pointer">
-                <Target className="w-5 h-5" /> สร้างโค้ดภารกิจ
+            <div className="grid grid-cols-3 gap-2">
+              <button type="button" onClick={openGenQuestModal}
+                className="group relative overflow-hidden rounded-lg border border-gold-400/20 bg-victorian-900/70 hover:border-gold-400/50 hover:bg-victorian-800/70 transition-all flex flex-col items-center gap-2 py-4 px-2 cursor-pointer">
+                <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-lg bg-[#c9a84c]/30 group-hover:bg-[#f0d080]/60 transition-all" />
+                <Target className="w-5 h-5 text-[#c9a84c]" />
+                <span className="text-xs font-bold text-center bg-[linear-gradient(135deg,#c9a84c_0%,#f0d080_35%,#e8c055_55%,#b8881e_80%,#d4a030_100%)] bg-clip-text text-transparent leading-tight">สร้างโค้ดภารกิจ</span>
               </button>
-              <Link
-                href="/dashboard/action-quest/roleplay-guide"
-                className="btn-victorian !px-5 !py-4 !text-sm flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <ScrollText className="w-5 h-5" /> แนวทางการสวมบทบาท
+              <Link href="/dashboard/action-quest/roleplay-guide"
+                className="group relative overflow-hidden rounded-lg border border-gold-400/20 bg-victorian-900/70 hover:border-gold-400/50 hover:bg-victorian-800/70 transition-all flex flex-col items-center gap-2 py-4 px-2 cursor-pointer">
+                <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-lg bg-[#c9a84c]/30 group-hover:bg-[#f0d080]/60 transition-all" />
+                <ScrollText className="w-5 h-5 text-[#c9a84c]" />
+                <span className="text-xs font-bold text-center bg-[linear-gradient(135deg,#c9a84c_0%,#f0d080_35%,#e8c055_55%,#b8881e_80%,#d4a030_100%)] bg-clip-text text-transparent leading-tight">แนวทาง RP</span>
               </Link>
-              <button type="button"
-                onClick={openCreatePunishmentModal}
-                className="px-5 py-4 rounded-lg border-2 border-red-500/30 bg-red-500/5 text-red-300 hover:border-red-400/50 hover:bg-red-500/10 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all">
-                <Skull className="w-5 h-5" /> สร้างเหตุการณ์
+              <button type="button" onClick={openCreatePunishmentModal}
+                className="group relative overflow-hidden rounded-lg border border-red-500/30 bg-victorian-900/70 hover:border-red-400/60 hover:bg-red-950/30 transition-all flex flex-col items-center gap-2 py-4 px-2 cursor-pointer">
+                <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-lg bg-red-500/40 group-hover:bg-red-400/80 transition-all" />
+                <Skull className="w-5 h-5 text-red-400" />
+                <span className="text-xs font-bold text-center bg-[linear-gradient(135deg,#dc2626_0%,#f87171_35%,#ef4444_55%,#991b1b_80%,#b91c1c_100%)] bg-clip-text text-transparent leading-tight">สร้างเหตุการณ์</span>
               </button>
             </div>
           </Card>
@@ -2057,66 +2059,30 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
           </div>
         )}
 
-        {/* ══════ PLAYER ACTION BUTTONS ══════ */}
-        <Card className="p-5 md:p-8">
-          <h2 className="heading-victorian text-xl md:text-2xl flex items-center gap-3 mb-5">
-            <Swords className="w-5 h-5 text-gold-400" /> การกระทำ
+        <Card className="p-4 md:p-6">
+          <h2 className="heading-victorian text-base md:text-xl flex items-center gap-2 mb-3">
+            <Swords className="w-4 h-4 md:w-5 md:h-5 text-gold-400" /> การกระทำ
           </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {/* นอนหลับ */}
-            <button type="button"
-              onClick={() => { if (!sleepSubmitted) setShowSleepForm(true) }}
-              disabled={sleepSubmitted || isPending}
-              className={`relative px-5 py-4 rounded-lg border-2 text-base font-bold transition-all flex flex-col items-center gap-2
-                ${sleepSubmitted
-                  ? 'border-victorian-700/30 bg-victorian-900/40 text-victorian-500 cursor-not-allowed'
-                  : 'border-blue-500/30 bg-blue-500/5 text-blue-300 hover:border-blue-400/50 hover:bg-blue-500/10 cursor-pointer'}`}>
-              <Moon className={`w-8 h-8 ${sleepSubmitted ? 'text-victorian-600' : 'text-blue-400'}`} />
-              <span>นอนหลับ</span>
-              {sleepSubmitted && (
-                <span className="text-[10px] text-victorian-500">
-                  {sleepStatus === 'approved' ? '✅ อนุมัติแล้ว' : sleepStatus === 'rejected' ? '❌ ถูกปฏิเสธ' : '⏳ รอตรวจสอบ'}
-                </span>
-              )}
-            </button>
-
-            {/* ภาวนา (Prayer) */}
-            <button type="button"
-              onClick={openPrayerModal}
-              disabled={isSleepPending}
-              className={`px-5 py-4 rounded-lg border-2 text-base font-bold flex flex-col items-center gap-2 transition-all
-                ${isSleepPending
-                  ? 'border-victorian-700/30 bg-victorian-900/40 text-victorian-500 cursor-not-allowed'
-                  : 'border-purple-500/30 bg-purple-500/5 text-purple-300 hover:border-purple-400/50 hover:bg-purple-500/10 cursor-pointer'}`}>
-              <Church className={`w-8 h-8 ${isSleepPending ? 'text-victorian-600' : 'text-purple-400'}`} />
-              <span>ภาวนา</span>
-              {isSleepPending && <span className="text-[10px] text-indigo-400">💤 กำลังหลับ</span>}
-            </button>
-
-            {/* ส่งภารกิจ */}
-            <button type="button"
-              onClick={openSubmitQuestModal}
-              disabled={isSleepPending}
-              className={`px-5 py-4 rounded-lg border-2 text-base font-bold flex flex-col items-center gap-2 transition-all
-                ${isSleepPending
-                  ? 'border-victorian-700/30 bg-victorian-900/40 text-victorian-500 cursor-not-allowed'
-                  : 'border-emerald-500/30 bg-emerald-500/5 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-500/10 cursor-pointer'}`}>
-              <Target className={`w-8 h-8 ${isSleepPending ? 'text-victorian-600' : 'text-emerald-400'}`} />
-              <span>ส่งภารกิจ</span>
-              {isSleepPending && <span className="text-[10px] text-indigo-400">💤 กำลังหลับ</span>}
-            </button>
-
-            <button type="button"
-              onClick={openRoleplayModal}
-              disabled={isSleepPending}
-              className={`px-5 py-4 rounded-lg border-2 text-base font-bold flex flex-col items-center gap-2 transition-all
-                ${isSleepPending
-                  ? 'border-victorian-700/30 bg-victorian-900/40 text-victorian-500 cursor-not-allowed'
-                  : 'border-fuchsia-500/30 bg-fuchsia-500/5 text-fuchsia-300 hover:border-fuchsia-400/50 hover:bg-fuchsia-500/10 cursor-pointer'}`}>
-              <Sparkles className={`w-8 h-8 ${isSleepPending ? 'text-victorian-600' : 'text-fuchsia-400'}`} />
-              <span>สวมบทบาท</span>
-              {isSleepPending && <span className="text-[10px] text-indigo-400">💤 กำลังหลับ</span>}
-            </button>
+          <div className="grid grid-cols-4 gap-1.5">
+            {[
+              { label: 'นอนหลับ', icon: Moon,     disabled: sleepSubmitted || isPending, onClick: () => { if (!sleepSubmitted) setShowSleepForm(true) } },
+              { label: 'ภาวนา',   icon: Church,   disabled: isSleepPending,              onClick: openPrayerModal },
+              { label: 'ส่งภารกิจ', icon: Target, disabled: isSleepPending,              onClick: openSubmitQuestModal },
+              { label: 'สวมบทบาท', icon: Sparkles, disabled: isSleepPending,             onClick: openRoleplayModal },
+            ].map(({ label, icon: Icon, disabled, onClick }) => (
+              <button key={label} type="button" onClick={onClick} disabled={disabled}
+                className={`group relative overflow-hidden rounded-lg border transition-all flex flex-col items-center justify-center gap-1.5 py-3 px-1
+                  ${disabled
+                    ? 'border-victorian-700/40 bg-victorian-900/50 cursor-not-allowed'
+                    : 'border-gold-400/20 bg-victorian-900/70 cursor-pointer hover:border-gold-400/50 hover:bg-victorian-800/70'}`}>
+                <div className={`absolute top-0 left-0 right-0 h-0.5 rounded-t-lg transition-all ${disabled ? 'bg-victorian-700/40' : 'bg-[#c9a84c]/30 group-hover:bg-[#f0d080]/60'}`} />
+                <Icon className={`w-4 h-4 ${disabled ? 'text-victorian-600' : 'text-[#c9a84c]'}`} />
+                {disabled
+                  ? <span className="text-[11px] font-bold leading-tight text-victorian-500 text-center">{label}</span>
+                  : <span className="text-[11px] font-bold leading-tight text-center bg-[linear-gradient(135deg,#c9a84c_0%,#f0d080_35%,#e8c055_55%,#b8881e_80%,#d4a030_100%)] bg-clip-text text-transparent">{label}</span>
+                }
+              </button>
+            ))}
           </div>
         </Card>
 
@@ -2144,7 +2110,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
             ) : (
               <button key={t.key} type="button"
                 onClick={() => setActiveTab(t.key)}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors whitespace-nowrap cursor-pointer
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs md:text-sm font-semibold transition-colors whitespace-nowrap cursor-pointer
                   ${activeTab === t.key
                     ? 'text-gold-400 border-b-2 border-gold-400'
                     : 'text-victorian-500 hover:text-victorian-300'}`}>

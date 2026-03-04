@@ -1,7 +1,7 @@
 'use client'
 
 import AdminEditModal from '@/components/admin/admin-edit-modal'
-import { ArrowLeft, Crown, Shield, Swords, Pencil, Users, Church, Plus, Trash2, X, Save, Eye, ScrollText } from 'lucide-react'
+import { ArrowLeft, Crown, Shield, Swords, Pencil, Users, Church, Plus, Trash2, X, Save, Eye, ScrollText, LayoutGrid, List, Search } from 'lucide-react'
 import { useState, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
@@ -99,6 +99,8 @@ export default function PlayersContent({ userId, initialData }: { userId: string
   const [sequences, setSequences] = useState<Sequence[]>(initialData?.sequences ?? getCached<Sequence[]>('players:seq') ?? [])
   const [loaded, setLoaded] = useState(!!initialData || !!getCached('players:me'))
   const [editingPlayer, setEditingPlayer] = useState<Profile | null>(null)
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [search, setSearch] = useState('')
 
   // ── Religion state ──
   const [activeTab, setActiveTab] = useState<TabKey>('players')
@@ -278,142 +280,499 @@ export default function PlayersContent({ userId, initialData }: { userId: string
 
       {/* ═══ TAB: Players ═══ */}
       {activeTab === 'players' && (
-      <main className="max-w-7xl mx-auto px-4 md:px-8 py-10">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {players.map((player) => {
-            const pathwayInfo = getPlayerPathwayInfo(player.id)
+      <main className="max-w-7xl mx-auto px-4 md:px-8 py-6">
+        {/* Search + Toggle */}
+        <div className="flex items-center gap-2 mb-6">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-victorian-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="ค้นหาผู้เล่น..."
+              className="w-full pl-9 pr-4 py-2.5 bg-victorian-950/60 border border-gold-400/20 rounded-sm text-nouveau-cream placeholder-victorian-500 text-sm font-display focus:outline-none focus:border-gold-400/50 transition-colors"
+            />
+          </div>
+          <div className="flex border border-gold-400/20 rounded-sm overflow-hidden">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-2.5 transition-colors ${
+                viewMode === 'grid' ? 'bg-gold-400/15 text-gold-400' : 'bg-victorian-950/60 text-victorian-400 hover:text-victorian-200'
+              }`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2.5 transition-colors border-l border-gold-400/20 ${
+                viewMode === 'list' ? 'bg-gold-400/15 text-gold-400' : 'bg-victorian-950/60 text-victorian-400 hover:text-victorian-200'
+              }`}
+            >
+              <List className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
 
-            return (
-              <div
-                key={player.id}
-                onClick={() => router.push(`/dashboard/players/${player.id}`)}
-                className="card-victorian relative overflow-hidden group cursor-pointer hover:border-gold-400/40 transition-all"
-              >
-                <CornerOrnament className="absolute top-0 left-0" size={40} />
-                <CornerOrnament className="absolute top-0 right-0 -scale-x-100" size={40} />
-                <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100" size={40} />
-                <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1]" size={40} />
+        {(() => {
+          const filtered = players.filter(p => !search || p.display_name?.toLowerCase().includes(search.toLowerCase()))
+          const dmList = filtered.filter(p => p.role === 'dm')
+          const adminList = filtered.filter(p => p.role === 'admin')
+          const playerList = filtered.filter(p => p.role === 'player')
+          const staffList = [...dmList, ...adminList]
 
-                {/* Background image */}
-                {player.background_url && (
-                  <div className="absolute inset-0 z-0">
-                    <img src={player.background_url} alt="" className="w-full h-full object-cover opacity-10" loading="lazy" decoding="async" />
-                    <div className="absolute inset-0 bg-gradient-to-b from-victorian-950/50 to-victorian-950/90" />
+          return (
+            <>
+              {/* ── Staff Section ── */}
+              {staffList.length > 0 && (
+                <div className="mb-8">
+                  {/* Section header */}
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-px flex-1" style={{ background: 'linear-gradient(90deg,transparent,#c9a84c55)' }} />
+                    <span className="text-xs font-display tracking-[0.25em] uppercase"
+                      style={{ background: 'linear-gradient(135deg,#c9a84c,#f0d080,#b8881e)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                      ผู้ดูแล
+                    </span>
+                    <div className="h-px flex-1" style={{ background: 'linear-gradient(90deg,#c9a84c55,transparent)' }} />
                   </div>
-                )}
 
-                <div className="relative z-10 p-6">
-                  {/* Admin Edit Button */}
-                  {isStaff && (isDM || player.role !== 'dm') && (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setEditingPlayer(player) }}
-                      className="absolute top-3 right-3 p-2 text-victorian-400 hover:text-gold-400 
-                                 opacity-0 group-hover:opacity-100 transition-all cursor-pointer
-                                 bg-victorian-900/80 rounded-sm border border-gold-400/10 hover:border-gold-400/30"
-                      title="แก้ไขข้อมูล"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                  )}
+                  {/* Grid View — DM featured full-width, then Admins compact */}
+                  {viewMode === 'grid' && (
+                    <div className="space-y-3">
+                      {/* DM — full-width grand banner */}
+                      {dmList.map(player => {
+                        const pathwayInfo = getPlayerPathwayInfo(player.id)
+                        return (
+                          <div
+                            key={player.id}
+                            onClick={() => router.push(`/dashboard/players/${player.id}`)}
+                            className="relative overflow-hidden group cursor-pointer rounded-sm border transition-all duration-300"
+                            style={{
+                              borderColor: 'rgba(52,211,153,0.5)',
+                              background: 'linear-gradient(135deg,rgba(8,24,18,0.98) 0%,rgba(12,32,24,0.98) 40%,rgba(8,22,16,0.98) 100%)',
+                              boxShadow: '0 0 40px rgba(52,211,153,0.18), 0 0 80px rgba(52,211,153,0.07), inset 0 0 80px rgba(52,211,153,0.04)',
+                            }}
+                          >
+                            <CornerOrnament className="absolute top-0 left-0 z-10" size={52} />
+                            <CornerOrnament className="absolute top-0 right-0 -scale-x-100 z-10" size={52} />
+                            <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 z-10" size={52} />
+                            <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] z-10" size={52} />
+                            {/* Top shimmer */}
+                            <div className="absolute top-0 left-0 right-0 h-[2px] z-20"
+                              style={{ background: 'linear-gradient(90deg,transparent 0%,#34d399 20%,#6ee7b7 50%,#34d399 80%,transparent 100%)' }} />
+                            <div className="absolute bottom-0 left-0 right-0 h-[1px] z-20"
+                              style={{ background: 'linear-gradient(90deg,transparent,#34d39940,transparent)' }} />
+                            {/* Background */}
+                            {player.background_url && (
+                              <div className="absolute inset-0 z-0">
+                                <img src={player.background_url} alt="" className="w-full h-full object-cover opacity-15 group-hover:opacity-22 transition-opacity duration-500" loading="lazy" decoding="async" />
+                                <div className="absolute inset-0" style={{ background: 'linear-gradient(100deg,rgba(8,24,18,0.7) 0%,rgba(8,22,16,0.92) 100%)' }} />
+                              </div>
+                            )}
+                            {/* DM badge */}
+                            <div className="absolute top-3.5 right-3.5 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-sm border"
+                              style={{ borderColor: 'rgba(52,211,153,0.35)', background: 'rgba(52,211,153,0.08)' }}>
+                              <Shield className="w-3.5 h-3.5 text-nouveau-emerald" />
+                              <span className="text-[10px] font-display tracking-widest uppercase" style={{ color: '#6ee7b7' }}>DM</span>
+                            </div>
+                            <div className="relative z-10 flex items-center gap-5 px-5 py-4">
+                              {/* Avatar */}
+                              {player.avatar_url ? (
+                                <div className="relative flex-shrink-0">
+                                  <div className="absolute inset-0 rounded-full blur-lg opacity-55 scale-125"
+                                    style={{ background: 'radial-gradient(circle,#34d399,transparent)' }} />
+                                  <img src={player.avatar_url} alt={player.display_name || ''}
+                                    className="relative w-16 h-16 rounded-full object-cover"
+                                    style={{ border: '2px solid rgba(110,231,183,0.55)' }}
+                                    loading="lazy" decoding="async" />
+                                </div>
+                              ) : (
+                                <div className="w-16 h-16 rounded-full flex items-center justify-center flex-shrink-0"
+                                  style={{ border: '2px solid rgba(110,231,183,0.55)', background: 'rgba(8,24,18,0.8)' }}>
+                                  <span className="text-xl font-display" style={{ color: '#6ee7b7' }}>{(player.display_name || '?')[0]?.toUpperCase()}</span>
+                                </div>
+                              )}
+                              {/* Info */}
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-display text-xl truncate"
+                                  style={{ background: 'linear-gradient(135deg,#34d399 0%,#6ee7b7 40%,#a7f3d0 60%,#34d399 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                                  {player.display_name || 'ไม่ระบุชื่อ'}
+                                </h3>
+                                <p className="text-xs font-display mt-0.5" style={{ color: 'rgba(52,211,153,0.55)' }}>Dungeon Master</p>
+                                {player.religions && (
+                                  <div className="flex items-center gap-1.5 mt-1.5">
+                                    {player.religions.logo_url
+                                      ? <img src={player.religions.logo_url} className="w-3 h-3 rounded-full object-cover border border-gold-400/20" />
+                                      : <Church className="w-3 h-3 text-gold-400" />}
+                                    <span className="text-gold-400/60 text-xs font-display">{player.religions.name_th}</span>
+                                  </div>
+                                )}
+                              </div>
+                              {/* Pathways inline */}
+                              {pathwayInfo.length > 0 && (
+                                <div className="hidden sm:flex flex-col gap-1 flex-shrink-0 text-right">
+                                  {pathwayInfo.slice(0, 2).map((info, i) => (
+                                    <span key={i} className="text-xs font-display" style={{ color: 'rgba(52,211,153,0.65)' }}>
+                                      {info.pathwayName}{info.seqNumber !== null ? ` · ลำดับ ${info.seqNumber}` : ''}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {/* Potion */}
+                              {isStaff && (
+                                <div className="hidden sm:flex flex-col gap-1 w-28 flex-shrink-0">
+                                  <div className="flex justify-between text-[10px] font-display" style={{ color: '#6ee7b7' }}>
+                                    <span>ย่อยโอสถ</span>
+                                    <span>{Math.min(100, Math.max(0, player.potion_digest_progress ?? 0))}%</span>
+                                  </div>
+                                  <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(52,211,153,0.12)' }}>
+                                    <div className="h-full rounded-full" style={{
+                                      width: `${Math.min(100, Math.max(0, player.potion_digest_progress ?? 0))}%`,
+                                      background: 'linear-gradient(90deg,#059669,#34d399,#6ee7b7)',
+                                      boxShadow: '0 0 6px rgba(52,211,153,0.4)',
+                                    }} />
+                                  </div>
+                                </div>
+                              )}
+                              {isStaff && (
+                                <button type="button" onClick={(e) => { e.stopPropagation(); setEditingPlayer(player) }}
+                                  className="p-1.5 text-victorian-400 hover:text-gold-400 opacity-0 group-hover:opacity-100 transition-all cursor-pointer flex-shrink-0">
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
 
-                  {/* Avatar + Basic Info */}
-                  <div className="flex items-center gap-4 mb-5">
-                    {player.avatar_url ? (
-                      <img
-                        src={player.avatar_url}
-                        alt={player.display_name || ''}
-                        className="w-16 h-16 rounded-full border-2 border-gold-400/30 object-cover flex-shrink-0"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    ) : (
-                      <div className="w-16 h-16 rounded-full border-2 border-gold-400/30 bg-victorian-800 flex items-center justify-center flex-shrink-0">
-                        <span className="text-gold-400 text-xl font-display">
-                          {(player.display_name || '?')[0]?.toUpperCase()}
-                        </span>
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <h3 className="font-display text-lg text-gold-400 truncate">
-                        {player.display_name || 'ไม่ระบุชื่อ'}
-                      </h3>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <RoleIcon role={player.role} />
-                        <span className="text-victorian-400 text-sm font-display">
-                          {player.role === 'admin' ? 'ผู้ดูแลระบบ' : player.role === 'dm' ? 'DM' : 'ผู้เล่น'}
-                        </span>
-                      </div>
-                      {player.religions && (
-                        <div className="flex items-center gap-1.5 mt-1.5 text-xs text-victorian-300">
-                          {player.religions.logo_url ? (
-                            <img src={player.religions.logo_url} className="w-3.5 h-3.5 rounded-full object-cover border border-gold-400/20" />
-                          ) : (
-                            <Church className="w-3.5 h-3.5 text-gold-400" />
-                          )}
-                          <span className="text-gold-400/80">{player.religions.name_th}</span>
+                      {/* Admins — compact 3-col */}
+                      {adminList.length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {adminList.map(player => {
+                            const pathwayInfo = getPlayerPathwayInfo(player.id)
+                            return (
+                              <div
+                                key={player.id}
+                                onClick={() => router.push(`/dashboard/players/${player.id}`)}
+                                className="relative overflow-hidden group cursor-pointer rounded-sm border transition-all duration-300"
+                                style={{
+                                  borderColor: 'rgba(212,175,55,0.4)',
+                                  background: 'linear-gradient(145deg,rgba(28,22,10,0.97),rgba(36,28,8,0.97))',
+                                  boxShadow: '0 0 20px rgba(212,175,55,0.1)',
+                                }}
+                              >
+                                <CornerOrnament className="absolute top-0 left-0 z-10" size={32} />
+                                <CornerOrnament className="absolute top-0 right-0 -scale-x-100 z-10" size={32} />
+                                <div className="absolute top-0 left-0 right-0 h-[1.5px] z-20"
+                                  style={{ background: 'linear-gradient(90deg,transparent,#c9a84c,#f0d080,#c9a84c,transparent)' }} />
+                                {player.background_url && (
+                                  <div className="absolute inset-0 z-0">
+                                    <img src={player.background_url} alt="" className="w-full h-full object-cover opacity-10" loading="lazy" decoding="async" />
+                                    <div className="absolute inset-0" style={{ background: 'rgba(20,15,5,0.82)' }} />
+                                  </div>
+                                )}
+                                {/* Admin badge */}
+                                <div className="absolute top-2 right-2 z-20">
+                                  <Crown className="w-3 h-3" style={{ color: '#c9a84c' }} />
+                                </div>
+                                <div className="relative z-10 flex items-center gap-3 px-3 py-3">
+                                  {player.avatar_url ? (
+                                    <div className="relative flex-shrink-0">
+                                      <div className="absolute inset-0 rounded-full blur-md opacity-50 scale-110"
+                                        style={{ background: 'radial-gradient(circle,#c9a84c,transparent)' }} />
+                                      <img src={player.avatar_url} alt={player.display_name || ''}
+                                        className="relative w-10 h-10 rounded-full object-cover"
+                                        style={{ border: '1.5px solid rgba(212,175,55,0.5)' }}
+                                        loading="lazy" decoding="async" />
+                                    </div>
+                                  ) : (
+                                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                                      style={{ border: '1.5px solid rgba(212,175,55,0.5)', background: 'rgba(28,22,10,0.8)' }}>
+                                      <span className="text-sm font-display" style={{ color: '#f0d080' }}>{(player.display_name || '?')[0]?.toUpperCase()}</span>
+                                    </div>
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-display text-sm truncate"
+                                      style={{ background: 'linear-gradient(135deg,#c9a84c,#f0d080,#b8881e)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                                      {player.display_name || 'ไม่ระบุชื่อ'}
+                                    </p>
+                                    {pathwayInfo.length > 0 && (
+                                      <p className="text-[11px] truncate mt-0.5" style={{ color: 'rgba(212,175,55,0.45)' }}>
+                                        {pathwayInfo[0].pathwayName}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
                         </div>
                       )}
                     </div>
-                  </div>
-
-                  {/* Pathways & Sequences */}
-                  {pathwayInfo.length > 0 ? (
-                    <div className="space-y-2">
-                      {pathwayInfo.map((info, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center justify-between px-3 py-2 
-                                     bg-victorian-950/60 border border-gold-400/10 rounded-sm"
-                        >
-                          <span className="text-nouveau-cream/80 text-sm truncate">
-                            {info.pathwayName}
-                          </span>
-                          <span className="text-gold-400 text-xs font-display ml-2 flex-shrink-0">
-                            {info.seqNumber !== null ? `ลำดับ ${info.seqNumber}` : '-'}
-                            {info.sequenceName && (
-                              <span className="text-victorian-400 ml-1">({info.sequenceName})</span>
-                            )}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-victorian-500 text-sm italic text-center py-2">
-                      ยังไม่มีเส้นทาง
-                    </p>
                   )}
 
-                  {isStaff && (
-                    <div className="mt-4">
-                      <div className="flex items-center justify-between text-xs text-amber-200 mb-1">
-                        <span className="font-display tracking-wider">ย่อยโอสถ</span>
-                        <span className="tabular-nums">{Math.min(100, Math.max(0, player.potion_digest_progress ?? 0))}%</span>
-                      </div>
-                      <div className="w-full h-2 bg-victorian-950 rounded-full overflow-hidden border border-amber-500/10">
-                        <div
-                          className="h-full rounded-full transition-all duration-700"
-                          style={{
-                            width: `${Math.min(100, Math.max(0, player.potion_digest_progress ?? 0))}%`,
-                            background: 'linear-gradient(90deg, #F59E0B, #FBBF24, #FDE68A)',
-                            boxShadow: '0 0 10px rgba(251, 191, 36, 0.5)'
-                          }}
-                        />
-                      </div>
+                  {/* List View — Staff */}
+                  {viewMode === 'list' && (
+                    <div className="space-y-1.5">
+                      {/* DM rows — slightly taller with glow */}
+                      {dmList.map(player => {
+                        const pathwayInfo = getPlayerPathwayInfo(player.id)
+                        return (
+                          <div
+                            key={player.id}
+                            onClick={() => router.push(`/dashboard/players/${player.id}`)}
+                            className="relative flex items-center gap-3 px-4 py-3 rounded-sm border cursor-pointer overflow-hidden group transition-all duration-300"
+                            style={{
+                              borderColor: 'rgba(52,211,153,0.42)',
+                              background: 'linear-gradient(135deg,rgba(8,24,18,0.98),rgba(12,32,24,0.98))',
+                              boxShadow: '0 0 18px rgba(52,211,153,0.12)',
+                            }}
+                          >
+                            <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-sm"
+                              style={{ background: 'linear-gradient(180deg,#34d399,#6ee7b7,#34d399)' }} />
+                            {player.avatar_url ? (
+                              <div className="relative flex-shrink-0">
+                                <div className="absolute inset-0 rounded-full blur-sm opacity-45" style={{ background: 'radial-gradient(circle,#34d399,transparent)' }} />
+                                <img src={player.avatar_url} alt={player.display_name || ''} className="relative w-11 h-11 rounded-full object-cover" style={{ border: '1.5px solid rgba(110,231,183,0.5)' }} loading="lazy" decoding="async" />
+                              </div>
+                            ) : (
+                              <div className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0" style={{ border: '1.5px solid rgba(110,231,183,0.5)' }}>
+                                <span className="font-display" style={{ color: '#6ee7b7' }}>{(player.display_name || '?')[0]?.toUpperCase()}</span>
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-display text-base truncate" style={{ background: 'linear-gradient(135deg,#34d399,#6ee7b7,#34d399)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                                  {player.display_name || 'ไม่ระบุชื่อ'}
+                                </span>
+                                <Shield className="w-3.5 h-3.5 text-nouveau-emerald flex-shrink-0" />
+                              </div>
+                              {pathwayInfo.length > 0 && (
+                                <p className="text-xs truncate mt-0.5" style={{ color: 'rgba(52,211,153,0.45)' }}>{pathwayInfo.map(i => i.pathwayName).join(', ')}</p>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-display tracking-widest px-2 py-0.5 rounded-sm border flex-shrink-0" style={{ borderColor: 'rgba(52,211,153,0.28)', color: '#34d399', background: 'rgba(52,211,153,0.07)' }}>DM</span>
+                            {isStaff && (
+                              <button type="button" onClick={(e) => { e.stopPropagation(); setEditingPlayer(player) }} className="p-1.5 text-victorian-400 hover:text-gold-400 transition-colors cursor-pointer opacity-0 group-hover:opacity-100"><Pencil className="w-3.5 h-3.5" /></button>
+                            )}
+                          </div>
+                        )
+                      })}
+                      {/* Admin rows — compact gold */}
+                      {adminList.map(player => {
+                        const pathwayInfo = getPlayerPathwayInfo(player.id)
+                        return (
+                          <div
+                            key={player.id}
+                            onClick={() => router.push(`/dashboard/players/${player.id}`)}
+                            className="relative flex items-center gap-3 px-4 py-2.5 rounded-sm border cursor-pointer overflow-hidden group transition-all duration-300"
+                            style={{
+                              borderColor: 'rgba(212,175,55,0.35)',
+                              background: 'linear-gradient(135deg,rgba(28,22,10,0.97),rgba(36,28,8,0.97))',
+                              boxShadow: '0 0 12px rgba(212,175,55,0.08)',
+                            }}
+                          >
+                            <div className="absolute left-0 top-0 bottom-0 w-[2.5px] rounded-l-sm"
+                              style={{ background: 'linear-gradient(180deg,#c9a84c,#f0d080,#c9a84c)' }} />
+                            {player.avatar_url ? (
+                              <img src={player.avatar_url} alt={player.display_name || ''} className="w-9 h-9 rounded-full object-cover flex-shrink-0" style={{ border: '1.5px solid rgba(212,175,55,0.45)' }} loading="lazy" decoding="async" />
+                            ) : (
+                              <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ border: '1.5px solid rgba(212,175,55,0.45)' }}>
+                                <span className="text-sm font-display" style={{ color: '#f0d080' }}>{(player.display_name || '?')[0]?.toUpperCase()}</span>
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-display text-sm truncate" style={{ background: 'linear-gradient(135deg,#c9a84c,#f0d080,#b8881e)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                                  {player.display_name || 'ไม่ระบุชื่อ'}
+                                </span>
+                                <Crown className="w-3 h-3 flex-shrink-0" style={{ color: '#c9a84c' }} />
+                              </div>
+                              {pathwayInfo.length > 0 && (
+                                <p className="text-[11px] truncate" style={{ color: 'rgba(212,175,55,0.4)' }}>{pathwayInfo[0].pathwayName}</p>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-display tracking-widest px-1.5 py-0.5 rounded-sm border flex-shrink-0" style={{ borderColor: 'rgba(212,175,55,0.25)', color: '#c9a84c', background: 'rgba(212,175,55,0.06)' }}>ADMIN</span>
+                            {isStaff && (
+                              <button type="button" onClick={(e) => { e.stopPropagation(); setEditingPlayer(player) }} className="p-1.5 text-victorian-400 hover:text-gold-400 transition-colors cursor-pointer opacity-0 group-hover:opacity-100"><Pencil className="w-3 h-3" /></button>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
-              </div>
-            )
-          })}
-        </div>
+              )}
 
-        {players.length === 0 && (
-          <div className="text-center py-20 text-victorian-400">
-            <Users className="w-16 h-16 mx-auto mb-4 opacity-30" />
-            <p className="font-display text-xl">ยังไม่มีผู้เล่นในระบบ</p>
-          </div>
-        )}
+              {/* ── Players Section ── */}
+              {playerList.length > 0 && (
+                <div>
+                  {/* Section header — only show if staff section also visible */}
+                  {staffList.length > 0 && (
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="h-px flex-1 bg-gold-400/10" />
+                      <span className="text-xs font-display tracking-[0.25em] uppercase text-victorian-400">ผู้เล่น</span>
+                      <div className="h-px flex-1 bg-gold-400/10" />
+                    </div>
+                  )}
+
+                  {/* Grid View — Players */}
+                  {viewMode === 'grid' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {playerList.map((player) => {
+                        const pathwayInfo = getPlayerPathwayInfo(player.id)
+                        return (
+                          <div
+                            key={player.id}
+                            onClick={() => router.push(`/dashboard/players/${player.id}`)}
+                            className="card-victorian relative overflow-hidden group cursor-pointer hover:border-gold-400/40 transition-all"
+                          >
+                            <CornerOrnament className="absolute top-0 left-0" size={40} />
+                            <CornerOrnament className="absolute top-0 right-0 -scale-x-100" size={40} />
+                            <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100" size={40} />
+                            <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1]" size={40} />
+
+                            {player.background_url && (
+                              <div className="absolute inset-0 z-0">
+                                <img src={player.background_url} alt="" className="w-full h-full object-cover opacity-10" loading="lazy" decoding="async" />
+                                <div className="absolute inset-0 bg-gradient-to-b from-victorian-950/50 to-victorian-950/90" />
+                              </div>
+                            )}
+
+                            <div className="relative z-10 p-6">
+                              {isStaff && (isDM || player.role !== 'dm') && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); setEditingPlayer(player) }}
+                                  className="absolute top-3 right-3 p-2 text-victorian-400 hover:text-gold-400
+                                             opacity-0 group-hover:opacity-100 transition-all cursor-pointer
+                                             bg-victorian-900/80 rounded-sm border border-gold-400/10 hover:border-gold-400/30"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                              )}
+
+                              <div className="flex items-center gap-4 mb-5">
+                                {player.avatar_url ? (
+                                  <img src={player.avatar_url} alt={player.display_name || ''} className="w-16 h-16 rounded-full border-2 border-gold-400/30 object-cover flex-shrink-0" loading="lazy" decoding="async" />
+                                ) : (
+                                  <div className="w-16 h-16 rounded-full border-2 border-gold-400/30 bg-victorian-800 flex items-center justify-center flex-shrink-0">
+                                    <span className="text-gold-400 text-xl font-display">{(player.display_name || '?')[0]?.toUpperCase()}</span>
+                                  </div>
+                                )}
+                                <div className="min-w-0">
+                                  <h3 className="font-display text-lg text-gold-400 truncate">{player.display_name || 'ไม่ระบุชื่อ'}</h3>
+                                  <div className="flex items-center gap-1.5 mt-1">
+                                    <Swords className="w-4 h-4 text-metal-silver" />
+                                    <span className="text-victorian-400 text-sm font-display">ผู้เล่น</span>
+                                  </div>
+                                  {player.religions && (
+                                    <div className="flex items-center gap-1.5 mt-1.5 text-xs">
+                                      {player.religions.logo_url
+                                        ? <img src={player.religions.logo_url} className="w-3.5 h-3.5 rounded-full object-cover border border-gold-400/20" />
+                                        : <Church className="w-3.5 h-3.5 text-gold-400" />}
+                                      <span className="text-gold-400/80">{player.religions.name_th}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {pathwayInfo.length > 0 ? (
+                                <div className="space-y-2">
+                                  {pathwayInfo.map((info, i) => (
+                                    <div key={i} className="flex items-center justify-between px-3 py-2 bg-victorian-950/60 border border-gold-400/10 rounded-sm">
+                                      <span className="text-nouveau-cream/80 text-sm truncate">{info.pathwayName}</span>
+                                      <span className="text-gold-400 text-xs font-display ml-2 flex-shrink-0">
+                                        {info.seqNumber !== null ? `ลำดับ ${info.seqNumber}` : '-'}
+                                        {info.sequenceName && <span className="text-victorian-400 ml-1">({info.sequenceName})</span>}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-victorian-500 text-sm italic text-center py-2">ยังไม่มีเส้นทาง</p>
+                              )}
+
+                              {isStaff && (
+                                <div className="mt-4">
+                                  <div className="flex items-center justify-between text-xs text-amber-200 mb-1">
+                                    <span className="font-display tracking-wider">ย่อยโอสถ</span>
+                                    <span className="tabular-nums">{Math.min(100, Math.max(0, player.potion_digest_progress ?? 0))}%</span>
+                                  </div>
+                                  <div className="w-full h-2 bg-victorian-950 rounded-full overflow-hidden border border-amber-500/10">
+                                    <div className="h-full rounded-full transition-all duration-700"
+                                      style={{
+                                        width: `${Math.min(100, Math.max(0, player.potion_digest_progress ?? 0))}%`,
+                                        background: 'linear-gradient(90deg,#F59E0B,#FBBF24,#FDE68A)',
+                                        boxShadow: '0 0 10px rgba(251,191,36,0.5)',
+                                      }} />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* List View — Players */}
+                  {viewMode === 'list' && (
+                    <div className="space-y-1.5">
+                      {playerList.map((player) => {
+                        const pathwayInfo = getPlayerPathwayInfo(player.id)
+                        return (
+                          <div
+                            key={player.id}
+                            onClick={() => router.push(`/dashboard/players/${player.id}`)}
+                            className="flex items-center gap-3 px-4 py-3 card-victorian cursor-pointer hover:border-gold-400/40 transition-all"
+                          >
+                            {player.avatar_url ? (
+                              <img src={player.avatar_url} alt={player.display_name || ''} className="w-10 h-10 rounded-full border border-gold-400/30 object-cover flex-shrink-0" loading="lazy" decoding="async" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full border border-gold-400/30 bg-victorian-800 flex items-center justify-center flex-shrink-0">
+                                <span className="text-gold-400 text-sm font-display">{(player.display_name || '?')[0]?.toUpperCase()}</span>
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-display text-gold-400 truncate">{player.display_name || 'ไม่ระบุชื่อ'}</span>
+                                <Swords className="w-3.5 h-3.5 text-metal-silver flex-shrink-0" />
+                              </div>
+                              {pathwayInfo.length > 0 && (
+                                <p className="text-victorian-400 text-xs truncate mt-0.5">{pathwayInfo.map(i => i.pathwayName).join(', ')}</p>
+                              )}
+                            </div>
+                            {player.religions && (
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                {player.religions.logo_url
+                                  ? <img src={player.religions.logo_url} className="w-4 h-4 rounded-full object-cover border border-gold-400/20" />
+                                  : <Church className="w-3.5 h-3.5 text-gold-400" />}
+                                <span className="text-gold-400/80 text-xs font-display">{player.religions.name_th}</span>
+                              </div>
+                            )}
+                            {isStaff && (
+                              <button type="button" onClick={(e) => { e.stopPropagation(); setEditingPlayer(player) }}
+                                className="p-1.5 text-victorian-400 hover:text-gold-400 transition-colors cursor-pointer">
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {filtered.length === 0 && (
+                <div className="text-center py-20 text-victorian-400">
+                  <Users className="w-16 h-16 mx-auto mb-4 opacity-30" />
+                  <p className="font-display text-xl">{search ? 'ไม่พบผู้เล่น' : 'ยังไม่มีผู้เล่นในระบบ'}</p>
+                </div>
+              )}
+            </>
+          )
+        })()}
       </main>
       )}
 
