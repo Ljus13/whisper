@@ -13,10 +13,13 @@
 -- ══════════════════════════════════════════════════════════════
 
 -- Step 1: Create the hook function
+-- SECURITY DEFINER = runs as function owner (bypasses RLS on profiles table)
 CREATE OR REPLACE FUNCTION public.custom_access_token_hook(event jsonb)
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE
+SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   claims jsonb;
@@ -24,12 +27,19 @@ DECLARE
   discord_linked boolean;
 BEGIN
   -- Fetch role and discord status from profiles
-  SELECT 
-    p.role,
-    (p.discord_user_id IS NOT NULL)
-  INTO user_role, discord_linked
-  FROM public.profiles p
-  WHERE p.id = (event->>'user_id')::uuid;
+  -- Wrapped in exception handler so auth NEVER fails even if profiles lookup fails
+  BEGIN
+    SELECT 
+      p.role,
+      (p.discord_user_id IS NOT NULL)
+    INTO user_role, discord_linked
+    FROM public.profiles p
+    WHERE p.id = (event->>'user_id')::uuid;
+  EXCEPTION WHEN OTHERS THEN
+    -- If profiles lookup fails for any reason, use safe defaults
+    user_role := NULL;
+    discord_linked := false;
+  END;
 
   -- Build custom claims
   claims := event->'claims';
