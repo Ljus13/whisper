@@ -1,4 +1,3 @@
-import { createClient } from '@/lib/supabase/server'
 import PunishmentBanner from '@/components/dashboard/punishment-banner'
 import NotificationBell from '@/components/dashboard/notification-bell'
 import MaintenanceBanner from '@/components/dashboard/maintenance-banner'
@@ -6,31 +5,21 @@ import MaintenanceToggle from '@/components/dashboard/maintenance-toggle'
 import MaintenanceWall from '@/components/dashboard/maintenance-wall'
 import DiscordLinkBanner from '@/components/dashboard/discord-link-banner'
 import CombatAlertBanner from '@/components/combat/combat-alert-banner'
-import { getMaintenanceStatus } from '@/app/actions/maintenance'
+import { getAuth, getMaintenanceStatusCached } from '@/lib/auth'
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  // ⚡ Parallel fetch: auth + maintenance run simultaneously (was sequential waterfall)
+  const [auth, maintenance] = await Promise.all([
+    getAuth(),
+    getMaintenanceStatusCached(),
+  ])
 
-  let isAdmin = false
-  let isDM = false
-  let discordLinked = false
-  if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role, discord_user_id')
-      .eq('id', user.id)
-      .single()
-    isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
-    isDM = profile?.role === 'dm'
-    discordLinked = !!profile?.discord_user_id
-  }
-
-  const maintenance = await getMaintenanceStatus()
+  const { user, isStaff: isAdmin, role, discordLinked } = auth
+  const isDM = role === 'dm'
 
   // Player + maintenance active → show blocking wall (no dashboard access)
   if (!isAdmin && user && maintenance.enabled) {

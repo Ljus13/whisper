@@ -1,7 +1,8 @@
 // src/app/dashboard/players/[id]/page.tsx
 import { createClient } from '@/lib/supabase/server'
 import PlayerDetailView from '@/components/dashboard/player-detail-view'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
+import { getAuth } from '@/lib/auth'
 
 type Props = {
   params: Promise<{ id: string }>
@@ -9,6 +10,9 @@ type Props = {
 
 export default async function Page({ params }: Props) {
   const { id } = await params
+  const { user } = await getAuth()
+  if (!user) redirect('/')
+
   const supabase = await createClient()
 
   // Parallel fetch for efficiency

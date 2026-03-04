@@ -1,15 +1,11 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import MapViewerLoader from '@/components/dashboard/map-viewer-loader'
+import { getAuth } from '@/lib/auth'
 
 export default async function MapDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const { user } = await getAuth()
+  if (!user) redirect('/')
 
-  if (!session?.user) {
-    redirect('/')
-  }
-
-  return <MapViewerLoader userId={session.user.id} mapId={id} />
+  return <MapViewerLoader userId={user.id} mapId={id} />
 }

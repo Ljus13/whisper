@@ -667,6 +667,7 @@ export default function DashboardContent({
         <section className="w-4/5 mx-auto grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-5">
           <Link 
             href={isSanityLocked ? "#" : "/dashboard/maps"} 
+            onMouseEnter={() => !isSanityLocked && router.prefetch('/dashboard/maps')}
             className={`group relative overflow-hidden card-victorian p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center gap-3 md:gap-5 
                         hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[140px] md:min-h-[200px]
                         ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
@@ -692,8 +693,9 @@ export default function DashboardContent({
             </div>
           </Link>
 
-          <a 
+          <Link 
             href={isSanityLocked ? "#" : "/dashboard/skills"} 
+            onMouseEnter={() => !isSanityLocked && router.prefetch('/dashboard/skills')}
             className={`group relative overflow-hidden card-victorian p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center gap-3 md:gap-5 
                         hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[140px] md:min-h-[200px]
                         ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
@@ -717,10 +719,11 @@ export default function DashboardContent({
                 จัดการทักษะและความสามารถพิเศษ
               </p>
             </div>
-          </a>
+          </Link>
 
           <Link
             href="/dashboard/combat"
+            onMouseEnter={() => router.prefetch('/dashboard/combat')}
             className="group relative overflow-hidden card-victorian p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center gap-3 md:gap-5 
                         hover:border-red-500/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[140px] md:min-h-[200px] cursor-pointer"
           >
@@ -740,8 +743,9 @@ export default function DashboardContent({
             </div>
           </Link>
 
-          <a 
+          <Link 
             href={isSanityLocked ? "#" : "/dashboard/action-quest/quests"} 
+            onMouseEnter={() => !isSanityLocked && router.prefetch('/dashboard/action-quest/quests')}
             className={`group relative overflow-hidden card-victorian p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center gap-3 md:gap-5 
                         hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[140px] md:min-h-[200px]
                         ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
@@ -765,10 +769,11 @@ export default function DashboardContent({
                 ส่งการกระทำ / ภารกิจ
               </p>
             </div>
-          </a>
+          </Link>
 
-          <a 
+          <Link 
             href={isSanityLocked ? "#" : "/dashboard/players"} 
+            onMouseEnter={() => !isSanityLocked && router.prefetch('/dashboard/players')}
             className={`group relative overflow-hidden card-victorian p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center gap-3 md:gap-5 
                         hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[140px] md:min-h-[200px]
                         ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
@@ -792,9 +797,10 @@ export default function DashboardContent({
                 รายชื่อนักผจญภัยและสหายร่วมรบ
               </p>
             </div>
-          </a>
+          </Link>
           <Link
             href="/timeline"
+            onMouseEnter={() => router.prefetch('/timeline')}
             className="group relative overflow-hidden card-victorian p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center gap-3 md:gap-5 
                         hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[140px] md:min-h-[200px]
                         cursor-pointer"
@@ -818,6 +824,7 @@ export default function DashboardContent({
           {isAdmin && (
             <Link
               href="/dashboard/pathways-grant"
+              onMouseEnter={() => router.prefetch('/dashboard/pathways-grant')}
               className="group relative overflow-hidden card-victorian p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center gap-3 md:gap-5 
                         hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[140px] md:min-h-[200px]
                         cursor-pointer"
@@ -841,6 +848,7 @@ export default function DashboardContent({
           {isAdmin && (
             <Link
               href="/dashboard/grant-skills"
+              onMouseEnter={() => router.prefetch('/dashboard/grant-skills')}
               className="group relative overflow-hidden card-victorian p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center gap-3 md:gap-5 
                         hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[140px] md:min-h-[200px]
                         cursor-pointer"
@@ -939,8 +947,9 @@ export default function DashboardContent({
                 แก้ไขประวัติ
               </button>
 
-              <a
+              <Link
                 href={isSanityLocked ? "#" : "/dashboard/bio-templates"}
+                onMouseEnter={() => !isSanityLocked && router.prefetch('/dashboard/bio-templates')}
                 className={`w-full flex items-center justify-center gap-3 px-4 py-3
                            border border-gold-400/20 rounded-sm
                            text-nouveau-cream hover:text-gold-400 hover:border-gold-400/40
@@ -955,7 +964,7 @@ export default function DashboardContent({
                   <FileText className="w-5 h-5" />
                 )}
                 เทมเพลตประวัติ
-              </a>
+              </Link>
 
               <button
                 type="button"

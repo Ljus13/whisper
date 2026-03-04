@@ -1,16 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import DashboardContent from '@/components/dashboard/dashboard-content'
+import { getAuth } from '@/lib/auth'
 
 export default async function DashboardPage() {
+  // Auth is cached from layout — no extra network call
+  const { user } = await getAuth()
+  if (!user) redirect('/')
+
+  // Only data queries below hit the DB
   const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-
-  if (!session?.user) {
-    redirect('/')
-  }
-
-  const user = session.user
 
   // Fetch profile and pathway info in parallel (not sequential!)
   const [{ data: profile }, { data: playerPathways }, { data: pathwayGrants }] = await Promise.all([

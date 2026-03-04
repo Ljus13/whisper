@@ -1,14 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import SkillsContent from '@/components/dashboard/skills-content'
+import { getAuth } from '@/lib/auth'
 
 export default async function SkillsPage() {
-  const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const { user } = await getAuth()
+  if (!user) redirect('/')
 
-  if (!session?.user) {
-    redirect('/')
-  }
-
-  return <SkillsContent userId={session.user.id} />
+  return <SkillsContent userId={user.id} />
 }
