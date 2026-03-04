@@ -24,6 +24,16 @@ import { getCached, setCache, REF_TTL } from '@/lib/client-cache'
 /* ─── Props ─── */
 interface SkillsContentProps {
   userId: string
+  /** Server-fetched initial data — skips the client-side loading spinner */
+  initialData?: {
+    profile: Profile
+    skillTypes: SkillType[]
+    pathways: SkillPathway[]
+    sequences: SkillSequence[]
+    skills: Skill[]
+    playerPathways: PlayerPathway[]
+    grantedSkills: any[]
+  }
 }
 
 /* ═══════════════════════════════════════
@@ -1644,15 +1654,15 @@ function PlayerSkillView({
 /* ═══════════════════════════════════════
    MAIN COMPONENT
    ═══════════════════════════════════════ */
-export default function SkillsContent({ userId }: SkillsContentProps) {
-  const [profile, setProfile] = useState<Profile | null>(getCached<Profile>('skills:profile'))
-  const [skillTypes, setSkillTypes] = useState<SkillType[]>(getCached<SkillType[]>('skills:types') ?? [])
-  const [pathways, setPathways] = useState<SkillPathway[]>(getCached<SkillPathway[]>('skills:pathways') ?? [])
-  const [sequences, setSequences] = useState<SkillSequence[]>(getCached<SkillSequence[]>('skills:sequences') ?? [])
-  const [skills, setSkills] = useState<Skill[]>(getCached<Skill[]>('skills:skills') ?? [])
-  const [playerPathways, setPlayerPathways] = useState<PlayerPathway[]>(getCached<PlayerPathway[]>(`skills:pp:${userId}`) ?? [])
-  const [grantedSkills, setGrantedSkills] = useState<any[]>(getCached<any[]>(`skills:granted:${userId}`) ?? [])
-  const [loaded, setLoaded] = useState(!!getCached('skills:profile'))
+export default function SkillsContent({ userId, initialData }: SkillsContentProps) {
+  const [profile, setProfile] = useState<Profile | null>(initialData?.profile ?? getCached<Profile>('skills:profile'))
+  const [skillTypes, setSkillTypes] = useState<SkillType[]>(initialData?.skillTypes ?? getCached<SkillType[]>('skills:types') ?? [])
+  const [pathways, setPathways] = useState<SkillPathway[]>(initialData?.pathways ?? getCached<SkillPathway[]>('skills:pathways') ?? [])
+  const [sequences, setSequences] = useState<SkillSequence[]>(initialData?.sequences ?? getCached<SkillSequence[]>('skills:sequences') ?? [])
+  const [skills, setSkills] = useState<Skill[]>(initialData?.skills ?? getCached<Skill[]>('skills:skills') ?? [])
+  const [playerPathways, setPlayerPathways] = useState<PlayerPathway[]>(initialData?.playerPathways ?? getCached<PlayerPathway[]>(`skills:pp:${userId}`) ?? [])
+  const [grantedSkills, setGrantedSkills] = useState<any[]>(initialData?.grantedSkills ?? getCached<any[]>(`skills:granted:${userId}`) ?? [])
+  const [loaded, setLoaded] = useState(!!initialData || !!getCached('skills:profile'))
 
   const fetchData = useCallback(() => {
     const supabase = createClient()
@@ -1677,7 +1687,8 @@ export default function SkillsContent({ userId }: SkillsContentProps) {
   }, [userId])
 
   useEffect(() => {
-    fetchData()
+    // If server provided initial data, only subscribe to realtime (skip initial fetch)
+    if (!initialData) fetchData()
 
     // ─── Realtime Subscription ───
     const supabase = createClient()
@@ -1693,7 +1704,7 @@ export default function SkillsContent({ userId }: SkillsContentProps) {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [userId, fetchData])
+  }, [userId, fetchData, initialData])
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
   const [showAdmin, setShowAdmin] = useState(false)

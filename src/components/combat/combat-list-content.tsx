@@ -11,6 +11,8 @@ import Link from 'next/link'
 interface Props {
   userId: string
   isStaff: boolean
+  /** Server-fetched initial sessions — skips the client-side loading spinner */
+  initialSessions?: CombatSession[]
 }
 
 function fmtDate(d: string) {
@@ -24,9 +26,9 @@ const statusLabel: Record<string, { text: string; color: string; icon: React.Rea
   ended: { text: 'จบแล้ว', color: 'text-victorian-400 border-victorian-500/40 bg-victorian-500/10', icon: <CheckCircle className="w-3.5 h-3.5" /> },
 }
 
-export default function CombatListContent({ userId, isStaff }: Props) {
-  const [sessions, setSessions] = useState<CombatSession[]>([])
-  const [loading, setLoading] = useState(true)
+export default function CombatListContent({ userId, isStaff, initialSessions }: Props) {
+  const [sessions, setSessions] = useState<CombatSession[]>(initialSessions ?? [])
+  const [loading, setLoading] = useState(!initialSessions)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [showCreate, setShowCreate] = useState(false)
@@ -46,7 +48,8 @@ export default function CombatListContent({ userId, isStaff }: Props) {
 
   useEffect(() => {
     mountedRef.current = true
-    fetchData()
+    // If server provided initial data, only subscribe to realtime (skip initial fetch)
+    if (!initialSessions) fetchData()
 
     const supabase = createClient()
     const debouncedFetch = () => debouncedCall('combat-list', fetchData, 150)
@@ -61,7 +64,7 @@ export default function CombatListContent({ userId, isStaff }: Props) {
       mountedRef.current = false
       supabase.removeChannel(channel)
     }
-  }, [fetchData])
+  }, [fetchData, initialSessions])
 
   const handleCreate = async () => {
     if (!newName.trim() || creating) return

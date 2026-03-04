@@ -12,6 +12,13 @@ import { getCached, setCache } from '@/lib/client-cache'
 
 interface MapsContentProps {
   userId: string
+  /** Server-fetched initial data — skips the client-side loading spinner */
+  initialData?: {
+    maps: GameMap[]
+    isAdmin: boolean
+    myMapId: string | null
+    sanity: number
+  }
 }
 
 /* ══════════════════════════════════════════════
@@ -153,19 +160,19 @@ function MapModal({
 /* ══════════════════════════════════════════════
    MAIN: Maps Gallery Content
    ══════════════════════════════════════════════ */
-export default function MapsContent({ userId }: MapsContentProps) {
+export default function MapsContent({ userId, initialData }: MapsContentProps) {
   const router = useRouter()
   const [showModal, setShowModal] = useState(false)
   const [editingMap, setEditingMap] = useState<GameMap | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  /* ── client-side data ── */
-  const [maps, setMaps] = useState<GameMap[]>(getCached('maps:all') ?? [])
-  const [isAdmin, setIsAdmin] = useState<boolean>(getCached('maps:admin') ?? false)
-  const [myMapId, setMyMapId] = useState<string | null>(getCached('maps:mymap') ?? null)
-  const [sanity, setSanity] = useState<number>(getCached('maps:sanity') ?? 10)
-  const [loaded, setLoaded] = useState(!!getCached('maps:all'))
+  /* ── client-side data (initialized from server when available) ── */
+  const [maps, setMaps] = useState<GameMap[]>(initialData?.maps ?? getCached('maps:all') ?? [])
+  const [isAdmin, setIsAdmin] = useState<boolean>(initialData?.isAdmin ?? getCached('maps:admin') ?? false)
+  const [myMapId, setMyMapId] = useState<string | null>(initialData?.myMapId ?? getCached('maps:mymap') ?? null)
+  const [sanity, setSanity] = useState<number>(initialData?.sanity ?? getCached('maps:sanity') ?? 10)
+  const [loaded, setLoaded] = useState(!!initialData || !!getCached('maps:all'))
 
   useEffect(() => {
     const supabase = createClient()
@@ -187,8 +194,9 @@ export default function MapsContent({ userId }: MapsContentProps) {
         setLoaded(true)
       })
     }
-    
-    fetchData()
+
+    // If server provided initial data, only subscribe to realtime (skip initial fetch)
+    if (!initialData) fetchData()
 
     const channel = supabase
       .channel('maps_realtime')
@@ -198,7 +206,7 @@ export default function MapsContent({ userId }: MapsContentProps) {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [userId])
+  }, [userId, initialData])
 
   if (!loaded) {
     return (

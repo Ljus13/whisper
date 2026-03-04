@@ -73,6 +73,15 @@ interface Religion {
 
 type TabKey = 'players' | 'religions'
 
+/** Server-fetched initial data — skips the client-side loading spinner */
+interface PlayersInitialData {
+  currentProfile: Profile
+  players: Profile[]
+  playerPathways: PlayerPathway[]
+  pathways: Pathway[]
+  sequences: Sequence[]
+}
+
 
 function RoleIcon({ role }: { role: string }) {
   if (role === 'admin') return <Crown className="w-4 h-4 text-gold-300" />
@@ -80,15 +89,15 @@ function RoleIcon({ role }: { role: string }) {
   return <Swords className="w-4 h-4 text-metal-silver" />
 }
 
-export default function PlayersContent({ userId }: { userId: string }) {
+export default function PlayersContent({ userId, initialData }: { userId: string; initialData?: PlayersInitialData }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [currentProfile, setCurrentProfile] = useState<Profile | null>(getCached<Profile>('players:me'))
-  const [players, setPlayers] = useState<Profile[]>(getCached<Profile[]>('players:all') ?? [])
-  const [playerPathways, setPlayerPathways] = useState<PlayerPathway[]>(getCached<PlayerPathway[]>('players:pp') ?? [])
-  const [pathways, setPathways] = useState<Pathway[]>(getCached<Pathway[]>('players:pw') ?? [])
-  const [sequences, setSequences] = useState<Sequence[]>(getCached<Sequence[]>('players:seq') ?? [])
-  const [loaded, setLoaded] = useState(!!getCached('players:me'))
+  const [currentProfile, setCurrentProfile] = useState<Profile | null>(initialData?.currentProfile ?? getCached<Profile>('players:me'))
+  const [players, setPlayers] = useState<Profile[]>(initialData?.players ?? getCached<Profile[]>('players:all') ?? [])
+  const [playerPathways, setPlayerPathways] = useState<PlayerPathway[]>(initialData?.playerPathways ?? getCached<PlayerPathway[]>('players:pp') ?? [])
+  const [pathways, setPathways] = useState<Pathway[]>(initialData?.pathways ?? getCached<Pathway[]>('players:pw') ?? [])
+  const [sequences, setSequences] = useState<Sequence[]>(initialData?.sequences ?? getCached<Sequence[]>('players:seq') ?? [])
+  const [loaded, setLoaded] = useState(!!initialData || !!getCached('players:me'))
   const [editingPlayer, setEditingPlayer] = useState<Profile | null>(null)
 
   // ── Religion state ──
@@ -120,7 +129,8 @@ export default function PlayersContent({ userId }: { userId: string }) {
       })
     }
     
-    fetchPlayers()
+    // If server provided initial data, only subscribe to realtime (skip initial fetch)
+    if (!initialData) fetchPlayers()
 
     const channel = supabase
       .channel('players_realtime')
@@ -129,7 +139,7 @@ export default function PlayersContent({ userId }: { userId: string }) {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [userId])
+  }, [userId, initialData])
 
   // ── Fetch religions ──
   useEffect(() => {
