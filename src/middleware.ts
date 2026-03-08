@@ -1,6 +1,16 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+function isAllowedDuringPreEvent(pathname: string) {
+  if (pathname === '/dashboard') return true
+  if (pathname.startsWith('/dashboard/players')) return true
+  if (pathname.startsWith('/timeline')) return true
+  if (pathname.startsWith('/dashboard/character-create')) return true
+  if (pathname.startsWith('/dashboard/bio-templates')) return true
+  if (pathname.startsWith('/dashboard/rp-template')) return true
+  return false
+}
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request })
 
@@ -72,6 +82,42 @@ export async function middleware(request: NextRequest) {
   // If user is logged in and visits login page, redirect to dashboard
   if (request.nextUrl.pathname === '/' && session) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+
+  if (session?.user) {
+    const { data: preEventData } = await supabase
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'pre_event_mode')
+      .single()
+
+    const preEventValue = preEventData?.value as { enabled?: boolean } | null | undefined
+    const preEventEnabled = preEventValue?.enabled ?? false
+
+    if (preEventEnabled) {
+      let role: string | null = null
+
+      try {
+        const payload = JSON.parse(atob(session.access_token.split('.')[1])) as { user_role?: string | null }
+        if (payload?.user_role) {
+          role = payload.user_role
+        }
+      } catch {}
+
+      if (!role) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single()
+        role = profile?.role ?? 'player'
+      }
+
+      const isStaff = role === 'admin' || role === 'dm'
+      if (!isStaff && !isAllowedDuringPreEvent(request.nextUrl.pathname)) {
+        return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
+    }
   }
 
   return response

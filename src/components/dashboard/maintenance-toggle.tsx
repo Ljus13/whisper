@@ -1,19 +1,24 @@
 'use client'
 
-import { toggleMaintenanceMode, updateMaintenanceNote } from '@/app/actions/maintenance'
+import { toggleMaintenanceMode, togglePreEventMode, updateMaintenanceNote, updatePreEventModeNote } from '@/app/actions/maintenance'
 import { Wrench, X, AlertTriangle, Check } from 'lucide-react'
 import { useState, useTransition } from 'react'
 
 interface MaintenanceToggleProps {
   initialEnabled: boolean
   initialWebNote: string
+  initialPreEventEnabled: boolean
+  initialPreEventWebNote: string
 }
 
-export default function MaintenanceToggle({ initialEnabled, initialWebNote }: MaintenanceToggleProps) {
+export default function MaintenanceToggle({ initialEnabled, initialWebNote, initialPreEventEnabled, initialPreEventWebNote }: MaintenanceToggleProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [enabled, setEnabled] = useState(initialEnabled)
   const [webNote, setWebNote] = useState(initialWebNote)
   const [confirmText, setConfirmText] = useState('')
+  const [preEventEnabled, setPreEventEnabled] = useState(initialPreEventEnabled)
+  const [preEventNote, setPreEventNote] = useState(initialPreEventWebNote)
+  const [preEventConfirmText, setPreEventConfirmText] = useState('')
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
 
@@ -58,12 +63,70 @@ export default function MaintenanceToggle({ initialEnabled, initialWebNote }: Ma
     })
   }
 
+  const handleEnablePreEvent = () => {
+    if (preEventConfirmText !== 'ยืนยัน') return
+    if (!preEventNote.trim()) {
+      setFeedback({ type: 'error', msg: 'กรุณากรอกข้อความแจ้งเตือนก่อนเปิดโหมดกิจกรรม' })
+      return
+    }
+
+    setFeedback(null)
+    startTransition(async () => {
+      const result = await togglePreEventMode(true, preEventNote)
+      if (result.success) {
+        setPreEventEnabled(true)
+        setPreEventConfirmText('')
+        setFeedback({ type: 'success', msg: 'เปิดโหมดกิจกรรมแล้ว' })
+        setTimeout(() => {
+          setIsOpen(false)
+          setFeedback(null)
+          window.location.reload()
+        }, 1500)
+      } else {
+        setFeedback({ type: 'error', msg: result.error || 'เกิดข้อผิดพลาด' })
+      }
+    })
+  }
+
+  const handleDisablePreEvent = () => {
+    setFeedback(null)
+    startTransition(async () => {
+      const result = await togglePreEventMode(false, '')
+      if (result.success) {
+        setPreEventEnabled(false)
+        setPreEventNote('')
+        setPreEventConfirmText('')
+        setFeedback({ type: 'success', msg: 'ปิดโหมดกิจกรรมแล้ว' })
+        setTimeout(() => {
+          setIsOpen(false)
+          setFeedback(null)
+          window.location.reload()
+        }, 1500)
+      } else {
+        setFeedback({ type: 'error', msg: result.error || 'เกิดข้อผิดพลาด' })
+      }
+    })
+  }
+
   const handleUpdateNote = () => {
     setFeedback(null)
     startTransition(async () => {
       const result = await updateMaintenanceNote(webNote)
       if (result.success) {
         setFeedback({ type: 'success', msg: 'อัพเดทข้อความแล้ว' })
+        setTimeout(() => setFeedback(null), 2000)
+      } else {
+        setFeedback({ type: 'error', msg: result.error || 'เกิดข้อผิดพลาด' })
+      }
+    })
+  }
+
+  const handleUpdatePreEventNote = () => {
+    setFeedback(null)
+    startTransition(async () => {
+      const result = await updatePreEventModeNote(preEventNote)
+      if (result.success) {
+        setFeedback({ type: 'success', msg: 'อัพเดทข้อความโหมดกิจกรรมแล้ว' })
         setTimeout(() => setFeedback(null), 2000)
       } else {
         setFeedback({ type: 'error', msg: result.error || 'เกิดข้อผิดพลาด' })
@@ -230,6 +293,87 @@ export default function MaintenanceToggle({ initialEnabled, initialWebNote }: Ma
                 </button>
               </div>
             )}
+
+            <div className="ornament-divider" />
+
+            <div className="space-y-3">
+              <h3 className="text-nouveau-cream font-display text-base">โหมดเปิดกิจกรรม (จำกัดเมนูผู้เล่น)</h3>
+              <p className="text-victorian-300 text-xs font-body leading-relaxed">
+                ผู้เล่นจะยังล็อกอินและตั้งค่าโปรไฟล์ได้ตามปกติ แต่เมนูที่เข้าได้จะเหลือเฉพาะ ทำเนียบผู้เล่น และ เส้นเรื่อง
+              </p>
+
+              <div className="space-y-2">
+                <label className="block text-victorian-300 text-sm font-body">
+                  ข้อความแจ้งเตือนโหมดกิจกรรม (บังคับกรอกก่อนเปิด)
+                </label>
+                <textarea
+                  value={preEventNote}
+                  onChange={e => setPreEventNote(e.target.value)}
+                  placeholder="เช่น: เปิดให้เข้ามาเตรียมตัวก่อนกิจกรรมเริ่ม 20:00 น. เมนูอื่นจะเปิดภายหลัง"
+                  className="input-victorian w-full h-24 resize-none text-sm font-body"
+                  disabled={isPending}
+                />
+              </div>
+
+              {preEventEnabled ? (
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={handleUpdatePreEventNote}
+                    disabled={isPending}
+                    className="w-full py-2.5 rounded-lg text-sm font-bold font-body border border-gold-400/30 text-gold-300 
+                               hover:bg-gold-400/10 transition-colors disabled:opacity-50 cursor-pointer
+                               flex items-center justify-center gap-2"
+                  >
+                    {isPending && <div className="w-4 h-4 border-2 border-gold-400/30 border-t-gold-400 rounded-full animate-spin" />}
+                    อัพเดทข้อความโหมดกิจกรรม
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDisablePreEvent}
+                    disabled={isPending}
+                    className="w-full py-3 rounded-lg text-sm font-bold font-body
+                               bg-gradient-to-r from-emerald-600 to-emerald-500 text-white
+                               hover:from-emerald-500 hover:to-emerald-400
+                               shadow-lg shadow-emerald-500/20
+                               disabled:opacity-50 cursor-pointer
+                               flex items-center justify-center gap-2 transition-all"
+                  >
+                    {isPending && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                    ปิดโหมดกิจกรรม
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="block text-victorian-300 text-sm font-body">
+                    พิมพ์ &ldquo;<span className="text-amber-400 font-bold">ยืนยัน</span>&rdquo; เพื่อเปิดโหมดกิจกรรม
+                  </label>
+                  <input
+                    type="text"
+                    value={preEventConfirmText}
+                    onChange={e => setPreEventConfirmText(e.target.value)}
+                    placeholder="ยืนยัน"
+                    className="input-victorian w-full text-sm font-body"
+                    disabled={isPending}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleEnablePreEvent}
+                    disabled={isPending || preEventConfirmText !== 'ยืนยัน' || !preEventNote.trim()}
+                    className="w-full py-3 rounded-lg text-sm font-bold font-body
+                               bg-gradient-to-r from-indigo-600 to-purple-600 text-white
+                               hover:from-indigo-500 hover:to-purple-500
+                               shadow-lg shadow-indigo-500/20
+                               disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer
+                               flex items-center justify-center gap-2 transition-all"
+                  >
+                    {isPending && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                    เปิดโหมดกิจกรรม
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -206,7 +206,8 @@ export default function DashboardContent({
   rankDisplay = 'Level 1 Adventurer',
   rankInfo = null,
   grantPathways = [],
-  hasPathway = false
+  hasPathway = false,
+  preEventModeEnabled = false
 }: { 
   user: User
   profile: Profile | null
@@ -214,6 +215,7 @@ export default function DashboardContent({
   rankInfo?: RankInfo | null
   grantPathways?: GrantPathway[]
   hasPathway?: boolean
+  preEventModeEnabled?: boolean
 }) {
   const [showProfile, setShowProfile] = useState(false)
   const [showEditAvatar, setShowEditAvatar] = useState(false)
@@ -243,13 +245,18 @@ export default function DashboardContent({
   const [choiceError, setChoiceError] = useState<string | null>(null)
   const [celebrationPathway, setCelebrationPathway] = useState<GrantPathway | null>(null)
 
+  const isSanityLocked = profile?.sanity === 0
   const isAdmin = profile?.role === 'admin' || profile?.role === 'dm'
+  const isRestrictedByPreEvent = preEventModeEnabled && !isAdmin
+  const isGeneralMenuLocked = isSanityLocked || isRestrictedByPreEvent
+  const generalMenuLockTitle = isSanityLocked
+    ? 'ถูกล็อค: สติของคุณเหลือ 0'
+    : isRestrictedByPreEvent
+      ? 'กิจกรรมยังไม่เริ่ม: เมนูนี้ยังไม่เปิดให้ใช้งาน'
+      : ''
   
   // ตรวจสอบว่าผู้เล่นยืนยันชื่อแล้วหรือยัง
   const needsDisplayNameSetup = profile && !profile.display_name_set
-
-  // ตรวจสอบว่าสติเหลือ 0 หรือไม่ (Sanity Lock)
-  const isSanityLocked = profile?.sanity === 0
   
   // Apply sanity decay on page load
   useEffect(() => {
@@ -524,7 +531,7 @@ export default function DashboardContent({
                   <div className="p-1.5 md:p-2 bg-purple-500/10 rounded-full">
                     <Flame className="w-5 h-5 md:w-7 md:h-7 text-purple-400" />
                   </div>
-                  <span className="text-purple-300 font-display text-xs md:text-sm tracking-wider uppercase">วิญญาณ</span>
+                  <span className="text-purple-300 font-display text-xs md:text-sm tracking-wider uppercase">พลังวิญญาณ</span>
                 </div>
                 <span className="font-display text-base md:text-2xl text-purple-200">
                   {profile?.spirituality ?? 15} <span className="text-purple-400/60 text-xs md:text-base">/ {profile?.max_spirituality ?? 15}</span>
@@ -549,7 +556,7 @@ export default function DashboardContent({
                   <div className="p-1.5 md:p-2 bg-emerald-500/10 rounded-full">
                     <Footprints className="w-5 h-5 md:w-7 md:h-7 text-emerald-400" />
                   </div>
-                  <span className="text-emerald-300 font-display text-xs md:text-sm tracking-wider uppercase">เดินทาง</span>
+                  <span className="text-emerald-300 font-display text-xs md:text-sm tracking-wider uppercase">ตั๋วเดินทาง</span>
                 </div>
                 <span className="font-display text-base md:text-2xl text-emerald-200">
                   {profile?.travel_points ?? 9} <span className="text-emerald-400/60 text-xs md:text-base">/ {profile?.max_travel_points ?? 9}</span>
@@ -573,7 +580,7 @@ export default function DashboardContent({
                   <div className="p-1.5 md:p-2 bg-amber-500/10 rounded-full">
                     <Flame className="w-5 h-5 md:w-7 md:h-7 text-amber-400" />
                   </div>
-                  <span className="text-amber-300 font-display text-xs md:text-sm tracking-wider uppercase">ย่อยโอสถ</span>
+                  <span className="text-amber-300 font-display text-xs md:text-sm tracking-wider uppercase">ระดับการย่อยโอสถ</span>
                 </div>
                 <span className="font-display text-base md:text-2xl text-amber-200 tabular-nums">
                   {Math.min(100, Math.max(0, digestProgress))}%
@@ -671,24 +678,23 @@ export default function DashboardContent({
 
           {/* Maps */}
           <Link
-            href={isSanityLocked ? "#" : "/dashboard/maps"}
-            onMouseEnter={() => !isSanityLocked && router.prefetch('/dashboard/maps')}
+            href={isGeneralMenuLocked ? "#" : "/dashboard/maps"}
+            onMouseEnter={() => !isGeneralMenuLocked && router.prefetch('/dashboard/maps')}
             className={`group relative overflow-hidden card-victorian p-3 md:p-6 lg:p-8 flex flex-row md:flex-col items-center gap-3 md:gap-5 md:justify-center
                         hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[72px] md:min-h-[200px]
-                        ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
-            title={isSanityLocked ? "ถูกล็อค: สติของคุณเหลือ 0" : ""}
+                        ${isGeneralMenuLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+            title={generalMenuLockTitle}
           >
             <CornerOrnament className="absolute top-0 left-0 hidden md:block w-14 h-14" />
             <CornerOrnament className="absolute top-0 right-0 -scale-x-100 hidden md:block w-14 h-14" />
             <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 hidden md:block w-14 h-14" />
             <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] hidden md:block w-14 h-14" />
             <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-4 w-full">
-              <div className="w-10 h-10 md:w-18 md:h-18 shrink-0 rounded-full bg-victorian-800/50 border-2 border-gold-400/20
-                              flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
-                {isSanityLocked ? <Lock className="w-5 h-5 md:w-9 md:h-9 text-red-500" /> : <Map className="w-5 h-5 md:w-9 md:h-9 text-gold-400" />}
+              <div className="w-16 h-16 md:w-32 md:h-32 shrink-0 flex items-center justify-center group-hover:scale-110 transition-all duration-300">
+                {isGeneralMenuLocked ? <Lock className="w-8 h-8 md:w-14 md:h-14 text-red-500" /> : <img src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772971167/map_pdxqdl.webp" alt="แผนที่" className="w-full h-full object-contain" />}
               </div>
               <div className="flex flex-col items-start md:items-center gap-0.5 min-w-0 flex-1">
-                <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center">แผนที่</h3>
+                <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center" style={{background:'linear-gradient(135deg,#c9a84c 0%,#f0d080 35%,#e8c055 55%,#b8881e 80%,#d4a030 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>แผนที่</h3>
                 <p className="text-victorian-400 text-[11px] md:text-sm font-body text-left md:text-center leading-tight">สำรวจโลกกว้างและสถานที่สำคัญ</p>
               </div>
             </div>
@@ -696,24 +702,23 @@ export default function DashboardContent({
 
           {/* Skills */}
           <Link
-            href={isSanityLocked ? "#" : "/dashboard/skills"}
-            onMouseEnter={() => !isSanityLocked && router.prefetch('/dashboard/skills')}
+            href={isGeneralMenuLocked ? "#" : "/dashboard/skills"}
+            onMouseEnter={() => !isGeneralMenuLocked && router.prefetch('/dashboard/skills')}
             className={`group relative overflow-hidden card-victorian p-3 md:p-6 lg:p-8 flex flex-row md:flex-col items-center gap-3 md:gap-5 md:justify-center
                         hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[72px] md:min-h-[200px]
-                        ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
-            title={isSanityLocked ? "ถูกล็อค: สติของคุณเหลือ 0" : ""}
+                        ${isGeneralMenuLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+            title={generalMenuLockTitle}
           >
             <CornerOrnament className="absolute top-0 left-0 hidden md:block w-14 h-14" />
             <CornerOrnament className="absolute top-0 right-0 -scale-x-100 hidden md:block w-14 h-14" />
             <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 hidden md:block w-14 h-14" />
             <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] hidden md:block w-14 h-14" />
             <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-4 w-full">
-              <div className="w-10 h-10 md:w-18 md:h-18 shrink-0 rounded-full bg-victorian-800/50 border-2 border-gold-400/20
-                              flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
-                {isSanityLocked ? <Lock className="w-5 h-5 md:w-9 md:h-9 text-red-500" /> : <Zap className="w-5 h-5 md:w-9 md:h-9 text-gold-400" />}
+              <div className="w-16 h-16 md:w-32 md:h-32 shrink-0 flex items-center justify-center group-hover:scale-110 transition-all duration-300">
+                {isGeneralMenuLocked ? <Lock className="w-8 h-8 md:w-14 md:h-14 text-red-500" /> : <img src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772971167/skills_ot7lzu.webp" alt="สกิล" className="w-full h-full object-contain" />}
               </div>
               <div className="flex flex-col items-start md:items-center gap-0.5 min-w-0 flex-1">
-                <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center">สกิล</h3>
+                <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center" style={{background:'linear-gradient(135deg,#c9a84c 0%,#f0d080 35%,#e8c055 55%,#b8881e 80%,#d4a030 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>สกิล</h3>
                 <p className="text-victorian-400 text-[11px] md:text-sm font-body text-left md:text-center leading-tight">จัดการทักษะและความสามารถพิเศษ</p>
               </div>
             </div>
@@ -721,22 +726,23 @@ export default function DashboardContent({
 
           {/* Combat */}
           <Link
-            href="/dashboard/combat"
-            onMouseEnter={() => router.prefetch('/dashboard/combat')}
-            className="group relative overflow-hidden card-victorian p-3 md:p-6 lg:p-8 flex flex-row md:flex-col items-center gap-3 md:gap-5 md:justify-center
-                        hover:border-red-500/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[72px] md:min-h-[200px] cursor-pointer"
+            href={isGeneralMenuLocked ? '#' : '/dashboard/combat'}
+            onMouseEnter={() => !isGeneralMenuLocked && router.prefetch('/dashboard/combat')}
+            className={`group relative overflow-hidden card-victorian p-3 md:p-6 lg:p-8 flex flex-row md:flex-col items-center gap-3 md:gap-5 md:justify-center
+                        hover:border-red-500/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[72px] md:min-h-[200px]
+                        ${isGeneralMenuLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+            title={generalMenuLockTitle}
           >
             <CornerOrnament className="absolute top-0 left-0 hidden md:block w-14 h-14" />
             <CornerOrnament className="absolute top-0 right-0 -scale-x-100 hidden md:block w-14 h-14" />
             <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 hidden md:block w-14 h-14" />
             <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] hidden md:block w-14 h-14" />
             <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-4 w-full">
-              <div className="w-10 h-10 md:w-18 md:h-18 shrink-0 rounded-full bg-red-900/30 border-2 border-red-500/30
-                              flex items-center justify-center group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(239,68,68,0.3)] transition-all duration-300">
-                <Swords className="w-5 h-5 md:w-9 md:h-9 text-red-400" />
+              <div className="w-16 h-16 md:w-32 md:h-32 shrink-0 flex items-center justify-center group-hover:scale-110 transition-all duration-300">
+                {isGeneralMenuLocked ? <Lock className="w-8 h-8 md:w-14 md:h-14 text-red-500" /> : <img src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772971167/combat_jjb11m.webp" alt="ต่อสู้" className="w-full h-full object-contain" />}
               </div>
               <div className="flex flex-col items-start md:items-center gap-0.5 min-w-0 flex-1">
-                <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center">ต่อสู้</h3>
+                <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center" style={{background:'linear-gradient(135deg,#c9a84c 0%,#f0d080 35%,#e8c055 55%,#b8881e 80%,#d4a030 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>ต่อสู้</h3>
                 <p className="text-victorian-400 text-[11px] md:text-sm font-body text-left md:text-center leading-tight">ห้องต่อสู้แบบเรียลไทม์</p>
               </div>
             </div>
@@ -744,24 +750,23 @@ export default function DashboardContent({
 
           {/* Action Quest */}
           <Link
-            href={isSanityLocked ? "#" : "/dashboard/action-quest/quests"}
-            onMouseEnter={() => !isSanityLocked && router.prefetch('/dashboard/action-quest/quests')}
+            href={isGeneralMenuLocked ? "#" : "/dashboard/action-quest/quests"}
+            onMouseEnter={() => !isGeneralMenuLocked && router.prefetch('/dashboard/action-quest/quests')}
             className={`group relative overflow-hidden card-victorian p-3 md:p-6 lg:p-8 flex flex-row md:flex-col items-center gap-3 md:gap-5 md:justify-center
                         hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[72px] md:min-h-[200px]
-                        ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
-            title={isSanityLocked ? "ถูกล็อค: สติของคุณเหลือ 0" : ""}
+                        ${isGeneralMenuLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+            title={generalMenuLockTitle}
           >
             <CornerOrnament className="absolute top-0 left-0 hidden md:block w-14 h-14" />
             <CornerOrnament className="absolute top-0 right-0 -scale-x-100 hidden md:block w-14 h-14" />
             <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 hidden md:block w-14 h-14" />
             <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] hidden md:block w-14 h-14" />
             <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-4 w-full">
-              <div className="w-10 h-10 md:w-18 md:h-18 shrink-0 rounded-full bg-victorian-800/50 border-2 border-gold-400/20
-                              flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
-                {isSanityLocked ? <Lock className="w-5 h-5 md:w-9 md:h-9 text-red-500" /> : <Swords className="w-5 h-5 md:w-9 md:h-9 text-gold-400" />}
+              <div className="w-16 h-16 md:w-32 md:h-32 shrink-0 flex items-center justify-center group-hover:scale-110 transition-all duration-300">
+                {isGeneralMenuLocked ? <Lock className="w-8 h-8 md:w-14 md:h-14 text-red-500" /> : <img src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772971167/quest_dxflk3.webp" alt="แอคชั่น" className="w-full h-full object-contain" />}
               </div>
               <div className="flex flex-col items-start md:items-center gap-0.5 min-w-0 flex-1">
-                <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center">แอคชั่น</h3>
+                <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center" style={{background:'linear-gradient(135deg,#c9a84c 0%,#f0d080 35%,#e8c055 55%,#b8881e 80%,#d4a030 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>แอคชั่น</h3>
                 <p className="text-victorian-400 text-[11px] md:text-sm font-body text-left md:text-center leading-tight">ส่งการกระทำ / ภารกิจ</p>
               </div>
             </div>
@@ -781,12 +786,11 @@ export default function DashboardContent({
             <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 hidden md:block w-14 h-14" />
             <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] hidden md:block w-14 h-14" />
             <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-4 w-full">
-              <div className="w-10 h-10 md:w-18 md:h-18 shrink-0 rounded-full bg-victorian-800/50 border-2 border-gold-400/20
-                              flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
-                {isSanityLocked ? <Lock className="w-5 h-5 md:w-9 md:h-9 text-red-500" /> : <Users className="w-5 h-5 md:w-9 md:h-9 text-gold-400" />}
+              <div className="w-16 h-16 md:w-32 md:h-32 shrink-0 flex items-center justify-center group-hover:scale-110 transition-all duration-300">
+                {isSanityLocked ? <Lock className="w-8 h-8 md:w-14 md:h-14 text-red-500" /> : <img src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772971167/member_hsdvvm.webp" alt="ทำเนียบผู้เล่น" className="w-full h-full object-contain" />}
               </div>
               <div className="flex flex-col items-start md:items-center gap-0.5 min-w-0 flex-1">
-                <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center">ทำเนียบผู้เล่น</h3>
+                <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center" style={{background:'linear-gradient(135deg,#c9a84c 0%,#f0d080 35%,#e8c055 55%,#b8881e 80%,#d4a030 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>ทำเนียบผู้เล่น</h3>
                 <p className="text-victorian-400 text-[11px] md:text-sm font-body text-left md:text-center leading-tight">รายชื่อนักผจญภัยและสหายร่วมรบ</p>
               </div>
             </div>
@@ -804,12 +808,11 @@ export default function DashboardContent({
             <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 hidden md:block w-14 h-14" />
             <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] hidden md:block w-14 h-14" />
             <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-4 w-full">
-              <div className="w-10 h-10 md:w-18 md:h-18 shrink-0 rounded-full bg-victorian-800/50 border-2 border-gold-400/20
-                              flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
-                <ScrollText className="w-5 h-5 md:w-9 md:h-9 text-gold-400" />
+              <div className="w-16 h-16 md:w-32 md:h-32 shrink-0 flex items-center justify-center group-hover:scale-110 transition-all duration-300">
+                <img src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772971167/timeline_bfo9qz.webp" alt="เส้นเรื่อง" className="w-full h-full object-contain" />
               </div>
               <div className="flex flex-col items-start md:items-center gap-0.5 min-w-0 flex-1">
-                <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center">เส้นเรื่อง</h3>
+                <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center" style={{background:'linear-gradient(135deg,#c9a84c 0%,#f0d080 35%,#e8c055 55%,#b8881e 80%,#d4a030 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>เส้นเรื่อง</h3>
                 <p className="text-victorian-400 text-[11px] md:text-sm font-body text-left md:text-center leading-tight">ติดตามไทม์ไลน์และเหตุการณ์สำคัญ</p>
               </div>
             </div>
@@ -828,12 +831,11 @@ export default function DashboardContent({
               <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 hidden md:block w-14 h-14" />
               <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] hidden md:block w-14 h-14" />
               <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-4 w-full">
-                <div className="w-10 h-10 md:w-18 md:h-18 shrink-0 rounded-full bg-victorian-800/50 border-2 border-gold-400/20
-                              flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
-                  <BookOpen className="w-5 h-5 md:w-9 md:h-9 text-gold-400" />
+                <div className="w-16 h-16 md:w-32 md:h-32 shrink-0 flex items-center justify-center group-hover:scale-110 transition-all duration-300">
+                  <img src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772971167/pathways-grant_ckwcpq.webp" alt="มอบโอสถ" className="w-full h-full object-contain" />
                 </div>
                 <div className="flex flex-col items-start md:items-center gap-0.5 min-w-0 flex-1">
-                  <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center">มอบโอสถ</h3>
+                  <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center" style={{background:'linear-gradient(135deg,#c9a84c 0%,#f0d080 35%,#e8c055 55%,#b8881e 80%,#d4a030 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>มอบโอสถ</h3>
                   <p className="text-victorian-400 text-[11px] md:text-sm font-body text-left md:text-center leading-tight">มอบเส้นทางและติดตามการตัดสินใจ</p>
                 </div>
               </div>
@@ -853,12 +855,11 @@ export default function DashboardContent({
               <CornerOrnament className="absolute bottom-0 left-0 -scale-y-100 hidden md:block w-14 h-14" />
               <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] hidden md:block w-14 h-14" />
               <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-4 w-full">
-                <div className="w-10 h-10 md:w-18 md:h-18 shrink-0 rounded-full bg-victorian-800/50 border-2 border-gold-400/20
-                              flex items-center justify-center group-hover:scale-110 group-hover:shadow-gold transition-all duration-300">
-                  <Flame className="w-5 h-5 md:w-9 md:h-9 text-gold-400" />
+                <div className="w-16 h-16 md:w-32 md:h-32 shrink-0 flex items-center justify-center group-hover:scale-110 transition-all duration-300">
+                  <img src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772971167/grant-power_lejbxi.webp" alt="มอบพลัง" className="w-full h-full object-contain" />
                 </div>
                 <div className="flex flex-col items-start md:items-center gap-0.5 min-w-0 flex-1">
-                  <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center">มอบพลัง</h3>
+                  <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center" style={{background:'linear-gradient(135deg,#c9a84c 0%,#f0d080 35%,#e8c055 55%,#b8881e 80%,#d4a030 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>มอบพลัง</h3>
                   <p className="text-victorian-400 text-[11px] md:text-sm font-body text-left md:text-center leading-tight">มอบสกิลพิเศษให้ผู้เล่น</p>
                 </div>
               </div>

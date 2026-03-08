@@ -1,11 +1,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import DashboardContent from '@/components/dashboard/dashboard-content'
-import { getAuth } from '@/lib/auth'
+import { getAuth, getPreEventModeStatusCached } from '@/lib/auth'
 
 export default async function DashboardPage() {
   // Auth is cached from layout — no extra network call
-  const { user } = await getAuth()
+  const [{ user }, preEventMode] = await Promise.all([
+    getAuth(),
+    getPreEventModeStatusCached(),
+  ])
   if (!user) redirect('/')
 
   // Only data queries below hit the DB
@@ -97,6 +100,7 @@ export default async function DashboardPage() {
       rankInfo={rankInfo}
       grantPathways={grantPathways || []}
       hasPathway={!!(playerPathways && playerPathways.length > 0)}
+      preEventModeEnabled={preEventMode.enabled}
     />
   )
 }

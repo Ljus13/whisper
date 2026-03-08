@@ -96,3 +96,25 @@ export const getMaintenanceStatusCached = cache(async (): Promise<{
     web_note: value?.web_note ?? '',
   }
 })
+
+export const getPreEventModeStatusCached = cache(async (): Promise<{
+  enabled: boolean
+  web_note: string
+}> => {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('site_settings')
+    .select('value')
+    .eq('key', 'pre_event_mode')
+    .single()
+
+  if (error || !data) {
+    return { enabled: false, web_note: '' }
+  }
+
+  const value = data.value as { enabled?: boolean; web_note?: string } | null
+  return {
+    enabled: value?.enabled ?? false,
+    web_note: value?.web_note ?? '',
+  }
+})

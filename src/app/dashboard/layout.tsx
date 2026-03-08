@@ -3,9 +3,10 @@ import NotificationBell from '@/components/dashboard/notification-bell'
 import MaintenanceBanner from '@/components/dashboard/maintenance-banner'
 import MaintenanceToggle from '@/components/dashboard/maintenance-toggle'
 import MaintenanceWall from '@/components/dashboard/maintenance-wall'
+import PreEventBanner from '@/components/dashboard/pre-event-banner'
 import DiscordLinkBanner from '@/components/dashboard/discord-link-banner'
 import CombatAlertBanner from '@/components/combat/combat-alert-banner'
-import { getAuth, getMaintenanceStatusCached } from '@/lib/auth'
+import { getAuth, getMaintenanceStatusCached, getPreEventModeStatusCached } from '@/lib/auth'
 
 export default async function DashboardLayout({
   children,
@@ -13,9 +14,10 @@ export default async function DashboardLayout({
   children: React.ReactNode
 }) {
   // ⚡ Parallel fetch: auth + maintenance run simultaneously (was sequential waterfall)
-  const [auth, maintenance] = await Promise.all([
+  const [auth, maintenance, preEventMode] = await Promise.all([
     getAuth(),
     getMaintenanceStatusCached(),
+    getPreEventModeStatusCached(),
   ])
 
   const { user, isStaff: isAdmin, role, discordLinked } = auth
@@ -40,12 +42,18 @@ export default async function DashboardLayout({
         <MaintenanceToggle
           initialEnabled={maintenance.enabled}
           initialWebNote={maintenance.web_note}
+          initialPreEventEnabled={preEventMode.enabled}
+          initialPreEventWebNote={preEventMode.web_note}
         />
       )}
 
       {/* Admin/DM: Maintenance banner when active */}
       {isAdmin && maintenance.enabled && (
         <MaintenanceBanner webNote={maintenance.web_note} />
+      )}
+
+      {preEventMode.enabled && (
+        <PreEventBanner webNote={preEventMode.web_note} isStaff={isAdmin} />
       )}
 
       {!isAdmin && user && (
