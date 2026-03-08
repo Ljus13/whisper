@@ -98,7 +98,7 @@ export default function PrayerLogsContent({ userId }: { userId: string }) {
               </button>
               <span className="text-gold-400 text-2xl">📿</span>
               <div>
-                <h1 className="heading-victorian text-2xl">บันทึกการภาวนา</h1>
+                <h1 className="heading-victorian title-whisper-gold text-2xl">บันทึกการภาวนา</h1>
                 <p className="text-victorian-400 text-sm font-display mt-1">
                   ตรวจสอบลิงก์หลักฐานจากผู้เล่นทุกคน
                 </p>

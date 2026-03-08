@@ -100,7 +100,7 @@ export default function PlayerDetailView({ profile, playerPathways, pathways, se
           >
             <ArrowLeft className="w-6 h-6" />
           </button>
-          <h1 className="heading-victorian text-xl md:text-2xl truncate">
+          <h1 className="heading-victorian title-whisper-gold text-xl md:text-2xl truncate">
             {profile.display_name || 'ข้อมูลตัวละคร'}
           </h1>
         </div>
@@ -147,7 +147,7 @@ export default function PlayerDetailView({ profile, playerPathways, pathways, se
               </div>
               
               <div className="flex-1 mb-2">
-                 <h2 className="heading-victorian text-3xl md:text-4xl lg:text-5xl text-gold-400 drop-shadow-md">
+                 <h2 className="heading-victorian title-whisper-gold text-3xl md:text-4xl lg:text-5xl drop-shadow-md">
                    {profile.display_name}
                  </h2>
                  <div className="flex flex-wrap items-center gap-3 mt-3">

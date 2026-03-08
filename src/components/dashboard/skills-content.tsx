@@ -1769,7 +1769,7 @@ export default function SkillsContent({ userId, initialData }: SkillsContentProp
               <ArrowLeft className="w-5 h-5" />
             </a>
             <div>
-              <h1 className="heading-victorian text-4xl">ระบบสกิล</h1>
+              <h1 className="heading-victorian title-whisper-gold text-4xl">ระบบสกิล</h1>
               <p className="text-victorian-400 text-sm mt-1">ทักษะและความสามารถพิเศษ</p>
             </div>
           </div>

@@ -49,7 +49,7 @@ export default async function TimelinePage() {
             </svg>
             {session ? 'กลับแดชบอร์ด' : 'กลับหน้าหลัก'}
           </Link>
-          <h1 className="font-display text-gold-400 text-lg tracking-wider">
+          <h1 className="font-display title-whisper-gold text-lg tracking-wider">
             ✦ เส้นเรื่อง ✦
           </h1>
           <div className="w-20 flex justify-end">

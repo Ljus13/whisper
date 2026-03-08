@@ -401,7 +401,7 @@ export default function PathwaysGrantContent({ userId }: { userId: string }) {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="heading-victorian text-3xl md:text-4xl flex items-center gap-3">
+            <h1 className="heading-victorian title-whisper-gold text-3xl md:text-4xl flex items-center gap-3">
               <Sparkles className="w-6 h-6 text-gold-400" /> มอบโอสถ
             </h1>
             <p className="text-victorian-400 text-sm mt-1">จัดการการมอบเส้นทางและสถานะการตัดสินใจ</p>

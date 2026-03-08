@@ -199,6 +199,14 @@
       rgba(212, 175, 55, 0.4)
     ) 1;
   }
+
+  .title-whisper-gold {
+    background: linear-gradient(135deg, #c9a84c 0%, #f0d080 35%, #e8c055 55%, #b8881e 80%, #d4a030 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: none;
+  }
 }
 
 /* ── Token wiggle animation for move mode ── */

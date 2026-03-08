@@ -266,7 +266,7 @@ export default function MapsContent({ userId, initialData }: MapsContentProps) {
               <ArrowLeft className="w-5 h-5" />
             </a>
             <div>
-              <h1 className="heading-victorian text-4xl md:text-5xl">แผนที่</h1>
+              <h1 className="heading-victorian title-whisper-gold text-4xl md:text-5xl">แผนที่</h1>
               <p className="text-victorian-400 mt-1">สำรวจโลกกว้างและสถานที่สำคัญ</p>
             </div>
           </div>

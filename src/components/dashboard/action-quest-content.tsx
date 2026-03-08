@@ -1970,7 +1970,7 @@ export default function ActionQuestContent({ userId: _userId, isAdmin, defaultTa
             <ArrowLeft className="w-5 h-5" />
           </a>
           <div>
-            <h1 className="heading-victorian text-2xl md:text-4xl">แอคชั่น & ภารกิจ</h1>
+            <h1 className="heading-victorian title-whisper-gold text-2xl md:text-4xl">แอคชั่น & ภารกิจ</h1>
             <p className="text-victorian-400 text-xs md:text-sm mt-1">ส่งการกระทำ / ภารกิจ</p>
           </div>
         </div>

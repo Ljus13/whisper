@@ -87,7 +87,7 @@ Output Format:
             ←
           </Link>
           <div>
-            <h1 className="heading-victorian text-3xl md:text-4xl flex items-center gap-3">
+            <h1 className="heading-victorian title-whisper-gold text-3xl md:text-4xl flex items-center gap-3">
               <ScrollText className="w-6 h-6 text-gold-400" /> แนวทางการสวมบทบาท
             </h1>
             <p className="text-victorian-400 text-sm mt-1">ข้อมูลกลุ่ม / เส้นทาง / ลำดับ สำหรับทีมงาน</p>

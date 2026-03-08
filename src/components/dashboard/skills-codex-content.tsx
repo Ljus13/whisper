@@ -160,7 +160,7 @@ export default function SkillsCodexContent({ types, pathways, sequences, skills 
               ←
             </a>
             <div>
-              <h1 className="heading-victorian text-4xl">Codex</h1>
+              <h1 className="heading-victorian title-whisper-gold text-4xl">Codex</h1>
               <p className="text-victorian-400 text-sm mt-1">ข้อมูลระบบสกิลสำหรับทีมงาน</p>
             </div>
           </div>

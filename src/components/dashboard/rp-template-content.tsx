@@ -371,7 +371,7 @@ export default function RpTemplateContent() {
           </button>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="heading-victorian text-2xl md:text-4xl mb-1">
+              <h1 className="heading-victorian title-whisper-gold text-2xl md:text-4xl mb-1">
                 สร้างโรลเพลย์
               </h1>
               <p className="text-victorian-400 text-sm">

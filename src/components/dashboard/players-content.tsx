@@ -250,8 +250,12 @@ export default function PlayersContent({ userId, initialData }: { userId: string
             >
               <ArrowLeft className="w-6 h-6" />
             </button>
-            <span className="text-gold-400 text-2xl">⚜</span>
-            <h1 className="heading-victorian text-2xl">ทำเนียบ</h1>
+            <img
+              src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772424893/wots-logo-w_fyr8dc.png"
+              alt="Whisper of the Shadow"
+              className="h-8 md:h-10 w-auto object-contain"
+            />
+            <h1 className="heading-victorian title-whisper-gold text-2xl">ทำเนียบ</h1>
           </div>
           <div className="flex items-center gap-2 text-victorian-400">
             <Users className="w-5 h-5" />

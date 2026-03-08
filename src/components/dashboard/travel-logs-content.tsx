@@ -77,7 +77,7 @@ export default function TravelLogsContent() {
             <ArrowLeft className="w-6 h-6" />
           </Link>
           <div>
-            <h1 className="heading-victorian text-2xl lg:text-3xl text-gold-300">ประวัติการเดินทาง</h1>
+            <h1 className="heading-victorian title-whisper-gold text-2xl lg:text-3xl">ประวัติการเดินทาง</h1>
             <p className="text-victorian-500 text-xs lg:text-sm">รวมทุกแมพ ({total})</p>
           </div>
         </div>
