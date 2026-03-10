@@ -1,0 +1,2 @@
+# Exclude local Discord bot package from Vercel uploads
+bot/

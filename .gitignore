@@ -30,6 +30,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local discord bot package
+bot/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
