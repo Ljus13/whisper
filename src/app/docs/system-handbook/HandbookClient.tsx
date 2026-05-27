@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { useState, useEffect, useCallback } from 'react'
+import { cldBg } from '@/lib/image'
 
 /* ─────────────────────────────────────────────────────────────
    Lightbox
@@ -31,7 +32,7 @@ function Lightbox({ state, onClose }: { state: LightboxState; onClose: () => voi
         </button>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={state.src}
+          src={cldBg(state.src)}
           alt={state.alt}
           className="max-w-[90vw] max-h-[85vh] object-contain rounded-sm border border-gold-subtle shadow-2xl"
         />

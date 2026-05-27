@@ -8,6 +8,7 @@ import AdminEditModal from '@/components/admin/admin-edit-modal'
 import DisplayNameSetup from '@/components/dashboard/display-name-setup'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
 import { CornerOrnament, OrnamentedCard } from '@/components/ui/ornaments'
+import { cldAvatar, cldBg, cldThumb } from '@/lib/image'
 import dynamic from 'next/dynamic'
 import type { User } from '@supabase/supabase-js'
 import { LogOut, Shield, Swords, Crown, Settings, X, Camera, Map, Zap, Users, Footprints, Flame, Brain, Heart, Pencil, Lock, Image as ImageIcon, BookOpen, FileText, Church, ScrollText } from 'lucide-react'
@@ -134,13 +135,13 @@ function PathwayChoiceCard({
   return (
     <div
       ref={cardRef}
-      className="snap-center shrink-0 w-44 sm:w-52 md:w-64 rounded-2xl border border-gold-400/10 bg-victorian-900/70 overflow-hidden transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0_18px_50px_rgba(0,0,0,0.45)]"
+      className="snap-center shrink-0 w-44 sm:w-52 md:w-64 rounded-2xl glass overflow-hidden transition-transform duration-300 hover:-translate-y-1 hover:shadow-glass-lg"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       <div className="relative h-36 sm:h-44 md:h-56">
         {pathway.bg_url ? (
-          <img src={pathway.bg_url} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" decoding="async" />
+          <img src={cldBg(pathway.bg_url)} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" decoding="async" />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-victorian-900 via-victorian-950 to-black" />
         )}
@@ -158,8 +159,8 @@ function PathwayChoiceCard({
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
         {pathway.logo_url && (
-          <div className="absolute top-4 right-4 w-14 h-14 rounded-full bg-black/40 border border-gold-400/30 flex items-center justify-center">
-            <img src={pathway.logo_url} alt="" className="w-10 h-10 object-contain" loading="lazy" decoding="async" />
+          <div className="absolute top-4 right-4 w-14 h-14 rounded-full bg-black/40 shadow-[0_0_0_2px_rgba(212,175,55,0.18),0_0_18px_rgba(0,0,0,0.4)] flex items-center justify-center">
+            <img src={cldAvatar(pathway.logo_url)} alt="" className="w-10 h-10 object-contain" loading="lazy" decoding="async" />
           </div>
         )}
       </div>
@@ -184,16 +185,16 @@ function PathwayChoiceCard({
 
 function RoleBadge({ role }: { role: string }) {
   const config = {
-    admin:  { icon: Crown,  label: 'ผู้ดูแลระบบ',    color: 'text-gold-300 bg-gold-400/10 border-gold-400/30' },
-    dm:     { icon: Shield, label: 'Dungeon Master', color: 'text-nouveau-cream bg-nouveau-emerald/10 border-nouveau-emerald/30' },
-    player: { icon: Swords, label: 'ผู้เล่น',        color: 'text-nouveau-cream bg-metal-silver/10 border-metal-silver/30' },
-  }[role] ?? { icon: Swords, label: 'ผู้เล่น', color: 'text-nouveau-cream bg-metal-silver/10 border-metal-silver/30' }
+    admin:  { icon: Crown,  label: 'ผู้ดูแลระบบ',    color: 'text-gold-300 bg-gold-400/15' },
+    dm:     { icon: Shield, label: 'Dungeon Master', color: 'text-nouveau-cream bg-nouveau-emerald/15' },
+    player: { icon: Swords, label: 'ผู้เล่น',        color: 'text-nouveau-cream bg-metal-silver/15' },
+  }[role] ?? { icon: Swords, label: 'ผู้เล่น', color: 'text-nouveau-cream bg-metal-silver/15' }
 
   const Icon = config.icon
 
   return (
-    <span className={`inline-flex items-center gap-1.5 md:gap-2.5 px-2 py-1.5 md:px-4 md:py-2 text-sm md:text-base font-display 
-                      tracking-wider border rounded-md ${config.color}`}>
+    <span className={`inline-flex items-center gap-1.5 md:gap-2.5 px-2 py-1.5 md:px-4 md:py-2 text-sm md:text-base font-display
+                      tracking-wider rounded-md backdrop-blur-sm ${config.color}`}>
       <Icon className="w-4 h-4 md:w-5 md:h-5" />
       <span className="hidden sm:inline">{config.label}</span>
     </span>
@@ -330,26 +331,25 @@ export default function DashboardContent({
   return (
     <div className="min-h-screen">
       <style dangerouslySetInnerHTML={{__html: `
-        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&display=swap');
         @keyframes flowEnergy {
           0% { background-position: 200% 0; }
           100% { background-position: 0% 0; }
         }
       `}} />
       {/* Top nav bar */}
-      <header className="border-b border-gold-400/10 bg-victorian-950/80 backdrop-blur-sm">
+      <header className="bg-victorian-950/60 backdrop-blur-md shadow-[0_8px_24px_rgba(0,0,0,0.4)]">
         <div className="max-w-screen-2xl mx-auto px-4 py-3 pr-14 sm:pr-4 md:px-8 md:py-4 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-2 md:gap-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772424893/wots-logo-w_fyr8dc.png"
+              src="https://res.cloudinary.com/dehp6efwc/image/upload/f_auto,q_auto,w_400/v1772424893/wots-logo-w_fyr8dc.png"
               alt="Whisper of the Shadow"
               className="h-9 md:h-14 w-auto object-contain"
             />
             <h1
               style={{
-                fontFamily: "'Cinzel Decorative', serif",
+                fontFamily: "var(--font-cinzel-decorative), serif",
                 background: 'linear-gradient(135deg, #c9a84c 0%, #f0d080 35%, #e8c055 55%, #b8881e 80%, #d4a030 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
@@ -373,13 +373,13 @@ export default function DashboardContent({
             >
               {currentAvatarUrl ? (
                 <img
-                  src={currentAvatarUrl}
+                  src={cldThumb(currentAvatarUrl)}
                   alt={displayName}
-                  className="w-9 h-9 md:w-12 md:h-12 rounded-full border-2 border-gold-400/30 object-cover"
+                  className="w-9 h-9 md:w-12 md:h-12 rounded-full object-cover shadow-[0_0_0_2px_rgba(212,175,55,0.15),0_0_16px_rgba(212,175,55,0.18)]"
                   decoding="async"
                 />
               ) : (
-                <div className="w-9 h-9 md:w-12 md:h-12 rounded-full border-2 border-gold-400/30 
+                <div className="w-9 h-9 md:w-12 md:h-12 rounded-full shadow-[0_0_0_2px_rgba(212,175,55,0.15),0_0_16px_rgba(212,175,55,0.18)]
                                 bg-victorian-800 flex items-center justify-center">
                   <span className="text-gold-400 text-sm md:text-lg font-display">
                     {displayName[0]?.toUpperCase()}
@@ -407,15 +407,15 @@ export default function DashboardContent({
               <div className="absolute -inset-1 rounded-xl bg-gold-400/20 blur-md group-hover:bg-gold-400/30 transition-all duration-500" />
               {currentAvatarUrl ? (
                 <img
-                  src={currentAvatarUrl}
+                  src={cldThumb(currentAvatarUrl)}
                   alt={displayName}
-                  className="relative w-20 h-20 sm:w-28 sm:h-28 md:w-44 md:h-44 lg:w-52 lg:h-52 xl:w-64 xl:h-64 rounded-xl border-4 border-gold-400/50 object-cover shadow-gold"
+                  className="relative w-20 h-20 sm:w-28 sm:h-28 md:w-44 md:h-44 lg:w-52 lg:h-52 xl:w-64 xl:h-64 rounded-xl object-cover shadow-gold-lg"
                   fetchPriority="high"
                   decoding="async"
                 />
               ) : (
-                <div className="relative w-20 h-20 sm:w-28 sm:h-28 md:w-44 md:h-44 lg:w-52 lg:h-52 xl:w-64 xl:h-64 rounded-xl border-4 border-gold-400/50 
-                                bg-victorian-800 flex items-center justify-center shadow-gold">
+                <div className="relative w-20 h-20 sm:w-28 sm:h-28 md:w-44 md:h-44 lg:w-52 lg:h-52 xl:w-64 xl:h-64 rounded-xl
+                                bg-victorian-800 flex items-center justify-center shadow-gold-lg">
                   <span className="text-gold-400 text-3xl sm:text-4xl md:text-6xl font-body font-semibold">
                     {displayName[0]?.toUpperCase()}
                   </span>
@@ -433,7 +433,7 @@ export default function DashboardContent({
                     type="button"
                     onClick={() => setShowAdminEdit(true)}
                     className="p-2 text-victorian-400 hover:text-gold-400 cursor-pointer 
-                               bg-victorian-900/60 rounded-md border border-gold-400/10 hover:border-gold-400/30 transition-all"
+                               bg-victorian-900/60 rounded-md hover:bg-victorian-800/80 transition-all"
                     title="แก้ไขข้อมูล (Admin)"
                   >
                     <Pencil className="w-5 h-5" />
@@ -442,10 +442,10 @@ export default function DashboardContent({
               </div>
               {rankInfo?.pathwayName ? (
                 <div className="w-full max-w-[320px] mt-1.5 xl:mt-3">
-                  <div className="relative overflow-hidden rounded-lg border border-gold-400/20 bg-victorian-900/70">
+                  <div className="relative overflow-hidden rounded-lg glass">
                     {rankInfo.pathwayBgUrl && (
                       <img
-                        src={rankInfo.pathwayBgUrl}
+                        src={cldBg(rankInfo.pathwayBgUrl)}
                         alt=""
                         className="absolute inset-0 w-full h-full object-cover opacity-35"
                         decoding="async"
@@ -453,9 +453,9 @@ export default function DashboardContent({
                     )}
                     <div className="absolute inset-0 bg-gradient-to-r from-victorian-950/80 via-victorian-900/70 to-victorian-950/80" />
                     <div className="relative p-3 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full border border-gold-400/30 bg-victorian-900/80 flex items-center justify-center overflow-hidden">
+                      <div className="w-10 h-10 rounded-full shadow-[0_0_0_1px_rgba(212,175,55,0.18)] bg-victorian-900/80 flex items-center justify-center overflow-hidden">
                         {rankInfo.pathwayLogoUrl ? (
-                          <img src={rankInfo.pathwayLogoUrl} alt="" className="w-full h-full object-cover" decoding="async" />
+                          <img src={cldAvatar(rankInfo.pathwayLogoUrl)} alt="" className="w-full h-full object-cover" decoding="async" />
                         ) : (
                           <Flame className="w-5 h-5 text-amber-300" />
                         )}
@@ -483,7 +483,7 @@ export default function DashboardContent({
           <div className="flex-1 w-full flex flex-col gap-3 md:gap-4 xl:gap-5">
             <div className="w-full grid grid-cols-2 gap-3 md:gap-4 xl:gap-5">
             {/* ตัวตายตัวแทน (HP) */}
-            <div className="p-3 md:p-4 bg-victorian-900/60 border border-red-500/20 rounded-md flex flex-col md:flex-row items-center md:justify-between gap-2 md:gap-3">
+            <div className="p-3 md:p-4 bg-victorian-900/60 rounded-md flex flex-col md:flex-row items-center md:justify-between gap-2 md:gap-3">
               <div className="flex items-center gap-2 md:gap-3">
                 <div className="p-1.5 md:p-2 bg-red-500/10 rounded-full">
                   <Heart className="w-5 h-5 md:w-7 md:h-7 text-red-400" />
@@ -497,7 +497,7 @@ export default function DashboardContent({
             </div>
 
             {/* สติ (Sanity) */}
-            <div className="p-3 md:p-4 bg-victorian-900/60 border border-cyan-500/20 rounded-md flex flex-col justify-center">
+            <div className="p-3 md:p-4 bg-victorian-900/60 rounded-md flex flex-col justify-center">
               <div className="flex items-center justify-between mb-1.5 md:mb-3">
                 <div className="flex items-center gap-2 md:gap-3">
                   <div className="p-1.5 md:p-2 bg-cyan-500/10 rounded-full">
@@ -512,7 +512,7 @@ export default function DashboardContent({
                   {profile?.sanity ?? 10} <span className="text-cyan-400/60 text-xs md:text-base">/ {profile?.max_sanity ?? 10}</span>
                 </span>
               </div>
-              <div className="w-full h-1.5 md:h-2.5 bg-victorian-950 rounded-full overflow-hidden border border-cyan-500/10">
+              <div className="w-full h-1.5 md:h-2.5 bg-victorian-950 rounded-full overflow-hidden">
                 <div 
                   className="h-full rounded-full transition-all duration-700 ease-out"
                   style={{ 
@@ -525,7 +525,7 @@ export default function DashboardContent({
             </div>
 
             {/* พลังวิญญาณ (Spirituality) */}
-            <div className="p-3 md:p-4 bg-victorian-900/60 border border-purple-500/20 rounded-md flex flex-col justify-center">
+            <div className="p-3 md:p-4 bg-victorian-900/60 rounded-md flex flex-col justify-center">
               <div className="flex items-center justify-between mb-1.5 md:mb-3">
                 <div className="flex items-center gap-2 md:gap-3">
                   <div className="p-1.5 md:p-2 bg-purple-500/10 rounded-full">
@@ -537,7 +537,7 @@ export default function DashboardContent({
                   {profile?.spirituality ?? 15} <span className="text-purple-400/60 text-xs md:text-base">/ {profile?.max_spirituality ?? 15}</span>
                 </span>
               </div>
-              <div className="w-full h-1.5 md:h-2.5 bg-victorian-950 rounded-full overflow-hidden border border-purple-500/10">
+              <div className="w-full h-1.5 md:h-2.5 bg-victorian-950 rounded-full overflow-hidden">
                 <div 
                   className="h-full rounded-full transition-all duration-700 ease-out"
                   style={{ 
@@ -550,7 +550,7 @@ export default function DashboardContent({
             </div>
 
             {/* หน่วยการเดินทาง (Travel Points) */}
-            <div className="p-3 md:p-4 bg-victorian-900/60 border border-emerald-500/20 rounded-md flex flex-col justify-center">
+            <div className="p-3 md:p-4 bg-victorian-900/60 rounded-md flex flex-col justify-center">
               <div className="flex items-center justify-between mb-1.5 md:mb-3">
                 <div className="flex items-center gap-2 md:gap-3">
                   <div className="p-1.5 md:p-2 bg-emerald-500/10 rounded-full">
@@ -562,7 +562,7 @@ export default function DashboardContent({
                   {profile?.travel_points ?? 9} <span className="text-emerald-400/60 text-xs md:text-base">/ {profile?.max_travel_points ?? 9}</span>
                 </span>
               </div>
-              <div className="w-full h-1.5 md:h-2.5 bg-victorian-950 rounded-full overflow-hidden border border-emerald-500/10">
+              <div className="w-full h-1.5 md:h-2.5 bg-victorian-950 rounded-full overflow-hidden">
                 <div 
                   className="h-full rounded-full transition-all duration-700 ease-out"
                   style={{ 
@@ -574,7 +574,7 @@ export default function DashboardContent({
               </div>
             </div>
 
-            <div className="p-3 md:p-4 bg-victorian-900/60 border border-amber-500/20 rounded-md flex flex-col justify-center">
+            <div className="p-3 md:p-4 bg-victorian-900/60 rounded-md flex flex-col justify-center">
               <div className="flex items-center justify-between mb-1.5 md:mb-3">
                 <div className="flex items-center gap-2 md:gap-3">
                   <div className="p-1.5 md:p-2 bg-amber-500/10 rounded-full">
@@ -586,7 +586,7 @@ export default function DashboardContent({
                   {Math.min(100, Math.max(0, digestProgress))}%
                 </span>
               </div>
-              <div className="w-full h-1.5 md:h-2.5 bg-victorian-950 rounded-full overflow-hidden border border-amber-500/10">
+              <div className="w-full h-1.5 md:h-2.5 bg-victorian-950 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-700 ease-out"
                   style={{
@@ -611,11 +611,11 @@ export default function DashboardContent({
               )}
             </div>
             </div>
-            <div className="p-3 md:p-4 bg-victorian-900/60 border border-gold-400/20 rounded-md flex items-center gap-2 md:gap-3">
+            <div className="p-3 md:p-4 bg-victorian-900/60 rounded-md flex items-center gap-2 md:gap-3">
               <div className="p-1.5 md:p-2 bg-gold-500/10 rounded-full">
                 {profile?.religions?.logo_url ? (
                   <img
-                    src={profile.religions.logo_url}
+                    src={cldAvatar(profile.religions.logo_url)}
                     alt=""
                     className="w-5 h-5 md:w-7 md:h-7 rounded-full object-cover"
                     decoding="async"
@@ -633,7 +633,7 @@ export default function DashboardContent({
             </div>
 
             {/* Discord Connection Row */}
-            <div className="p-3 md:p-4 bg-victorian-900/60 border border-[#5865F2]/20 rounded-md flex items-center gap-2 md:gap-3">
+            <div className="p-3 md:p-4 bg-victorian-900/60 rounded-md flex items-center gap-2 md:gap-3">
               <div className="p-1.5 md:p-2 bg-[#5865F2]/10 rounded-full shrink-0">
                 <svg className="w-5 h-5 md:w-7 md:h-7 text-[#5865F2]" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.947 2.418-2.157 2.418z" />
@@ -646,7 +646,7 @@ export default function DashboardContent({
                 </span>
               </div>
               {profile?.discord_user_id ? (
-                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/25 text-emerald-300 text-[10px] md:text-xs font-semibold shrink-0">
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] md:text-xs font-semibold shrink-0">
                   <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                   Linked
                 </span>
@@ -681,7 +681,7 @@ export default function DashboardContent({
             href={isGeneralMenuLocked ? "#" : "/dashboard/maps"}
             onMouseEnter={() => !isGeneralMenuLocked && router.prefetch('/dashboard/maps')}
             className={`group relative overflow-hidden card-victorian p-3 md:p-6 lg:p-8 flex flex-row md:flex-col items-center gap-3 md:gap-5 md:justify-center
-                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[72px] md:min-h-[200px]
+                        glass-hover transition-all duration-300 min-h-[72px] md:min-h-[200px]
                         ${isGeneralMenuLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
             title={generalMenuLockTitle}
           >
@@ -691,7 +691,7 @@ export default function DashboardContent({
             <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] hidden md:block w-14 h-14" />
             <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-4 w-full">
               <div className="w-16 h-16 md:w-32 md:h-32 shrink-0 flex items-center justify-center group-hover:scale-110 transition-all duration-300">
-                {isGeneralMenuLocked ? <Lock className="w-8 h-8 md:w-14 md:h-14 text-red-500" /> : <img src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772971167/map_pdxqdl.webp" alt="แผนที่" className="w-full h-full object-contain" />}
+                {isGeneralMenuLocked ? <Lock className="w-8 h-8 md:w-14 md:h-14 text-red-500" /> : <img src="https://res.cloudinary.com/dehp6efwc/image/upload/f_auto,q_auto,w_256/v1772971167/map_pdxqdl.webp" alt="แผนที่" className="w-full h-full object-contain" />}
               </div>
               <div className="flex flex-col items-start md:items-center gap-0.5 min-w-0 flex-1">
                 <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center" style={{background:'linear-gradient(135deg,#c9a84c 0%,#f0d080 35%,#e8c055 55%,#b8881e 80%,#d4a030 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>แผนที่</h3>
@@ -705,7 +705,7 @@ export default function DashboardContent({
             href={isGeneralMenuLocked ? "#" : "/dashboard/skills"}
             onMouseEnter={() => !isGeneralMenuLocked && router.prefetch('/dashboard/skills')}
             className={`group relative overflow-hidden card-victorian p-3 md:p-6 lg:p-8 flex flex-row md:flex-col items-center gap-3 md:gap-5 md:justify-center
-                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[72px] md:min-h-[200px]
+                        glass-hover transition-all duration-300 min-h-[72px] md:min-h-[200px]
                         ${isGeneralMenuLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
             title={generalMenuLockTitle}
           >
@@ -715,7 +715,7 @@ export default function DashboardContent({
             <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] hidden md:block w-14 h-14" />
             <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-4 w-full">
               <div className="w-16 h-16 md:w-32 md:h-32 shrink-0 flex items-center justify-center group-hover:scale-110 transition-all duration-300">
-                {isGeneralMenuLocked ? <Lock className="w-8 h-8 md:w-14 md:h-14 text-red-500" /> : <img src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772971167/skills_ot7lzu.webp" alt="สกิล" className="w-full h-full object-contain" />}
+                {isGeneralMenuLocked ? <Lock className="w-8 h-8 md:w-14 md:h-14 text-red-500" /> : <img src="https://res.cloudinary.com/dehp6efwc/image/upload/f_auto,q_auto,w_256/v1772971167/skills_ot7lzu.webp" alt="สกิล" className="w-full h-full object-contain" />}
               </div>
               <div className="flex flex-col items-start md:items-center gap-0.5 min-w-0 flex-1">
                 <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center" style={{background:'linear-gradient(135deg,#c9a84c 0%,#f0d080 35%,#e8c055 55%,#b8881e 80%,#d4a030 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>สกิล</h3>
@@ -729,7 +729,7 @@ export default function DashboardContent({
             href={isGeneralMenuLocked ? '#' : '/dashboard/combat'}
             onMouseEnter={() => !isGeneralMenuLocked && router.prefetch('/dashboard/combat')}
             className={`group relative overflow-hidden card-victorian p-3 md:p-6 lg:p-8 flex flex-row md:flex-col items-center gap-3 md:gap-5 md:justify-center
-                        hover:border-red-500/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[72px] md:min-h-[200px]
+                        glass-hover transition-all duration-300 min-h-[72px] md:min-h-[200px]
                         ${isGeneralMenuLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
             title={generalMenuLockTitle}
           >
@@ -739,7 +739,7 @@ export default function DashboardContent({
             <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] hidden md:block w-14 h-14" />
             <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-4 w-full">
               <div className="w-16 h-16 md:w-32 md:h-32 shrink-0 flex items-center justify-center group-hover:scale-110 transition-all duration-300">
-                {isGeneralMenuLocked ? <Lock className="w-8 h-8 md:w-14 md:h-14 text-red-500" /> : <img src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772971167/combat_jjb11m.webp" alt="ต่อสู้" className="w-full h-full object-contain" />}
+                {isGeneralMenuLocked ? <Lock className="w-8 h-8 md:w-14 md:h-14 text-red-500" /> : <img src="https://res.cloudinary.com/dehp6efwc/image/upload/f_auto,q_auto,w_256/v1772971167/combat_jjb11m.webp" alt="ต่อสู้" className="w-full h-full object-contain" />}
               </div>
               <div className="flex flex-col items-start md:items-center gap-0.5 min-w-0 flex-1">
                 <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center" style={{background:'linear-gradient(135deg,#c9a84c 0%,#f0d080 35%,#e8c055 55%,#b8881e 80%,#d4a030 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>ต่อสู้</h3>
@@ -753,7 +753,7 @@ export default function DashboardContent({
             href={isGeneralMenuLocked ? "#" : "/dashboard/action-quest/quests"}
             onMouseEnter={() => !isGeneralMenuLocked && router.prefetch('/dashboard/action-quest/quests')}
             className={`group relative overflow-hidden card-victorian p-3 md:p-6 lg:p-8 flex flex-row md:flex-col items-center gap-3 md:gap-5 md:justify-center
-                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[72px] md:min-h-[200px]
+                        glass-hover transition-all duration-300 min-h-[72px] md:min-h-[200px]
                         ${isGeneralMenuLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
             title={generalMenuLockTitle}
           >
@@ -763,7 +763,7 @@ export default function DashboardContent({
             <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] hidden md:block w-14 h-14" />
             <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-4 w-full">
               <div className="w-16 h-16 md:w-32 md:h-32 shrink-0 flex items-center justify-center group-hover:scale-110 transition-all duration-300">
-                {isGeneralMenuLocked ? <Lock className="w-8 h-8 md:w-14 md:h-14 text-red-500" /> : <img src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772971167/quest_dxflk3.webp" alt="แอคชั่น" className="w-full h-full object-contain" />}
+                {isGeneralMenuLocked ? <Lock className="w-8 h-8 md:w-14 md:h-14 text-red-500" /> : <img src="https://res.cloudinary.com/dehp6efwc/image/upload/f_auto,q_auto,w_256/v1772971167/quest_dxflk3.webp" alt="แอคชั่น" className="w-full h-full object-contain" />}
               </div>
               <div className="flex flex-col items-start md:items-center gap-0.5 min-w-0 flex-1">
                 <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center" style={{background:'linear-gradient(135deg,#c9a84c 0%,#f0d080 35%,#e8c055 55%,#b8881e 80%,#d4a030 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>แอคชั่น</h3>
@@ -777,7 +777,7 @@ export default function DashboardContent({
             href={isSanityLocked ? "#" : "/dashboard/players"}
             onMouseEnter={() => !isSanityLocked && router.prefetch('/dashboard/players')}
             className={`group relative overflow-hidden card-victorian p-3 md:p-6 lg:p-8 flex flex-row md:flex-col items-center gap-3 md:gap-5 md:justify-center
-                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[72px] md:min-h-[200px]
+                        glass-hover transition-all duration-300 min-h-[72px] md:min-h-[200px]
                         ${isSanityLocked ? 'pointer-events-none opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
             title={isSanityLocked ? "ถูกล็อค: สติของคุณเหลือ 0" : ""}
           >
@@ -787,7 +787,7 @@ export default function DashboardContent({
             <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] hidden md:block w-14 h-14" />
             <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-4 w-full">
               <div className="w-16 h-16 md:w-32 md:h-32 shrink-0 flex items-center justify-center group-hover:scale-110 transition-all duration-300">
-                {isSanityLocked ? <Lock className="w-8 h-8 md:w-14 md:h-14 text-red-500" /> : <img src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772971167/member_hsdvvm.webp" alt="ทำเนียบผู้เล่น" className="w-full h-full object-contain" />}
+                {isSanityLocked ? <Lock className="w-8 h-8 md:w-14 md:h-14 text-red-500" /> : <img src="https://res.cloudinary.com/dehp6efwc/image/upload/f_auto,q_auto,w_256/v1772971167/member_hsdvvm.webp" alt="ทำเนียบผู้เล่น" className="w-full h-full object-contain" />}
               </div>
               <div className="flex flex-col items-start md:items-center gap-0.5 min-w-0 flex-1">
                 <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center" style={{background:'linear-gradient(135deg,#c9a84c 0%,#f0d080 35%,#e8c055 55%,#b8881e 80%,#d4a030 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>ทำเนียบผู้เล่น</h3>
@@ -801,7 +801,7 @@ export default function DashboardContent({
             href="/timeline"
             onMouseEnter={() => router.prefetch('/timeline')}
             className="group relative overflow-hidden card-victorian p-3 md:p-6 lg:p-8 flex flex-row md:flex-col items-center gap-3 md:gap-5 md:justify-center
-                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[72px] md:min-h-[200px] cursor-pointer"
+                        glass-hover transition-all duration-300 min-h-[72px] md:min-h-[200px] cursor-pointer"
           >
             <CornerOrnament className="absolute top-0 left-0 hidden md:block w-14 h-14" />
             <CornerOrnament className="absolute top-0 right-0 -scale-x-100 hidden md:block w-14 h-14" />
@@ -809,7 +809,7 @@ export default function DashboardContent({
             <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] hidden md:block w-14 h-14" />
             <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-4 w-full">
               <div className="w-16 h-16 md:w-32 md:h-32 shrink-0 flex items-center justify-center group-hover:scale-110 transition-all duration-300">
-                <img src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772971167/timeline_bfo9qz.webp" alt="เส้นเรื่อง" className="w-full h-full object-contain" />
+                <img src="https://res.cloudinary.com/dehp6efwc/image/upload/f_auto,q_auto,w_256/v1772971167/timeline_bfo9qz.webp" alt="เส้นเรื่อง" className="w-full h-full object-contain" />
               </div>
               <div className="flex flex-col items-start md:items-center gap-0.5 min-w-0 flex-1">
                 <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center" style={{background:'linear-gradient(135deg,#c9a84c 0%,#f0d080 35%,#e8c055 55%,#b8881e 80%,#d4a030 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>เส้นเรื่อง</h3>
@@ -824,7 +824,7 @@ export default function DashboardContent({
               href="/dashboard/pathways-grant"
               onMouseEnter={() => router.prefetch('/dashboard/pathways-grant')}
               className="group relative overflow-hidden card-victorian p-3 md:p-6 lg:p-8 flex flex-row md:flex-col items-center gap-3 md:gap-5 md:justify-center
-                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[72px] md:min-h-[200px] cursor-pointer"
+                        glass-hover transition-all duration-300 min-h-[72px] md:min-h-[200px] cursor-pointer"
             >
               <CornerOrnament className="absolute top-0 left-0 hidden md:block w-14 h-14" />
               <CornerOrnament className="absolute top-0 right-0 -scale-x-100 hidden md:block w-14 h-14" />
@@ -832,7 +832,7 @@ export default function DashboardContent({
               <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] hidden md:block w-14 h-14" />
               <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-4 w-full">
                 <div className="w-16 h-16 md:w-32 md:h-32 shrink-0 flex items-center justify-center group-hover:scale-110 transition-all duration-300">
-                  <img src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772971167/pathways-grant_ckwcpq.webp" alt="มอบโอสถ" className="w-full h-full object-contain" />
+                  <img src="https://res.cloudinary.com/dehp6efwc/image/upload/f_auto,q_auto,w_256/v1772971167/pathways-grant_ckwcpq.webp" alt="มอบโอสถ" className="w-full h-full object-contain" />
                 </div>
                 <div className="flex flex-col items-start md:items-center gap-0.5 min-w-0 flex-1">
                   <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center" style={{background:'linear-gradient(135deg,#c9a84c 0%,#f0d080 35%,#e8c055 55%,#b8881e 80%,#d4a030 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>มอบโอสถ</h3>
@@ -848,7 +848,7 @@ export default function DashboardContent({
               href="/dashboard/grant-skills"
               onMouseEnter={() => router.prefetch('/dashboard/grant-skills')}
               className="group relative overflow-hidden card-victorian p-3 md:p-6 lg:p-8 flex flex-row md:flex-col items-center gap-3 md:gap-5 md:justify-center
-                        hover:border-gold-400/50 hover:bg-victorian-900/90 transition-all duration-300 min-h-[72px] md:min-h-[200px] cursor-pointer"
+                        glass-hover transition-all duration-300 min-h-[72px] md:min-h-[200px] cursor-pointer"
             >
               <CornerOrnament className="absolute top-0 left-0 hidden md:block w-14 h-14" />
               <CornerOrnament className="absolute top-0 right-0 -scale-x-100 hidden md:block w-14 h-14" />
@@ -856,7 +856,7 @@ export default function DashboardContent({
               <CornerOrnament className="absolute bottom-0 right-0 scale-x-[-1] scale-y-[-1] hidden md:block w-14 h-14" />
               <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-4 w-full">
                 <div className="w-16 h-16 md:w-32 md:h-32 shrink-0 flex items-center justify-center group-hover:scale-110 transition-all duration-300">
-                  <img src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772971167/grant-power_lejbxi.webp" alt="มอบพลัง" className="w-full h-full object-contain" />
+                  <img src="https://res.cloudinary.com/dehp6efwc/image/upload/f_auto,q_auto,w_256/v1772971167/grant-power_lejbxi.webp" alt="มอบพลัง" className="w-full h-full object-contain" />
                 </div>
                 <div className="flex flex-col items-start md:items-center gap-0.5 min-w-0 flex-1">
                   <h3 className="heading-victorian text-sm md:text-2xl text-left md:text-center" style={{background:'linear-gradient(135deg,#c9a84c 0%,#f0d080 35%,#e8c055 55%,#b8881e 80%,#d4a030 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>มอบพลัง</h3>
@@ -878,9 +878,8 @@ export default function DashboardContent({
           onClick={() => setShowProfile(false)}
           style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
         >
-          <div 
-            className="w-full max-w-lg rounded-sm border border-gold-400/20 p-8"
-            style={{ backgroundColor: '#1A1612' }}
+          <div
+            className="w-full max-w-lg rounded-xl glass-strong p-8"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close button */}
@@ -898,12 +897,12 @@ export default function DashboardContent({
             <div className="flex flex-col items-center gap-4 mb-8">
               {currentAvatarUrl ? (
                 <img
-                  src={currentAvatarUrl}
+                  src={cldThumb(currentAvatarUrl)}
                   alt={displayName}
-                  className="w-24 h-24 rounded-full border-2 border-gold-400/30 object-cover"
+                  className="w-24 h-24 rounded-full object-cover shadow-[0_0_0_2px_rgba(212,175,55,0.18),0_0_20px_rgba(212,175,55,0.18)]"
                 />
               ) : (
-                <div className="w-24 h-24 rounded-full border-2 border-gold-400/30 
+                <div className="w-24 h-24 rounded-full shadow-[0_0_0_2px_rgba(212,175,55,0.18),0_0_20px_rgba(212,175,55,0.18)]
                                 bg-victorian-800 flex items-center justify-center">
                   <span className="text-gold-400 text-3xl font-display">
                     {displayName[0]?.toUpperCase()}
@@ -928,8 +927,8 @@ export default function DashboardContent({
                 }}
                 disabled={isSanityLocked}
                 className={`w-full flex items-center justify-center gap-3 px-4 py-3
-                           border border-gold-400/20 rounded-sm
-                           text-nouveau-cream hover:text-gold-400 hover:border-gold-400/40
+                           rounded-lg
+                           text-nouveau-cream hover:text-gold-400 hover:bg-victorian-800/80
                            transition-colors text-base
                            ${isSanityLocked ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                 style={{ backgroundColor: '#231C14' }}
@@ -947,8 +946,8 @@ export default function DashboardContent({
                 href={isSanityLocked ? "#" : "/dashboard/bio-templates"}
                 onMouseEnter={() => !isSanityLocked && router.prefetch('/dashboard/bio-templates')}
                 className={`w-full flex items-center justify-center gap-3 px-4 py-3
-                           border border-gold-400/20 rounded-sm
-                           text-nouveau-cream hover:text-gold-400 hover:border-gold-400/40
+                           rounded-lg
+                           text-nouveau-cream hover:text-gold-400 hover:bg-victorian-800/80
                            transition-colors text-base
                            ${isSanityLocked ? 'opacity-40 cursor-not-allowed pointer-events-none' : 'cursor-pointer'}`}
                 style={{ backgroundColor: '#231C14' }}
@@ -971,8 +970,8 @@ export default function DashboardContent({
                 }}
                 disabled={isSanityLocked}
                 className={`w-full flex items-center justify-center gap-3 px-4 py-3
-                           border border-gold-400/20 rounded-sm
-                           text-nouveau-cream hover:text-gold-400 hover:border-gold-400/40
+                           rounded-lg
+                           text-nouveau-cream hover:text-gold-400 hover:bg-victorian-800/80
                            transition-colors text-base
                            ${isSanityLocked ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                 style={{ backgroundColor: '#231C14' }}
@@ -991,8 +990,8 @@ export default function DashboardContent({
                 onClick={handleSignOut}
                 disabled={isSigningOut}
                 className="w-full flex items-center justify-center gap-3 px-4 py-3
-                           border border-nouveau-ruby/30 rounded-sm
-                           text-nouveau-ruby hover:border-nouveau-ruby/60
+                           rounded-lg
+                           text-nouveau-ruby hover:bg-nouveau-ruby/15
                            transition-colors cursor-pointer text-base
                            disabled:opacity-50"
                 style={{ backgroundColor: '#231C14' }}
@@ -1014,9 +1013,8 @@ export default function DashboardContent({
           onClick={() => setShowEditAvatar(false)}
           style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
         >
-          <div 
-            className="w-full max-w-md rounded-sm border border-gold-400/20 p-8 max-h-[90vh] overflow-y-auto"
-            style={{ backgroundColor: '#1A1612' }}
+          <div
+            className="w-full max-w-md rounded-xl glass-strong p-8 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-6">
@@ -1052,12 +1050,12 @@ export default function DashboardContent({
               <div className="flex justify-center mb-6">
                 {currentAvatarUrl ? (
                   <img
-                    src={currentAvatarUrl}
+                    src={cldThumb(currentAvatarUrl)}
                     alt="Current Avatar"
-                    className="w-24 h-24 rounded-full border-2 border-gold-400/30 object-cover"
+                    className="w-24 h-24 rounded-full object-cover shadow-[0_0_0_2px_rgba(212,175,55,0.18),0_0_20px_rgba(212,175,55,0.18)]"
                   />
                 ) : (
-                  <div className="w-24 h-24 rounded-full border-2 border-gold-400/30 
+                  <div className="w-24 h-24 rounded-full shadow-[0_0_0_2px_rgba(212,175,55,0.18),0_0_20px_rgba(212,175,55,0.18)]
                                   bg-victorian-800 flex items-center justify-center">
                     <span className="text-gold-400 text-3xl font-display">
                       {displayName[0]?.toUpperCase()}
@@ -1104,8 +1102,8 @@ export default function DashboardContent({
                 </p>
                 {/* Background preview */}
                 {currentBgUrl && (
-                  <div className="mt-3 rounded-sm overflow-hidden border border-gold-400/10 h-20">
-                    <img src={currentBgUrl} alt="BG Preview" className="w-full h-full object-cover opacity-60" loading="lazy" decoding="async" />
+                  <div className="mt-3 rounded-lg overflow-hidden h-20">
+                    <img src={cldBg(currentBgUrl)} alt="BG Preview" className="w-full h-full object-cover opacity-60" loading="lazy" decoding="async" />
                   </div>
                 )}
               </div>
@@ -1139,9 +1137,8 @@ export default function DashboardContent({
           onClick={() => setShowEditBio(false)}
           style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
         >
-          <div 
-            className="w-full max-w-2xl rounded-sm border border-gold-400/20 p-6 md:p-8 max-h-[90vh] overflow-y-auto"
-            style={{ backgroundColor: '#1A1612' }}
+          <div
+            className="w-full max-w-2xl rounded-xl glass-strong p-6 md:p-8 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-6">
@@ -1193,14 +1190,14 @@ export default function DashboardContent({
         <div className="fixed inset-0 z-[90] flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
           <div className="relative w-full max-w-4xl my-auto">
-            <div className="border border-gold-400/20 rounded-2xl overflow-hidden bg-victorian-950/90 shadow-[0_0_60px_rgba(212,175,55,0.15)]">
-              <div className="p-3 md:p-5 border-b border-gold-400/10">
+            <div className="rounded-2xl overflow-hidden bg-victorian-950/90 backdrop-blur-md shadow-[0_0_60px_rgba(212,175,55,0.15)]">
+              <div className="p-3 md:p-5 shadow-[0_10px_18px_-14px_rgba(0,0,0,0.7)]">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <div className="heading-victorian text-base md:text-xl text-gold-200">กรุณาเลือกเส้นทางของคุณ</div>
                     <div className="text-victorian-400 text-xs mt-0.5">สถานะ: กำลังรอตัดสินใจ</div>
                   </div>
-                  <div className="px-3 py-1 text-xs rounded-full border border-amber-400/40 text-amber-200 bg-amber-500/10">
+                  <div className="px-3 py-1 text-xs rounded-full text-amber-200 bg-amber-500/15">
                     เลื่อนซ้าย/ขวาเพื่อดูตัวเลือกทั้งหมด
                   </div>
                 </div>
@@ -1232,13 +1229,13 @@ export default function DashboardContent({
       {celebrationPathway && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-          <div className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-amber-400/40 bg-victorian-950/90">
+          <div className="relative w-full max-w-xl overflow-hidden rounded-2xl bg-victorian-950/90 shadow-[0_0_60px_rgba(251,191,36,0.25)]">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.4),_transparent_60%)]" />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(245,158,11,0.35),_transparent_60%)]" />
             <div className="relative p-6 md:p-10 text-center space-y-5">
-              <div className="mx-auto w-20 h-20 rounded-full border border-amber-400/60 bg-amber-500/10 flex items-center justify-center shadow-[0_0_35px_rgba(251,191,36,0.6)]">
+              <div className="mx-auto w-20 h-20 rounded-full bg-amber-500/15 flex items-center justify-center shadow-[0_0_35px_rgba(251,191,36,0.6)]">
                 {celebrationPathway.logo_url ? (
-                  <img src={celebrationPathway.logo_url} alt="" className="w-12 h-12 object-contain" loading="lazy" decoding="async" />
+                  <img src={cldAvatar(celebrationPathway.logo_url)} alt="" className="w-12 h-12 object-contain" loading="lazy" decoding="async" />
                 ) : (
                   <Crown className="w-8 h-8 text-amber-300" />
                 )}
@@ -1259,11 +1256,11 @@ export default function DashboardContent({
 
       {promoteResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(5,4,3,0.75)' }}>
-          <div className="relative w-full max-w-md overflow-hidden rounded-xl border border-amber-400/40 bg-victorian-950/90">
+          <div className="relative w-full max-w-md overflow-hidden rounded-xl bg-victorian-950/90 shadow-[0_0_50px_rgba(251,191,36,0.22)]">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.35),_transparent_60%)]" />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(245,158,11,0.25),_transparent_60%)]" />
             <div className="relative p-6 md:p-10 text-center space-y-5">
-              <div className="mx-auto w-16 h-16 rounded-full border border-amber-400/50 bg-amber-500/10 flex items-center justify-center shadow-[0_0_25px_rgba(251,191,36,0.5)]">
+              <div className="mx-auto w-16 h-16 rounded-full bg-amber-500/15 flex items-center justify-center shadow-[0_0_25px_rgba(251,191,36,0.5)]">
                 <Flame className="w-8 h-8 text-amber-300" />
               </div>
               <div className="heading-victorian text-2xl md:text-3xl text-amber-200 drop-shadow-[0_0_12px_rgba(251,191,36,0.7)]">

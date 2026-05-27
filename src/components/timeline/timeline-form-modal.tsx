@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, type FormEvent } from 'react'
 import { X, Loader2, Check } from 'lucide-react'
 import type { TimelineEntry, SideStory, SubStory } from './timeline-view'
+import { cldAvatar, cldThumb } from '@/lib/image'
 import {
   setSideStoryModerators, setSideStoryParticipants, setSideStoryPunishments,
   setSubStoryModerators, setSubStoryParticipants,
@@ -260,7 +261,7 @@ export default function TimelineFormModal({
             </div>
             {imageUrl && (
               <div className="mt-2 relative aspect-[5/4] w-32 rounded-lg overflow-hidden border border-victorian-700">
-                <img src={imageUrl} alt="Preview"
+                <img src={cldThumb(imageUrl)} alt="Preview"
                   className="absolute inset-0 w-full h-full object-cover"
                   onError={(e) => (e.currentTarget.style.display = 'none')} />
               </div>
@@ -358,7 +359,7 @@ export default function TimelineFormModal({
                         {checked && <Check className="w-3 h-3 text-white" />}
                       </span>
                       {p.avatar_url && (
-                        <img src={p.avatar_url} alt="" className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
+                        <img src={cldAvatar(p.avatar_url)} alt="" className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
                       )}
                       <span className="truncate">{p.display_name}</span>
                     </button>
@@ -392,7 +393,7 @@ export default function TimelineFormModal({
                         {checked && <Check className="w-3 h-3 text-white" />}
                       </span>
                       {p.avatar_url && (
-                        <img src={p.avatar_url} alt="" className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
+                        <img src={cldAvatar(p.avatar_url)} alt="" className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
                       )}
                       <span className="truncate">{p.display_name}</span>
                     </button>

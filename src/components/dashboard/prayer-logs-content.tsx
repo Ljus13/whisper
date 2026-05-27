@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
 import { createClient } from '@/lib/supabase/client'
+import { cldAvatar } from '@/lib/image'
 
 interface PrayerLog {
   id: string
@@ -153,7 +154,7 @@ export default function PrayerLogsContent({ userId }: { userId: string }) {
                       <div className="lg:col-span-3 flex items-center gap-3">
                         {player?.avatar_url ? (
                           <img
-                            src={player.avatar_url}
+                            src={cldAvatar(player.avatar_url)}
                             alt={player.display_name || ''}
                             className="w-12 h-12 rounded-full border-2 border-gold-400/30 object-cover flex-shrink-0"
                           />
@@ -183,7 +184,7 @@ export default function PrayerLogsContent({ userId }: { userId: string }) {
                       <div className="lg:col-span-3 flex items-center gap-3">
                         {religion?.logo_url ? (
                           <img
-                            src={religion.logo_url}
+                            src={cldAvatar(religion.logo_url)}
                             alt={religion.name_th}
                             className="w-10 h-10 rounded-full border border-amber-400/30 object-cover flex-shrink-0"
                           />

@@ -1,7 +1,8 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
+import { SITE_SETTINGS_CACHE_TAG } from '@/lib/auth'
 
 export async function getMaintenanceStatus(): Promise<{
   enabled: boolean
@@ -75,6 +76,7 @@ export async function toggleMaintenanceMode(enabled: boolean, webNote: string) {
   if (error) return { error: error.message }
 
   revalidatePath('/', 'layout')
+  revalidateTag(SITE_SETTINGS_CACHE_TAG)
   return { success: true }
 }
 
@@ -109,6 +111,7 @@ export async function updateMaintenanceNote(webNote: string) {
   if (error) return { error: error.message }
 
   revalidatePath('/', 'layout')
+  revalidateTag(SITE_SETTINGS_CACHE_TAG)
   return { success: true }
 }
 
@@ -140,6 +143,7 @@ export async function togglePreEventMode(enabled: boolean, webNote: string) {
   if (error) return { error: error.message }
 
   revalidatePath('/', 'layout')
+  revalidateTag(SITE_SETTINGS_CACHE_TAG)
   return { success: true }
 }
 
@@ -173,5 +177,6 @@ export async function updatePreEventModeNote(webNote: string) {
   if (error) return { error: error.message }
 
   revalidatePath('/', 'layout')
+  revalidateTag(SITE_SETTINGS_CACHE_TAG)
   return { success: true }
 }

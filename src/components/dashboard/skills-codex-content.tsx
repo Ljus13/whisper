@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { Skill, SkillPathway, SkillSequence, SkillType } from '@/lib/types/database'
 import { ChevronDown, ChevronUp, Search } from 'lucide-react'
+import { cldAvatar, cldBg } from '@/lib/image'
 
 interface SkillsCodexContentProps {
   types: SkillType[]
@@ -225,14 +226,14 @@ export default function SkillsCodexContent({ types, pathways, sequences, skills 
                       <div key={pathway.id} className="border border-gold-400/10 rounded-lg overflow-hidden bg-victorian-950/40">
                           <div className="relative p-4 md:p-5 flex flex-col gap-3">
                           {pathway.bg_url && (
-                            <img src={pathway.bg_url} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20" />
+                            <img src={cldBg(pathway.bg_url)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20" />
                           )}
                           <div className="absolute inset-0 bg-gradient-to-r from-victorian-950/90 via-victorian-900/70 to-victorian-950/90" />
                           <div className="relative flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3">
                               <div className="w-12 h-12 rounded-full aspect-square shrink-0 border border-gold-400/20 bg-victorian-900/80 overflow-hidden flex items-center justify-center">
                                 {pathway.logo_url ? (
-                                  <img src={pathway.logo_url} alt="" className="w-full h-full object-cover rounded-full" />
+                                  <img src={cldAvatar(pathway.logo_url)} alt="" className="w-full h-full object-cover rounded-full" />
                                 ) : (
                                   <span className="text-gold-300 text-sm">⛧</span>
                                 )}

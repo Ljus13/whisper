@@ -7,6 +7,7 @@ import {
   Clock, CheckCircle, Sparkles, Shield, Crown, Swords, Calendar, Repeat, Infinity,
   Pencil, Trash2, Settings, LockKeyhole
 } from 'lucide-react'
+import { cldAvatar, cldThumb } from '@/lib/image'
 import {
   getPlayersForGrantSkill,
   getAllSkillsGrouped,
@@ -334,7 +335,7 @@ function GrantForm({
       {players.length === 1 ? (
         <div className="flex items-center gap-3 p-3 rounded-lg bg-victorian-900/50 border border-gold-400/10">
           {players[0].avatar_url ? (
-            <img src={players[0].avatar_url} alt="" className="w-10 h-10 rounded-full object-cover border border-gold-400/20" />
+            <img src={cldAvatar(players[0].avatar_url)} alt="" className="w-10 h-10 rounded-full object-cover border border-gold-400/20" />
           ) : (
             <div className="w-10 h-10 rounded-full bg-victorian-800 border border-gold-400/20 flex items-center justify-center">
               <Users className="w-5 h-5 text-victorian-500" />
@@ -351,7 +352,7 @@ function GrantForm({
             {players.map(p => (
               <div key={p.id} className="flex items-center gap-1.5 bg-victorian-800/60 border border-gold-400/15 rounded-full px-2 py-1">
                 {p.avatar_url ? (
-                  <img src={p.avatar_url} alt="" className="w-5 h-5 rounded-full object-cover" />
+                  <img src={cldAvatar(p.avatar_url)} alt="" className="w-5 h-5 rounded-full object-cover" />
                 ) : (
                   <div className="w-5 h-5 rounded-full bg-victorian-700 flex items-center justify-center">
                     <Users className="w-3 h-3 text-victorian-500" />
@@ -402,7 +403,7 @@ function GrantForm({
         <input type="url" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://..." className="input-victorian w-full" />
         {imageUrl.trim() && (
           <div className="mt-2 flex items-center gap-3">
-            <img src={imageUrl.trim()} alt="preview" className="w-16 h-16 rounded-lg object-cover border border-gold-400/20" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+            <img src={cldThumb(imageUrl.trim())} alt="preview" className="w-16 h-16 rounded-lg object-cover border border-gold-400/20" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
             <span className="text-xs text-victorian-500">Preview</span>
           </div>
         )}
@@ -703,7 +704,7 @@ function EditGrantForm({
         <input type="url" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://..." className="input-victorian w-full" />
         {imageUrl.trim() && (
           <div className="mt-2 flex items-center gap-3">
-            <img src={imageUrl.trim()} alt="preview" className="w-16 h-16 rounded-lg object-cover border border-gold-400/20" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+            <img src={cldThumb(imageUrl.trim())} alt="preview" className="w-16 h-16 rounded-lg object-cover border border-gold-400/20" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
             <span className="text-xs text-victorian-500">Preview</span>
           </div>
         )}
@@ -1164,7 +1165,7 @@ export default function GrantSkillsContent({ userId }: { userId: string }) {
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-3">
                                 {player.avatar_url ? (
-                                  <img src={player.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover border border-gold-400/20" />
+                                  <img src={cldAvatar(player.avatar_url)} alt="" className="w-8 h-8 rounded-full object-cover border border-gold-400/20" />
                                 ) : (
                                   <div className="w-8 h-8 rounded-full bg-victorian-800 border border-gold-400/20 flex items-center justify-center">
                                     <Users className="w-4 h-4 text-victorian-500" />
@@ -1262,7 +1263,7 @@ export default function GrantSkillsContent({ userId }: { userId: string }) {
                           <td className="px-4 py-2.5">
                             <div className="flex items-center gap-2">
                               {log.player_avatar ? (
-                                <img src={log.player_avatar} alt="" className="w-6 h-6 rounded-full object-cover border border-gold-400/20 flex-shrink-0" />
+                                <img src={cldAvatar(log.player_avatar)} alt="" className="w-6 h-6 rounded-full object-cover border border-gold-400/20 flex-shrink-0" />
                               ) : (
                                 <div className="w-6 h-6 rounded-full bg-victorian-800 border border-gold-400/20 flex items-center justify-center flex-shrink-0">
                                   <Users className="w-3 h-3 text-victorian-500" />
@@ -1391,7 +1392,7 @@ export default function GrantSkillsContent({ userId }: { userId: string }) {
                       }`}
                     >
                       {p.avatar_url ? (
-                        <img src={p.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+                        <img src={cldAvatar(p.avatar_url)} alt="" className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
                       ) : (
                         <div className="w-6 h-6 rounded-full bg-victorian-800 flex items-center justify-center flex-shrink-0">
                           <Users className="w-3 h-3 text-victorian-500" />
@@ -1431,7 +1432,7 @@ export default function GrantSkillsContent({ userId }: { userId: string }) {
                         <div key={gs.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${gs.is_active ? 'border-gold-400/15 bg-victorian-900/40' : 'border-victorian-800/50 bg-victorian-900/20 opacity-60'}`}>
                           {/* Image */}
                           {gs.image_url ? (
-                            <img src={gs.image_url} alt="" className="w-10 h-10 rounded-lg object-cover border border-gold-400/20 flex-shrink-0" />
+                            <img src={cldAvatar(gs.image_url)} alt="" className="w-10 h-10 rounded-lg object-cover border border-gold-400/20 flex-shrink-0" />
                           ) : (
                             <div className="w-10 h-10 rounded-lg bg-victorian-800 border border-gold-400/10 flex items-center justify-center flex-shrink-0">
                               <Gift className="w-5 h-5 text-victorian-600" />
@@ -1551,7 +1552,7 @@ export default function GrantSkillsContent({ userId }: { userId: string }) {
                       }}
                     />
                     {p.avatar_url ? (
-                      <img src={p.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                      <img src={cldAvatar(p.avatar_url)} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
                     ) : (
                       <div className="w-7 h-7 rounded-full bg-victorian-800 flex items-center justify-center flex-shrink-0">
                         <Users className="w-4 h-4 text-victorian-500" />

@@ -3,6 +3,7 @@
 import { useState, useEffect, useTransition, useCallback, useRef, useMemo, memo } from 'react'
 import Link from 'next/link'
 import { getCached, setCache, invalidateCache, isCacheStale, debouncedCall } from '@/lib/client-cache'
+import { cldAvatar } from '@/lib/image'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import {
@@ -218,7 +219,7 @@ function Pagination({ page, totalPages, onPage }: { page: number; totalPages: nu
 }
 
 function Avatar({ name, url }: { name: string; url: string | null }) {
-  if (url) return <img src={url} alt={name} className="w-9 h-9 rounded-full border border-gold-400/20 object-cover" loading="lazy" decoding="async" />
+  if (url) return <img src={cldAvatar(url)} alt={name} className="w-9 h-9 rounded-full border border-gold-400/20 object-cover" loading="lazy" decoding="async" />
   return (
     <div className="w-9 h-9 rounded-full border border-gold-400/20 bg-victorian-800 flex items-center justify-center">
       <span className="text-gold-400 text-xs font-display">{name[0]?.toUpperCase()}</span>
@@ -633,7 +634,7 @@ const PrayerLogRow = memo(function PrayerLogRow({ log, isAdmin }: {
       <td className="py-2.5 pr-3">
         <div className="flex items-center gap-2">
           {religion?.logo_url ? (
-            <img src={religion.logo_url} alt="" className="w-6 h-6 rounded-full border border-gold-400/20" />
+            <img src={cldAvatar(religion.logo_url)} alt="" className="w-6 h-6 rounded-full border border-gold-400/20" />
           ) : (
             <Church className="w-4 h-4 text-gold-400/50" />
           )}

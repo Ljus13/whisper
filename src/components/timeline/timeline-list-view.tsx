@@ -8,6 +8,7 @@ import {
   X, Shield, Users,
 } from 'lucide-react'
 import type { TimelineEntry, SideStory, SubStory, ModalMode } from './timeline-view'
+import { cldAvatar, cldThumb } from '@/lib/image'
 
 // ── Utilities ──────────────────────────────────────────────────────────────────
 function fmtDate(d: string | null) {
@@ -76,7 +77,7 @@ function Popup({
 
         {imageUrl && (
           <div className="aspect-video overflow-hidden sm:rounded-t-2xl">
-            <img src={imageUrl} alt={title} className="w-full h-full object-cover" />
+            <img src={cldThumb(imageUrl)} alt={title} className="w-full h-full object-cover" />
           </div>
         )}
 
@@ -105,7 +106,7 @@ function Popup({
               <div className="flex flex-wrap gap-1.5">
                 {moderators.map(m => (
                   <span key={m.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-nouveau-sapphire/20 text-blue-300">
-                    {m.avatar_url && <img src={m.avatar_url} className="w-3.5 h-3.5 rounded-full object-cover" alt="" />}
+                    {m.avatar_url && <img src={cldAvatar(m.avatar_url)} className="w-3.5 h-3.5 rounded-full object-cover" alt="" />}
                     {m.display_name || 'ไม่ระบุชื่อ'}
                   </span>
                 ))}
@@ -121,7 +122,7 @@ function Popup({
               <div className="flex flex-wrap gap-1.5">
                 {participants.map(p => (
                   <span key={p.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-nouveau-emerald/20 text-emerald-300">
-                    {p.avatar_url && <img src={p.avatar_url} className="w-3.5 h-3.5 rounded-full object-cover" alt="" />}
+                    {p.avatar_url && <img src={cldAvatar(p.avatar_url)} className="w-3.5 h-3.5 rounded-full object-cover" alt="" />}
                     {p.display_name || 'ไม่ระบุชื่อ'}
                   </span>
                 ))}
@@ -239,7 +240,7 @@ function SubItem({
       )}
       {sub.image_url && (
         <div className="h-24 overflow-hidden">
-          <img src={sub.image_url} alt={sub.title} className="w-full h-full object-cover" />
+          <img src={cldThumb(sub.image_url)} alt={sub.title} className="w-full h-full object-cover" />
         </div>
       )}
       <div className="p-3">
@@ -324,7 +325,7 @@ function SideItem({
       )}
       {side.image_url && (
         <div className="h-32 overflow-hidden">
-          <img src={side.image_url} alt={side.title} className="w-full h-full object-cover" />
+          <img src={cldThumb(side.image_url)} alt={side.title} className="w-full h-full object-cover" />
         </div>
       )}
       <div className="p-3">
@@ -464,7 +465,7 @@ function EntryItem({
       {/* Cover image */}
       {entry.image_url && (
         <div className="relative h-44 overflow-hidden">
-          <img src={entry.image_url} alt={entry.title} className="w-full h-full object-cover" />
+          <img src={cldThumb(entry.image_url)} alt={entry.title} className="w-full h-full object-cover" />
           <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-victorian-900/80 to-transparent" />
         </div>
       )}

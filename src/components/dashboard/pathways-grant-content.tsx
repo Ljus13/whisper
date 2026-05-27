@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { grantPathwayChoices } from '@/app/actions/pathway-grants'
 import { ArrowLeft, Sparkles, Check, X, Search, CheckCircle2 } from 'lucide-react'
+import { cldAvatar, cldBg } from '@/lib/image'
 
 interface Profile {
   id: string
@@ -69,13 +70,13 @@ function GrantModal({
       {/* Image */}
       <div className="relative h-44 md:h-64 flex-shrink-0 overflow-hidden">
         {preview.bg_url ? (
-          <img src={preview.bg_url} alt={preview.name} className="w-full h-full object-cover object-top" />
+          <img src={cldBg(preview.bg_url)} alt={preview.name} className="w-full h-full object-cover object-top" />
         ) : (
           <div className="w-full h-full bg-victorian-900" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-[#1A1612] via-[#1A1612]/40 to-transparent" />
         {preview.logo_url && (
-          <img src={preview.logo_url} alt="" className="absolute bottom-3 left-4 h-10 w-10 object-contain drop-shadow-lg" />
+          <img src={cldAvatar(preview.logo_url)} alt="" className="absolute bottom-3 left-4 h-10 w-10 object-contain drop-shadow-lg" />
         )}
         <h3 className={`absolute bottom-3 font-display text-xl text-gold-100 drop-shadow ${preview.logo_url ? 'left-16' : 'left-4'}`}>
           {preview.name}
@@ -155,7 +156,7 @@ function GrantModal({
                 className="flex items-center gap-2 flex-1 min-w-0 text-left"
               >
                 {p.bg_url ? (
-                  <img src={p.bg_url} alt="" className="w-7 h-7 rounded object-cover flex-shrink-0 opacity-80" />
+                  <img src={cldAvatar(p.bg_url)} alt="" className="w-7 h-7 rounded object-cover flex-shrink-0 opacity-80" />
                 ) : (
                   <div className="w-7 h-7 rounded bg-victorian-800 flex-shrink-0" />
                 )}

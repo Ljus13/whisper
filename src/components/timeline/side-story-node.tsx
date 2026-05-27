@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react'
 import { Eye, EyeOff, Pencil, Trash2, Plus, ChevronDown, ChevronUp, GripVertical, Calendar } from 'lucide-react'
+import { cldThumb } from '@/lib/image'
 
 function fmtDate(d: string | null): string | null {
   if (!d) return null
@@ -202,7 +203,7 @@ export default function SideStoryNode({
 
           {side.image_url && (
             <div className="relative aspect-[5/4] overflow-hidden">
-              <img src={side.image_url} alt={side.title}
+              <img src={cldThumb(side.image_url)} alt={side.title}
                 className="absolute inset-0 w-full h-full object-cover" />
               <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-victorian-900/95 to-transparent" />
             </div>
@@ -420,7 +421,7 @@ function SubStoryNode({
           )}
           {sub.image_url && (
             <div className="relative aspect-[5/4] overflow-hidden">
-              <img src={sub.image_url} alt={sub.title} className="absolute inset-0 w-full h-full object-cover" />
+              <img src={cldThumb(sub.image_url)} alt={sub.title} className="absolute inset-0 w-full h-full object-cover" />
               <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-victorian-900/95 to-transparent" />
             </div>
           )}

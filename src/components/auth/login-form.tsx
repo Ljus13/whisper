@@ -151,7 +151,7 @@ export default function LoginForm() {
           {/* Logo */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772424893/wots-logo-w_fyr8dc.png"
+            src="https://res.cloudinary.com/dehp6efwc/image/upload/f_auto,q_auto,w_400/v1772424893/wots-logo-w_fyr8dc.png"
             alt="Whisper of the Shadow"
             className="w-24 h-24 object-contain mx-auto mb-4 drop-shadow-[0_0_12px_rgba(212,175,55,0.3)]"
           />

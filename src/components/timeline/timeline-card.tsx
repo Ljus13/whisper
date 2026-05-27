@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Eye, EyeOff, Pencil, Trash2, ChevronDown, ChevronUp, Plus, GitBranch, Calendar } from 'lucide-react'
+import { cldThumb } from '@/lib/image'
 
 function fmtDate(d: string | null): string | null {
   if (!d) return null
@@ -77,7 +78,7 @@ export default function TimelineCard({
       {entry.image_url && (
         <div className={`relative ${s.imageAspect} overflow-hidden`}>
           <img
-            src={entry.image_url}
+            src={cldThumb(entry.image_url)}
             alt={entry.title}
             className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 hover:scale-105"
           />

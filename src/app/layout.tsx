@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Kanit, Uncial_Antiqua } from 'next/font/google'
+import { Kanit, Uncial_Antiqua, Cinzel_Decorative } from 'next/font/google'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
@@ -16,6 +16,12 @@ const uncialAntiqua = Uncial_Antiqua({
   weight: ['400'],
   display: 'swap',
   variable: '--font-uncial-antiqua',
+})
+const cinzelDecorative = Cinzel_Decorative({
+  subsets: ['latin'],
+  weight: ['400', '700'],
+  display: 'swap',
+  variable: '--font-cinzel-decorative',
 })
 
 export const viewport: Viewport = {
@@ -41,7 +47,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`dark ${kanit.variable} ${uncialAntiqua.variable}`}>
+    <html lang="en" className={`dark ${kanit.variable} ${uncialAntiqua.variable} ${cinzelDecorative.variable}`}>
       <body className={`min-h-screen ${kanit.className}`}>
         {children}
         <SpeedInsights />

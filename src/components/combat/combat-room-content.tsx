@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { debouncedCall } from '@/lib/client-cache'
+import { cldAvatar } from '@/lib/image'
 import {
   getCombatSession,
   getCombatLogs,
@@ -587,7 +588,7 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
               <div className="flex items-center gap-3">
                 <div className="relative">
                   {currentTurnParticipant.avatar_url ? (
-                    <img src={currentTurnParticipant.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-gold-400/50 combat-turn-active" />
+                    <img src={cldAvatar(currentTurnParticipant.avatar_url)} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-gold-400/50 combat-turn-active" />
                   ) : (
                     <div className="w-12 h-12 rounded-full bg-victorian-700 border-2 border-gold-400/50 flex items-center justify-center text-xl combat-turn-active">
                       {currentTurnParticipant.type === 'npc' ? '👹' : '👤'}
@@ -616,7 +617,7 @@ export default function CombatRoomContent({ sessionId, userId, isStaff }: Props)
                     title={p.display_name}
                   >
                     {p.avatar_url ? (
-                      <img src={p.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                      <img src={cldAvatar(p.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
                     ) : (
                       <span>{p.type === 'npc' ? '👹' : '👤'}</span>
                     )}
@@ -1091,7 +1092,7 @@ function CombatCard({
           <div className="relative shrink-0">
             {p.avatar_url ? (
               <img
-                src={p.avatar_url}
+                src={cldAvatar(p.avatar_url)}
                 alt=""
                 className={`w-14 h-14 rounded-2xl object-cover border-2 ${
                   p.is_current_turn ? 'border-gold-400/60' :
@@ -1352,7 +1353,7 @@ function PlayerPickerModal({ players, participants, onSelect, onClose, pending }
                   : 'border-victorian-700/30 bg-victorian-800/40 hover:border-blue-500/30 hover:bg-victorian-800/70 hover:shadow-lg'
                 }`}>
                 {p.avatar_url ? (
-                  <img src={p.avatar_url} alt="" className="w-10 h-10 rounded-xl object-cover border border-victorian-600/30 shrink-0" />
+                  <img src={cldAvatar(p.avatar_url)} alt="" className="w-10 h-10 rounded-xl object-cover border border-victorian-600/30 shrink-0" />
                 ) : (
                   <div className="w-10 h-10 rounded-xl bg-victorian-700 flex items-center justify-center shrink-0 text-lg">👤</div>
                 )}

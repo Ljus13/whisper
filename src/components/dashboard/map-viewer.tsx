@@ -22,7 +22,8 @@ import Link from 'next/link'
 import { useState, useRef, useCallback, useEffect, useTransition } from 'react'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
 import { createClient } from '@/lib/supabase/client'
-import { getCached, setCache } from '@/lib/client-cache'
+import { getCached, setCache, debouncedCall } from '@/lib/client-cache'
+import { cldAvatar, cldMap } from '@/lib/image'
 import { DEFAULT_TRAVEL_RULE, normalizePathwayRows, resolveTravelRule, type TravelRule } from '@/lib/travel-rules'
 
 /* ══════════════════════════════════════════════
@@ -243,6 +244,10 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
     fetchMapDataRef.current = fetchMapData
     fetchMapData()
 
+    // Collapse a burst of postgres_changes (e.g. a multi-token save, or the echo
+    // of our own writes) into a single refetch instead of one per row event.
+    const debouncedFetchMapData = () => debouncedCall(`mv-refetch:${mapId}`, fetchMapData, 350)
+
     const fetchProfile = () => {
       supabase
         .from('profiles')
@@ -292,13 +297,13 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
       .on('broadcast', { event: 'token_added' }, () => {
         fetchMapDataRef.current?.()
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_tokens', filter: `map_id=eq.${mapId}` }, fetchMapData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_locked_zones', filter: `map_id=eq.${mapId}` }, fetchMapData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_churches', filter: `map_id=eq.${mapId}` }, fetchMapData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_rest_points', filter: `map_id=eq.${mapId}` }, fetchMapData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'maps', filter: `id=eq.${mapId}` }, fetchMapData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_tokens', filter: `map_id=eq.${mapId}` }, debouncedFetchMapData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_locked_zones', filter: `map_id=eq.${mapId}` }, debouncedFetchMapData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_churches', filter: `map_id=eq.${mapId}` }, debouncedFetchMapData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_rest_points', filter: `map_id=eq.${mapId}` }, debouncedFetchMapData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'maps', filter: `id=eq.${mapId}` }, debouncedFetchMapData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, fetchProfile)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'player_pathways', filter: `player_id=eq.${userId}` }, fetchMapData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'player_pathways', filter: `player_id=eq.${userId}` }, debouncedFetchMapData)
       .subscribe()
 
     broadcastRef.current = (event, payload) => {
@@ -2053,7 +2058,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
             }}>
             {/* Image */}
             <div className="relative">
-              <img ref={imgRef} src={map.image_url} alt={map.name}
+              <img ref={imgRef} src={cldMap(map.image_url)} alt={map.name}
                 className="max-w-full max-h-full object-contain select-none block"
                 draggable={false} onLoad={onImageLoad} />
 
@@ -2152,7 +2157,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                       <div className="w-12 h-12 sm:w-10 sm:h-10 rounded-full border-[3px] sm:border-2 border-amber-400/70 bg-[#1A1612] flex items-center justify-center shadow-lg shadow-amber-900/30
                         group-hover/church:border-amber-400 group-hover/church:shadow-amber-400/30 transition-all">
                         {ch.religion_logo_url ? (
-                          <img src={ch.religion_logo_url} alt="" className="w-8 h-8 sm:w-6 sm:h-6 rounded-full object-cover" />
+                          <img src={cldAvatar(ch.religion_logo_url)} alt="" className="w-8 h-8 sm:w-6 sm:h-6 rounded-full object-cover" />
                         ) : (
                           <Church className="w-6 h-6 sm:w-5 sm:h-5 text-amber-400" />
                         )}
@@ -2217,7 +2222,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                       <div className="w-12 h-12 sm:w-10 sm:h-10 rounded-full border-[3px] sm:border-2 border-indigo-400/70 bg-[#1A1612] flex items-center justify-center shadow-lg shadow-indigo-900/30
                         group-hover/restpoint:border-indigo-400 group-hover/restpoint:shadow-indigo-400/30 transition-all">
                         {rp.image_url ? (
-                          <img src={rp.image_url} alt="" className="w-8 h-8 sm:w-6 sm:h-6 rounded-full object-cover" />
+                          <img src={cldAvatar(rp.image_url)} alt="" className="w-8 h-8 sm:w-6 sm:h-6 rounded-full object-cover" />
                         ) : (
                           <Tent className="w-6 h-6 sm:w-5 sm:h-5 text-indigo-400" />
                         )}
@@ -2297,7 +2302,7 @@ export default function MapViewer({ userId, mapId }: MapViewerProps) {
                         ${displayToken.user_id === currentUserId ? 'border-gold-400 shadow-[0_0_8px_rgba(212,175,55,0.5)]' : 
                           displayToken.token_type === 'npc' ? 'border-nouveau-ruby/60' : 'border-victorian-400/60'}`}>
                         {(displayToken.avatar_url || displayToken.npc_image_url) ? (
-                          <img src={displayToken.avatar_url || displayToken.npc_image_url || ''}
+                          <img src={cldAvatar(displayToken.avatar_url || displayToken.npc_image_url || '')}
                             className="w-full h-full object-cover" draggable={false} alt="" />
                         ) : (
                           <div className="w-full h-full bg-victorian-800 flex items-center justify-center text-gold-400 text-xs font-display">
@@ -2696,7 +2701,7 @@ function TokenInfoPopup({ token, isAdmin, isMe, canMove, onClose, onRemove, onMo
           <div className={`w-24 h-24 rounded-full overflow-hidden border-4 shrink-0 shadow-lg
             ${token.user_id && isMe ? 'border-gold-400 shadow-gold-400/20' : token.token_type === 'npc' ? 'border-nouveau-ruby/60' : 'border-victorian-400/60'}`}>
             {(token.avatar_url || token.npc_image_url) ? (
-              <img src={token.avatar_url || token.npc_image_url || ''} className="w-full h-full object-cover" alt="" />
+              <img src={cldAvatar(token.avatar_url || token.npc_image_url || '')} className="w-full h-full object-cover" alt="" />
             ) : (
               <div className="w-full h-full bg-victorian-800 flex items-center justify-center text-gold-400 font-display text-4xl">
                 {(token.display_name || token.npc_name || '?')[0]}
@@ -2784,7 +2789,7 @@ function ClusterPopup({ cluster, currentUserId, isAdmin: _isAdmin, onSelectToken
               <div className={`w-16 h-16 rounded-full overflow-hidden border-2 shrink-0 shadow-md group-hover:scale-105 transition-transform
                 ${t.user_id === currentUserId ? 'border-gold-400' : t.token_type === 'npc' ? 'border-nouveau-ruby/40' : 'border-victorian-400/40'}`}>
                 {(t.avatar_url || t.npc_image_url) ? (
-                  <img src={t.avatar_url || t.npc_image_url || ''} className="w-full h-full object-cover" alt="" />
+                  <img src={cldAvatar(t.avatar_url || t.npc_image_url || '')} className="w-full h-full object-cover" alt="" />
                 ) : (
                   <div className="w-full h-full bg-victorian-800 flex items-center justify-center text-gold-400 text-xl font-display">
                     {(t.display_name || t.npc_name || '?')[0]}
@@ -2822,7 +2827,7 @@ function ChurchInfoPopup({ church, onClose, onMove, onDelete, onSaveRadius, isPe
         <div className="flex items-center gap-6 mb-6">
           <div className="w-20 h-20 rounded-full overflow-hidden border-4 shrink-0 shadow-lg border-amber-400/60">
             {church.religion_logo_url ? (
-              <img src={church.religion_logo_url} className="w-full h-full object-cover" alt="" />
+              <img src={cldAvatar(church.religion_logo_url)} className="w-full h-full object-cover" alt="" />
             ) : (
               <div className="w-full h-full bg-victorian-800 flex items-center justify-center">
                 <Church className="w-10 h-10 text-amber-400" />
@@ -2894,7 +2899,7 @@ function RestPointInfoPopup({ restPoint, onClose, onMove, onDelete, onSaveRadius
         <div className="flex items-center gap-6 mb-6">
           <div className="w-20 h-20 rounded-full overflow-hidden border-4 shrink-0 shadow-lg border-indigo-400/60">
             {restPoint.image_url ? (
-              <img src={restPoint.image_url} className="w-full h-full object-cover" alt="" />
+              <img src={cldAvatar(restPoint.image_url)} className="w-full h-full object-cover" alt="" />
             ) : (
               <div className="w-full h-full bg-victorian-800 flex items-center justify-center">
                 <Tent className="w-10 h-10 text-indigo-400" />

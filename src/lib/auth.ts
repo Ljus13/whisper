@@ -1,5 +1,6 @@
 import { cache } from 'react'
-import { createClient } from '@/lib/supabase/server'
+import { unstable_cache } from 'next/cache'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 export type AuthResult = {
   user: Awaited<ReturnType<Awaited<ReturnType<typeof createClient>>['auth']['getUser']>>['data']['user']
@@ -73,48 +74,43 @@ export const getAuth = cache(async (): Promise<AuthResult> => {
 })
 
 /**
- * Cached maintenance status — deduplicates across layout + page within a single request.
+ * Site-wide setting reader. site_settings is global (not per-user), so the
+ * result is cached in Next's data cache across requests (revalidate every 60s,
+ * or immediately via revalidateTag('site-settings') from the toggle action).
+ * Uses the admin client so it never touches cookies — required for unstable_cache.
  */
-export const getMaintenanceStatusCached = cache(async (): Promise<{
-  enabled: boolean
-  web_note: string
-}> => {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('site_settings')
-    .select('value')
-    .eq('key', 'maintenance_mode')
-    .single()
+const SITE_SETTINGS_TAG = 'site-settings'
 
-  if (error || !data) {
-    return { enabled: false, web_note: '' }
-  }
+const getSiteSettingCached = unstable_cache(
+  async (key: string): Promise<{ enabled: boolean; web_note: string }> => {
+    const supabase = createAdminClient()
+    const { data, error } = await supabase
+      .from('site_settings')
+      .select('value')
+      .eq('key', key)
+      .single()
 
-  const value = data.value as { enabled?: boolean; web_note?: string } | null
-  return {
-    enabled: value?.enabled ?? false,
-    web_note: value?.web_note ?? '',
-  }
-})
+    if (error || !data) {
+      return { enabled: false, web_note: '' }
+    }
 
-export const getPreEventModeStatusCached = cache(async (): Promise<{
-  enabled: boolean
-  web_note: string
-}> => {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('site_settings')
-    .select('value')
-    .eq('key', 'pre_event_mode')
-    .single()
+    const value = data.value as { enabled?: boolean; web_note?: string } | null
+    return {
+      enabled: value?.enabled ?? false,
+      web_note: value?.web_note ?? '',
+    }
+  },
+  ['site-setting'],
+  { revalidate: 60, tags: [SITE_SETTINGS_TAG] }
+)
 
-  if (error || !data) {
-    return { enabled: false, web_note: '' }
-  }
+/** Tag to revalidate after a site_settings write. */
+export const SITE_SETTINGS_CACHE_TAG = SITE_SETTINGS_TAG
 
-  const value = data.value as { enabled?: boolean; web_note?: string } | null
-  return {
-    enabled: value?.enabled ?? false,
-    web_note: value?.web_note ?? '',
-  }
-})
+/**
+ * Cached maintenance status — deduplicates across layout + page within a single
+ * request (React.cache) and across requests (Next data cache).
+ */
+export const getMaintenanceStatusCached = cache(() => getSiteSettingCached('maintenance_mode'))
+
+export const getPreEventModeStatusCached = cache(() => getSiteSettingCached('pre_event_mode'))

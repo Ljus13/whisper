@@ -5,6 +5,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { PATHWAYS as PATHWAY_DATA } from '@/app/world-setting/_data/pathways'
 import { RELIGIONS as RELIGION_DATA, type ReligionData } from '@/app/dashboard/character-create/_data/religions'
+import { cldAvatar } from '@/lib/image'
 
 const STORAGE_KEY = 'whisper_char_draft'
 const GENDERS = ['หญิง', 'ชาย', 'อื่น ๆ']
@@ -513,7 +514,7 @@ export default function CharacterCreateContent() {
                   {/* Religion preview with logo & theme color */}
                   {currentReligion.logo_url && (
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded border border-victorian-700/50 bg-victorian-900/40">
-                      <img src={currentReligion.logo_url} alt="" className="w-6 h-6 object-contain rounded" />
+                      <img src={cldAvatar(currentReligion.logo_url)} alt="" className="w-6 h-6 object-contain rounded" />
                       <span className="text-xs text-victorian-300">{currentReligion.name_en}</span>
                       <span
                         className="ml-auto w-4 h-4 rounded-full border border-victorian-600/50"
@@ -612,7 +613,7 @@ export default function CharacterCreateContent() {
                     const pw = findPathwayByShortName(p)
                     return (
                       <span key={p} className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border border-gold-400/50 text-gold-300 bg-gold-400/10">
-                        {pw?.logo && <img src={pw.logo} alt="" className="w-4 h-4 object-contain rounded" />}
+                        {pw?.logo && <img src={cldAvatar(pw.logo)} alt="" className="w-4 h-4 object-contain rounded" />}
                         <span className="text-gold-500 font-bold">{i + 1}.</span> {p}
                         <button type="button" onClick={() => togglePathway(p)}
                           className="ml-0.5 text-gold-500/60 hover:text-red-400 transition-colors leading-none cursor-pointer">✕</button>
@@ -645,7 +646,7 @@ export default function CharacterCreateContent() {
                         }
                       `}
                     >
-                      <img src={p.logo} alt="" className="w-4 h-4 object-contain rounded flex-shrink-0" />
+                      <img src={cldAvatar(p.logo)} alt="" className="w-4 h-4 object-contain rounded flex-shrink-0" />
                       <span className="truncate">{p.shortName}</span>
                       {selected && (
                         <span className="absolute top-0.5 right-1.5 text-[10px] font-bold text-gold-500">{rank}</span>

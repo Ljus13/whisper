@@ -68,6 +68,8 @@ const config: Config = {
         'gold':      '0 0 15px rgba(212, 175, 55, 0.3)',
         'gold-lg':   '0 0 30px rgba(212, 175, 55, 0.4)',
         'inner-gold':'inset 0 0 20px rgba(212, 175, 55, 0.1)',
+        'glass':     '0 8px 32px rgba(0, 0, 0, 0.45)',
+        'glass-lg':  '0 18px 50px rgba(0, 0, 0, 0.55)',
       },
       borderColor: {
         'gold-subtle': 'rgba(212, 175, 55, 0.3)',

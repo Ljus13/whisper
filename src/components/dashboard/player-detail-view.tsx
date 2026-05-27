@@ -3,6 +3,7 @@
 import { BioRenderer } from '@/components/bio-editor'
 import { CornerOrnament } from '@/components/ui/ornaments'
 import { ArrowLeft, Crown, Shield, Swords, Brain, Flame, Heart, Users, Church } from 'lucide-react'
+import { cldAvatar, cldBg, cldThumb } from '@/lib/image'
 import { useRouter } from 'next/navigation'
 
 interface Profile {
@@ -112,7 +113,7 @@ export default function PlayerDetailView({ profile, playerPathways, pathways, se
           {profile.background_url && (
             <div className="relative w-full h-48 md:h-64 overflow-hidden">
               <img
-                src={profile.background_url}
+                src={cldBg(profile.background_url)}
                 alt=""
                 className="w-full h-full object-cover"
                 decoding="async"
@@ -132,7 +133,7 @@ export default function PlayerDetailView({ profile, playerPathways, pathways, se
               <div className="relative shrink-0">
                  {profile.avatar_url ? (
                    <img 
-                     src={profile.avatar_url} 
+                     src={cldThumb(profile.avatar_url)}
                      alt={profile.display_name || ''}
                      className="w-32 h-32 md:w-40 md:h-40 rounded-lg border-4 border-gold-400/30 object-cover shadow-gold bg-victorian-950"
                      decoding="async" 
@@ -155,7 +156,7 @@ export default function PlayerDetailView({ profile, playerPathways, pathways, se
                    {profile.religions && (
                     <div className="inline-flex items-center gap-2 px-3 py-1 text-sm font-display tracking-wider border rounded-md text-gold-200 bg-gold-500/10 border-gold-500/20">
                         {profile.religions.logo_url ? (
-                            <img src={profile.religions.logo_url} className="w-4 h-4 rounded-full object-cover" />
+                            <img src={cldAvatar(profile.religions.logo_url)} className="w-4 h-4 rounded-full object-cover" />
                         ) : (
                             <Church className="w-4 h-4" />
                         )}
@@ -232,7 +233,7 @@ export default function PlayerDetailView({ profile, playerPathways, pathways, se
                           <div key={i} className="flex items-start gap-3 p-3 bg-victorian-900/50 rounded-sm border border-white/5">
                             {info.logoUrl && (
                               <img 
-                                src={info.logoUrl} 
+                                src={cldAvatar(info.logoUrl)} 
                                 alt={info.pathwayName}
                                 className="w-10 h-10 rounded object-contain bg-victorian-950/50 p-1 shrink-0"
                                 loading="lazy"

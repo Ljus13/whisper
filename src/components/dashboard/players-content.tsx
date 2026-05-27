@@ -7,7 +7,8 @@ import { useRouter } from 'next/navigation'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
 import { CornerOrnament } from '@/components/ui/ornaments'
 import { createClient } from '@/lib/supabase/client'
-import { getCached, setCache, REF_TTL } from '@/lib/client-cache'
+import { getCached, setCache, REF_TTL, debouncedCall } from '@/lib/client-cache'
+import { cldAvatar, cldBg, cldThumb } from '@/lib/image'
 import {
   getReligions, createReligion, updateReligion, deleteReligion,
 } from '@/app/actions/religions'
@@ -134,10 +135,13 @@ export default function PlayersContent({ userId, initialData }: { userId: string
     // If server provided initial data, only subscribe to realtime (skip initial fetch)
     if (!initialData) fetchPlayers()
 
+    // Collapse bursts (e.g. a DM editing several players) into one refetch.
+    const debouncedFetch = () => debouncedCall('players-refetch', fetchPlayers, 400)
+
     const channel = supabase
       .channel('players_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchPlayers())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'player_pathways' }, () => fetchPlayers())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'player_pathways' }, debouncedFetch)
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -251,7 +255,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
               <ArrowLeft className="w-6 h-6" />
             </button>
             <img
-              src="https://res.cloudinary.com/dehp6efwc/image/upload/v1772424893/wots-logo-w_fyr8dc.png"
+              src="https://res.cloudinary.com/dehp6efwc/image/upload/f_auto,q_auto,w_400/v1772424893/wots-logo-w_fyr8dc.png"
               alt="Whisper of the Shadow"
               className="h-8 md:h-10 w-auto object-contain"
             />
@@ -368,7 +372,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
                             {/* Background */}
                             {player.background_url && (
                               <div className="absolute inset-0 z-0">
-                                <img src={player.background_url} alt="" className="w-full h-full object-cover opacity-15 group-hover:opacity-22 transition-opacity duration-500" loading="lazy" decoding="async" />
+                                <img src={cldBg(player.background_url)} alt="" className="w-full h-full object-cover opacity-15 group-hover:opacity-22 transition-opacity duration-500" loading="lazy" decoding="async" />
                                 <div className="absolute inset-0" style={{ background: 'linear-gradient(100deg,rgba(8,24,18,0.7) 0%,rgba(8,22,16,0.92) 100%)' }} />
                               </div>
                             )}
@@ -384,7 +388,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
                                 <div className="relative flex-shrink-0">
                                   <div className="absolute inset-0 rounded-full blur-lg opacity-55 scale-125"
                                     style={{ background: 'radial-gradient(circle,#34d399,transparent)' }} />
-                                  <img src={player.avatar_url} alt={player.display_name || ''}
+                                  <img src={cldAvatar(player.avatar_url)} alt={player.display_name || ''}
                                     className="relative w-16 h-16 rounded-full object-cover"
                                     style={{ border: '2px solid rgba(110,231,183,0.55)' }}
                                     loading="lazy" decoding="async" />
@@ -405,7 +409,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
                                 {player.religions && (
                                   <div className="flex items-center gap-1.5 mt-1.5">
                                     {player.religions.logo_url
-                                      ? <img src={player.religions.logo_url} className="w-3 h-3 rounded-full object-cover border border-gold-400/20" />
+                                      ? <img src={cldAvatar(player.religions.logo_url)} className="w-3 h-3 rounded-full object-cover border border-gold-400/20" />
                                       : <Church className="w-3 h-3 text-gold-400" />}
                                     <span className="text-gold-400/60 text-xs font-display">{player.religions.name_th}</span>
                                   </div>
@@ -470,7 +474,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
                                   style={{ background: 'linear-gradient(90deg,transparent,#c9a84c,#f0d080,#c9a84c,transparent)' }} />
                                 {player.background_url && (
                                   <div className="absolute inset-0 z-0">
-                                    <img src={player.background_url} alt="" className="w-full h-full object-cover opacity-10" loading="lazy" decoding="async" />
+                                    <img src={cldBg(player.background_url)} alt="" className="w-full h-full object-cover opacity-10" loading="lazy" decoding="async" />
                                     <div className="absolute inset-0" style={{ background: 'rgba(20,15,5,0.82)' }} />
                                   </div>
                                 )}
@@ -483,7 +487,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
                                     <div className="relative flex-shrink-0">
                                       <div className="absolute inset-0 rounded-full blur-md opacity-50 scale-110"
                                         style={{ background: 'radial-gradient(circle,#c9a84c,transparent)' }} />
-                                      <img src={player.avatar_url} alt={player.display_name || ''}
+                                      <img src={cldAvatar(player.avatar_url)} alt={player.display_name || ''}
                                         className="relative w-10 h-10 rounded-full object-cover"
                                         style={{ border: '1.5px solid rgba(212,175,55,0.5)' }}
                                         loading="lazy" decoding="async" />
@@ -536,7 +540,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
                             {player.avatar_url ? (
                               <div className="relative flex-shrink-0">
                                 <div className="absolute inset-0 rounded-full blur-sm opacity-45" style={{ background: 'radial-gradient(circle,#34d399,transparent)' }} />
-                                <img src={player.avatar_url} alt={player.display_name || ''} className="relative w-11 h-11 rounded-full object-cover" style={{ border: '1.5px solid rgba(110,231,183,0.5)' }} loading="lazy" decoding="async" />
+                                <img src={cldAvatar(player.avatar_url)} alt={player.display_name || ''} className="relative w-11 h-11 rounded-full object-cover" style={{ border: '1.5px solid rgba(110,231,183,0.5)' }} loading="lazy" decoding="async" />
                               </div>
                             ) : (
                               <div className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0" style={{ border: '1.5px solid rgba(110,231,183,0.5)' }}>
@@ -578,7 +582,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
                             <div className="absolute left-0 top-0 bottom-0 w-[2.5px] rounded-l-sm"
                               style={{ background: 'linear-gradient(180deg,#c9a84c,#f0d080,#c9a84c)' }} />
                             {player.avatar_url ? (
-                              <img src={player.avatar_url} alt={player.display_name || ''} className="w-9 h-9 rounded-full object-cover flex-shrink-0" style={{ border: '1.5px solid rgba(212,175,55,0.45)' }} loading="lazy" decoding="async" />
+                              <img src={cldAvatar(player.avatar_url)} alt={player.display_name || ''} className="w-9 h-9 rounded-full object-cover flex-shrink-0" style={{ border: '1.5px solid rgba(212,175,55,0.45)' }} loading="lazy" decoding="async" />
                             ) : (
                               <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ border: '1.5px solid rgba(212,175,55,0.45)' }}>
                                 <span className="text-sm font-display" style={{ color: '#f0d080' }}>{(player.display_name || '?')[0]?.toUpperCase()}</span>
@@ -637,7 +641,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
 
                             {player.background_url && (
                               <div className="absolute inset-0 z-0">
-                                <img src={player.background_url} alt="" className="w-full h-full object-cover opacity-10" loading="lazy" decoding="async" />
+                                <img src={cldBg(player.background_url)} alt="" className="w-full h-full object-cover opacity-10" loading="lazy" decoding="async" />
                                 <div className="absolute inset-0 bg-gradient-to-b from-victorian-950/50 to-victorian-950/90" />
                               </div>
                             )}
@@ -657,7 +661,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
 
                               <div className="flex items-center gap-4 mb-5">
                                 {player.avatar_url ? (
-                                  <img src={player.avatar_url} alt={player.display_name || ''} className="w-16 h-16 rounded-full border-2 border-gold-400/30 object-cover flex-shrink-0" loading="lazy" decoding="async" />
+                                  <img src={cldAvatar(player.avatar_url)} alt={player.display_name || ''} className="w-16 h-16 rounded-full border-2 border-gold-400/30 object-cover flex-shrink-0" loading="lazy" decoding="async" />
                                 ) : (
                                   <div className="w-16 h-16 rounded-full border-2 border-gold-400/30 bg-victorian-800 flex items-center justify-center flex-shrink-0">
                                     <span className="text-gold-400 text-xl font-display">{(player.display_name || '?')[0]?.toUpperCase()}</span>
@@ -672,7 +676,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
                                   {player.religions && (
                                     <div className="flex items-center gap-1.5 mt-1.5 text-xs">
                                       {player.religions.logo_url
-                                        ? <img src={player.religions.logo_url} className="w-3.5 h-3.5 rounded-full object-cover border border-gold-400/20" />
+                                        ? <img src={cldAvatar(player.religions.logo_url)} className="w-3.5 h-3.5 rounded-full object-cover border border-gold-400/20" />
                                         : <Church className="w-3.5 h-3.5 text-gold-400" />}
                                       <span className="text-gold-400/80">{player.religions.name_th}</span>
                                     </div>
@@ -731,7 +735,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
                             className="flex items-center gap-3 px-4 py-3 card-victorian cursor-pointer hover:border-gold-400/40 transition-all"
                           >
                             {player.avatar_url ? (
-                              <img src={player.avatar_url} alt={player.display_name || ''} className="w-10 h-10 rounded-full border border-gold-400/30 object-cover flex-shrink-0" loading="lazy" decoding="async" />
+                              <img src={cldAvatar(player.avatar_url)} alt={player.display_name || ''} className="w-10 h-10 rounded-full border border-gold-400/30 object-cover flex-shrink-0" loading="lazy" decoding="async" />
                             ) : (
                               <div className="w-10 h-10 rounded-full border border-gold-400/30 bg-victorian-800 flex items-center justify-center flex-shrink-0">
                                 <span className="text-gold-400 text-sm font-display">{(player.display_name || '?')[0]?.toUpperCase()}</span>
@@ -749,7 +753,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
                             {player.religions && (
                               <div className="flex items-center gap-1 flex-shrink-0">
                                 {player.religions.logo_url
-                                  ? <img src={player.religions.logo_url} className="w-4 h-4 rounded-full object-cover border border-gold-400/20" />
+                                  ? <img src={cldAvatar(player.religions.logo_url)} className="w-4 h-4 rounded-full object-cover border border-gold-400/20" />
                                   : <Church className="w-3.5 h-3.5 text-gold-400" />}
                                 <span className="text-gold-400/80 text-xs font-display">{player.religions.name_th}</span>
                               </div>
@@ -812,7 +816,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
               <div className="relative h-32 overflow-hidden">
                 {rel.bg_url ? (
                   <>
-                    <img src={rel.bg_url} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                    <img src={cldBg(rel.bg_url)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                     <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-victorian-950/90" />
                   </>
                 ) : (
@@ -835,7 +839,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
               <div className="relative z-10 -mt-10 px-6">
                 <div className="flex items-end gap-4">
                   {rel.logo_url ? (
-                    <img src={rel.logo_url} alt={rel.name_th} className="w-20 h-20 rounded-full border-3 border-gold-400/40 object-cover flex-shrink-0 shadow-lg shadow-black/50 bg-victorian-950" loading="lazy" decoding="async" />
+                    <img src={cldThumb(rel.logo_url)} alt={rel.name_th} className="w-20 h-20 rounded-full border-3 border-gold-400/40 object-cover flex-shrink-0 shadow-lg shadow-black/50 bg-victorian-950" loading="lazy" decoding="async" />
                   ) : (
                     <div className="w-20 h-20 rounded-full border-3 border-gold-400/40 bg-victorian-900 flex items-center justify-center flex-shrink-0 shadow-lg shadow-black/50">
                       <Church className="w-10 h-10 text-gold-400" />
@@ -892,7 +896,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
             <div className="relative h-40 overflow-hidden">
               {viewingReligion.bg_url ? (
                 <>
-                  <img src={viewingReligion.bg_url} alt="" className="w-full h-full object-cover" />
+                  <img src={cldBg(viewingReligion.bg_url)} alt="" className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-[#1A1612]" />
                 </>
               ) : (
@@ -906,7 +910,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
             {/* Logo overlapping banner */}
             <div className="relative z-10 -mt-14 flex justify-center">
               {viewingReligion.logo_url ? (
-                <img src={viewingReligion.logo_url} alt={viewingReligion.name_th} className="w-28 h-28 rounded-full border-4 border-gold-400/40 object-cover shadow-xl shadow-black/60 bg-victorian-950" />
+                <img src={cldThumb(viewingReligion.logo_url)} alt={viewingReligion.name_th} className="w-28 h-28 rounded-full border-4 border-gold-400/40 object-cover shadow-xl shadow-black/60 bg-victorian-950" />
               ) : (
                 <div className="w-28 h-28 rounded-full border-4 border-gold-400/40 bg-victorian-900 flex items-center justify-center shadow-xl shadow-black/60">
                   <Church className="w-14 h-14 text-gold-400" />
@@ -984,7 +988,7 @@ export default function PlayersContent({ userId, initialData }: { userId: string
                 <input value={relForm.logo_url} onChange={e => setRelForm(f => ({ ...f, logo_url: e.target.value }))} className="input-victorian !py-2 !px-3 w-full" placeholder="https://..." />
                 {relForm.logo_url && (
                   <div className="mt-2 flex justify-center">
-                    <img src={relForm.logo_url} alt="Preview" className="w-16 h-16 rounded-full border border-gold-400/20 object-cover" />
+                    <img src={cldThumb(relForm.logo_url)} alt="Preview" className="w-16 h-16 rounded-full border border-gold-400/20 object-cover" />
                   </div>
                 )}
               </div>

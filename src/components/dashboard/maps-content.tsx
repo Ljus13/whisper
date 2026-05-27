@@ -3,12 +3,13 @@
 import { createMap, updateMap, deleteMap } from '@/app/actions/maps'
 import type { GameMap } from '@/lib/types/database'
 import { ArrowLeft, Plus, Pencil, Trash2, X, Save, MapIcon } from 'lucide-react'
+import { cldThumb } from '@/lib/image'
 import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
 import { CornerOrnament } from '@/components/ui/ornaments'
 import { createClient } from '@/lib/supabase/client'
-import { getCached, setCache } from '@/lib/client-cache'
+import { getCached, setCache, debouncedCall } from '@/lib/client-cache'
 
 interface MapsContentProps {
   userId: string
@@ -198,11 +199,16 @@ export default function MapsContent({ userId, initialData }: MapsContentProps) {
     // If server provided initial data, only subscribe to realtime (skip initial fetch)
     if (!initialData) fetchData()
 
+    // Debounce bursts into one refetch. profiles/map_tokens are filtered to the
+    // current user — the list only needs MY role/sanity and MY token's map_id,
+    // so unrelated players' changes no longer trigger a full refetch.
+    const debouncedFetch = () => debouncedCall('maps-refetch', fetchData, 350)
+
     const channel = supabase
       .channel('maps_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'maps' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_tokens' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'maps' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_tokens', filter: `user_id=eq.${userId}` }, debouncedFetch)
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -305,7 +311,7 @@ export default function MapsContent({ userId, initialData }: MapsContentProps) {
                 <a href={`/dashboard/maps/${map.id}`} className="block">
                   <div className="relative aspect-square overflow-hidden">
                     <img 
-                      src={map.image_url} 
+                      src={cldThumb(map.image_url)}
                       alt={map.name}
                       className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       loading="lazy"

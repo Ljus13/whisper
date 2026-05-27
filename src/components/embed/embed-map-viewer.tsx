@@ -4,6 +4,8 @@ import type { GameMap, MapTokenWithProfile, MapLockedZone } from '@/lib/types/da
 import { Lock, ZoomIn, ZoomOut, Maximize, Move, Crown, Shield } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { cldAvatar, cldMap } from '@/lib/image'
+import { debouncedCall } from '@/lib/client-cache'
 
 interface Props {
   map: GameMap
@@ -82,6 +84,8 @@ export default function EmbedMapViewer({ map, tokens, zones }: Props) {
     // Do NOT call fetchData() on mount — trust server-rendered props.
     // Client-side anon in iframe often fails due to third-party cookie blocking.
 
+    const debouncedFetch = () => debouncedCall(`embed-refetch:${mapId}`, fetchData, 350)
+
     const channel = supabase
       .channel(`embed_map_view:${mapId}`, { config: { broadcast: { self: false } } })
       .on('broadcast', { event: 'token_moved' }, ({ payload }) => {
@@ -99,9 +103,9 @@ export default function EmbedMapViewer({ map, tokens, zones }: Props) {
       .on('broadcast', { event: 'token_added' }, () => {
         fetchData()
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_tokens', filter: `map_id=eq.${mapId}` }, fetchData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_locked_zones', filter: `map_id=eq.${mapId}` }, fetchData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'maps', filter: `id=eq.${mapId}` }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_tokens', filter: `map_id=eq.${mapId}` }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'map_locked_zones', filter: `map_id=eq.${mapId}` }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'maps', filter: `id=eq.${mapId}` }, debouncedFetch)
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -195,7 +199,7 @@ export default function EmbedMapViewer({ map, tokens, zones }: Props) {
             transition: isPanning ? 'none' : 'transform 0.15s ease-out',
           }}>
           <div className="relative">
-            <img ref={imgRef} src={mapState.image_url} alt={mapState.name}
+            <img ref={imgRef} src={cldMap(mapState.image_url)} alt={mapState.name}
               className="max-w-full max-h-full object-contain select-none block"
               draggable={false} onLoad={() => setImageLoaded(true)} />
 
@@ -238,7 +242,7 @@ export default function EmbedMapViewer({ map, tokens, zones }: Props) {
                   border: `2px solid ${t.token_type === 'npc' ? 'rgba(180,60,60,0.6)' : 'rgba(212,175,55,0.5)'}`,
                 }}>
                   {(t.avatar_url || t.npc_image_url) ? (
-                    <img src={t.avatar_url || t.npc_image_url || ''} className="w-full h-full object-cover" alt="" draggable={false} />
+                    <img src={cldAvatar(t.avatar_url || t.npc_image_url || '')} className="w-full h-full object-cover" alt="" draggable={false} />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center"
                       style={{ backgroundColor: '#2a2520', color: '#D4AF37', fontSize: '11px' }}>

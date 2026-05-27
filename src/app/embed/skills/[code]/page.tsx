@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { cldAvatar } from '@/lib/image'
 
 export const revalidate = 300
 
@@ -67,7 +68,7 @@ export default async function SkillEmbedPage({ params }: { params: Promise<{ cod
       <div className="w-[560px] h-[60px] max-w-full rounded-lg border border-gold-400/20 bg-victorian-950/90 px-4 py-2 text-[12px] text-victorian-200 flex items-center gap-3 overflow-hidden">
         {log.player_avatar ? (
           <img
-            src={log.player_avatar}
+            src={cldAvatar(log.player_avatar)}
             alt={playerName}
             className="w-9 h-9 rounded-full border border-gold-400/20 object-cover"
           />

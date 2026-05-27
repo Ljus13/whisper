@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { EmbedButton } from '@/components/embed-button'
+import { cldAvatar, cldBg } from '@/lib/image'
 
 /* ──────────────────────────────────────────────────────────────
    Church Data
@@ -466,7 +467,7 @@ export default function ReligionsClient() {
               {!imgError[ch.id] ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
-                  src={ch.logo}
+                  src={cldAvatar(ch.logo)}
                   alt={ch.name}
                   onError={() => handleImgError(ch.id)}
                   className="w-5 h-5 rounded-full object-cover flex-shrink-0"
@@ -494,7 +495,7 @@ export default function ReligionsClient() {
           {!imgError[`bg-${church.id}`] ? (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
-              src={church.bg}
+              src={cldBg(church.bg)}
               alt={church.name}
               onError={() => handleImgError(`bg-${church.id}`)}
               className="absolute inset-0 w-full h-full object-cover"
@@ -511,7 +512,7 @@ export default function ReligionsClient() {
               {!imgError[`logo-${church.id}`] ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
-                  src={church.logo}
+                  src={cldAvatar(church.logo)}
                   alt={`ตราสัญลักษณ์ ${church.name}`}
                   onError={() => handleImgError(`logo-${church.id}`)}
                   className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover ring-2 ${c.logoRing} shadow-2xl flex-shrink-0`}
@@ -621,7 +622,7 @@ export default function ReligionsClient() {
                   {!imgError[ch.id] ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
-                      src={ch.logo}
+                      src={cldAvatar(ch.logo)}
                       alt={ch.name}
                       onError={() => handleImgError(ch.id)}
                       className="w-8 h-8 rounded-full object-cover flex-shrink-0"

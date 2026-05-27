@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useEffect, useCallback } from 'react'
 import type { Profile, SkillType, SkillPathway, SkillSequence, Skill, PlayerPathway } from '@/lib/types/database'
+import { cldAvatar, cldBg } from '@/lib/image'
 import {
   ArrowLeft, ChevronDown, ChevronRight, Plus, Trash2, Sparkles, Zap,
   GitBranch, Layers, Shield, Lock, BookOpen, Pencil, Copy, Check, X, ScrollText,
@@ -18,7 +19,7 @@ import { getGrantedSkillsForPlayer, useGrantedSkill as castGrantedSkill, transfe
 import SanityLockOverlay from '@/components/sanity-lock-overlay'
 import { OrnamentedCard } from '@/components/ui/ornaments'
 import { createClient } from '@/lib/supabase/client'
-import { getCached, setCache, REF_TTL } from '@/lib/client-cache'
+import { getCached, setCache, REF_TTL, debouncedCall } from '@/lib/client-cache'
 
 
 /* ─── Props ─── */
@@ -1023,7 +1024,7 @@ function PlayerSkillView({
               {/* Background image */}
               {pathway.bg_url ? (
                 <div className="absolute inset-0">
-                  <img src={pathway.bg_url} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                  <img src={cldBg(pathway.bg_url)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/30" />
                 </div>
               ) : (
@@ -1034,7 +1035,7 @@ function PlayerSkillView({
               {pathway.logo_url && (
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
                   <img
-                    src={pathway.logo_url}
+                    src={cldAvatar(pathway.logo_url)}
                     alt={pathway.name}
                     className="w-32 h-32 lg:w-40 lg:h-40 object-contain drop-shadow-[0_0_30px_rgba(212,175,55,0.3)]"
                     loading="lazy"
@@ -1223,7 +1224,7 @@ function PlayerSkillView({
                   {gs.image_url ? (
                     <div className="relative w-full h-32 flex-shrink-0">
                       <img
-                        src={gs.image_url}
+                        src={cldAvatar(gs.image_url)}
                         alt={gs.title}
                         className="w-full h-full object-cover"
                         onError={e => { (e.target as HTMLImageElement).parentElement!.style.display = 'none' }}
@@ -1541,7 +1542,7 @@ function PlayerSkillView({
             {/* Item being transferred */}
             <div className="flex items-center gap-3 p-3 rounded-lg bg-victorian-900/50 border border-gold-400/10">
               {transferringGrant.image_url ? (
-                <img src={transferringGrant.image_url} alt="" className="w-10 h-10 rounded-lg object-cover border border-gold-400/20 flex-shrink-0" />
+                <img src={cldAvatar(transferringGrant.image_url)} alt="" className="w-10 h-10 rounded-lg object-cover border border-gold-400/20 flex-shrink-0" />
               ) : (
                 <div className="w-10 h-10 rounded-lg bg-victorian-800 border border-gold-400/10 flex items-center justify-center flex-shrink-0">
                   <Gift className="w-5 h-5 text-victorian-600" />
@@ -1577,7 +1578,7 @@ function PlayerSkillView({
                 <p className="text-sm text-amber-200 font-semibold text-center">ยืนยันการส่งมอบ</p>
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-victorian-900/60 border border-gold-400/10">
                   {transferConfirmTarget.avatar_url ? (
-                    <img src={transferConfirmTarget.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                    <img src={cldAvatar(transferConfirmTarget.avatar_url)} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
                   ) : (
                     <div className="w-10 h-10 rounded-full bg-victorian-800 flex items-center justify-center flex-shrink-0">
                       <Users className="w-5 h-5 text-victorian-500" />
@@ -1630,7 +1631,7 @@ function PlayerSkillView({
                       className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-victorian-800 hover:border-green-500/30 hover:bg-green-500/5 text-left transition-all"
                     >
                       {p.avatar_url ? (
-                        <img src={p.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                        <img src={cldAvatar(p.avatar_url)} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
                       ) : (
                         <div className="w-8 h-8 rounded-full bg-victorian-800 flex items-center justify-center flex-shrink-0">
                           <Users className="w-4 h-4 text-victorian-500" />
@@ -1692,15 +1693,17 @@ export default function SkillsContent({ userId, initialData }: SkillsContentProp
 
     // ─── Realtime Subscription ───
     const supabase = createClient()
+    // 7 global tables feed this view; collapse simultaneous changes into one refetch.
+    const debouncedFetch = () => debouncedCall('skills-refetch', fetchData, 400)
     const channel = supabase
       .channel('skills_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'skill_types' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'skill_pathways' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'skill_sequences' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'skills' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'player_pathways' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'granted_skills' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'skill_types' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'skill_pathways' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'skill_sequences' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'skills' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'player_pathways' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'granted_skills' }, debouncedFetch)
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
